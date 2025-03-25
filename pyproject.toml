@@ -1,0 +1,23 @@
+[project]
+name = "mlem-method"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "exca>=0.3.0",
+    "ipykernel>=6.29.5",
+    "ipywidgets>=8.1.5",
+    "joblib>=1.4.2",
+    "nbformat>=5.10.4",
+    "pandas>=2.2.3",
+    "parametrization-cookbook>=0.18",
+    "plotly>=6.0.1",
+    "scikit-learn>=1.6.1",
+    "seaborn>=0.13.2",
+    "torch>=2.6.0",
+    "torchsort>=0.1.9",
+    "tqdm>=4.67.1",
+    "transformers>=4.50.1",
+    "wandb>=0.19.8",
+]
