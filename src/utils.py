@@ -41,3 +41,17 @@ def encode_df(df: pd.DataFrame) -> torch.Tensor:
     X[:, number_cols] = MinMaxScaler().fit_transform(X[:, number_cols])
 
     return torch.from_numpy(X)
+
+
+def nanmax(tensor, dim=None, keepdim=False):
+    # From https://github.com/pytorch/pytorch/issues/61474#issuecomment-1735537507
+    min_value = torch.finfo(tensor.dtype).min
+    output = tensor.nan_to_num(min_value).max(dim=dim, keepdim=keepdim)
+    return output
+
+
+def nanmin(tensor, dim=None, keepdim=False):
+    # From https://github.com/pytorch/pytorch/issues/61474#issuecomment-1735537507
+    max_value = torch.finfo(tensor.dtype).max
+    output = tensor.nan_to_num(max_value).min(dim=dim, keepdim=keepdim)
+    return output

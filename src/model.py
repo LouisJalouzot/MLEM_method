@@ -1,3 +1,4 @@
+from requests import get
 import torch
 from torch import nn
 from torch.nn.utils import parametrize
@@ -32,7 +33,8 @@ class SPDMatrixLearner(BaseModel):
         num_features,
         param="exp",
         fro_norm=True,
-        init_eye=False,
+        init=None,
+        init_kwargs={},
         loss="spearman",
         spearman_regularization="l2",
         spearman_regularization_strength=1,
@@ -44,8 +46,8 @@ class SPDMatrixLearner(BaseModel):
         )
         self.W = nn.Linear(num_features, num_features, bias=False)
 
-        if init_eye:
-            nn.init.eye_(self.W.weight)
+        if init is not None:
+            getattr(nn.init, init)(self.W.weight, **init_kwargs)
 
         if param == "exp":
             parametrize.register_parametrization(

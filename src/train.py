@@ -1,5 +1,5 @@
 import torch
 
 
-def train(loss="spearman"):
+def train(X, Y, model):
     
