@@ -1,97 +1,107 @@
 from src.utils import nanmin, nanmax
-from joblib.memory import Memory
 from transformers import AutoModel, AutoTokenizer
 import torch
 from tqdm.auto import tqdm
-from src.utils import memory
+from pydantic import BaseModel
+from exca import MapInfra
+import typing as tp
 
 
-@memory.cache
-def compute_text_representations(
-    sentences,
-    model_name,
-    token_aggregation="mean",
-    batch_size=32,
-    norm=None,
-    device=None,
-):
-    """Computes hidden states for all layers of a transformer model.
+class TextRepresentationsConfig(BaseModel):
+    model_name: str
+    token_aggregation: str = "mean"
+    batch_size: int = 32
+    norm: tp.Optional[int] = None
+    device: tp.Optional[torch.device] = None
+    infra: MapInfra = MapInfra(version="1")
 
-    Args:
-        sentences (list): A list of sentences to process.
-        model_name (str): Name of the transformer model to use.
-        token_aggregation (str): How to aggregate token embeddings (mean, max, min, first, last).
-        batch_size (int): Batch size for processing sentences.
-        norm (int): p value for normalization. If None, no normalization is applied.
-        device (torch.device): Device to use for computation. If None, uses the one defined in src.utils.
+    # Exclude device from caching as it doesn't affect the result
+    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
 
-    Returns:
-        torch.Tensor: Hidden states for all layers.
-    """
-    if device is None:
-        from src.utils import device
+    @infra.apply(item_uid=lambda s: str(hash(s)))
+    def compute(self, sentences: tp.List[str]) -> torch.Tensor:
+        """Computes hidden states for all layers of a transformer model.
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModel.from_pretrained(model_name, output_hidden_states=True)
-    model = model.to(device)
-    model.eval()
+        Args:
+            sentences: A list of sentences to process.
 
-    all_hidden_states = []
-    for i in tqdm(
-        range(0, len(sentences), batch_size),
-        desc="Computing and aggregating hidden states on device " + str(device),
-    ):
-        batch_sentences = sentences[i : i + batch_size]
-        encoded_input = tokenizer(
-            batch_sentences, padding=True, truncation=False, return_tensors="pt"
-        ).to(device)
-
-        with torch.no_grad():
-            hidden_states = model(**encoded_input).hidden_states
-
-        # Tuple of torch.Tensor, one for each layer
-        hidden_states = torch.stack(hidden_states)
-
-        # Create masked hidden states with NaNs for padding tokens
-        attention_mask_expanded = (
-            encoded_input["attention_mask"]
-            .unsqueeze(-1)
-            .expand(hidden_states.size())
-        )
-        # Create a tensor with NaN values where attention_mask is 0
-        nan_mask = torch.full_like(hidden_states, fill_value=torch.nan)
-        # Use real values where attention_mask is 1, and NaNs elsewhere
-        masked_hidden_states = torch.where(
-            attention_mask_expanded > 0, hidden_states, nan_mask
-        )
-
-        # Aggregate token embeddings
-        # hidden_states has shape (layer, batch_size, seq_len, hidden_size)
-        if token_aggregation == "mean":
-            aggregated_states = masked_hidden_states.nanmean(dim=2)
-        elif token_aggregation == "max":
-            aggregated_states = nanmax(masked_hidden_states, dim=2)[0]
-        elif token_aggregation == "min":
-            aggregated_states = nanmin(masked_hidden_states, dim=2)[0]
-        elif token_aggregation == "first":
-            aggregated_states = hidden_states[:, :, 0]
-        elif token_aggregation == "last":
-            # Need to handle variable sequence lengths in the batch
-            last_idx = encoded_input["attention_mask"].sum(dim=1) - 1
-            corresp_idx = torch.arange(len(last_idx))
-            aggregated_states = hidden_states[:, corresp_idx, last_idx]
+        Returns:
+            torch.Tensor: Hidden states for all layers.
+        """
+        if self.device is None:
+            from src.utils import device
         else:
-            raise ValueError(
-                f"Invalid token aggregation method: {token_aggregation}"
+            device = self.device
+
+        tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        model = AutoModel.from_pretrained(
+            self.model_name, output_hidden_states=True
+        )
+        model = model.to(device)
+        model.eval()
+
+        all_hidden_states = []
+        for i in tqdm(
+            range(0, len(sentences), self.batch_size),
+            desc=f"Computing hidden states on device {device}",
+        ):
+            # Process batch of sentences
+            batch_sentences = sentences[i : i + self.batch_size]
+            encoded_input = tokenizer(
+                batch_sentences,
+                padding=True,
+                truncation=False,
+                return_tensors="pt",
+            ).to(device)
+
+            # Get hidden states
+            with torch.no_grad():
+                hidden_states = model(**encoded_input).hidden_states
+
+            # Stack to tensor shape (layers, batch, seq_len, hidden_size)
+            hidden_states = torch.stack(hidden_states)
+
+            # Mask padding tokens with NaNs
+            attention_mask_expanded = (
+                encoded_input["attention_mask"]
+                .unsqueeze(-1)
+                .expand(hidden_states.size())
+            )
+            masked_hidden_states = torch.where(
+                attention_mask_expanded > 0,
+                hidden_states,
+                torch.full_like(hidden_states, fill_value=torch.nan),
             )
 
-        all_hidden_states.append(aggregated_states.cpu())
+            # Aggregate token embeddings based on specified method
+            if self.token_aggregation == "mean":
+                aggregated_states = masked_hidden_states.nanmean(dim=2)
+            elif self.token_aggregation == "max":
+                aggregated_states = nanmax(masked_hidden_states, dim=2)[0]
+            elif self.token_aggregation == "min":
+                aggregated_states = nanmin(masked_hidden_states, dim=2)[0]
+            elif self.token_aggregation == "first":
+                aggregated_states = hidden_states[:, :, 0]
+            elif self.token_aggregation == "last":
+                last_idx = encoded_input["attention_mask"].sum(dim=1) - 1
+                corresp_idx = torch.arange(len(last_idx))
+                aggregated_states = hidden_states[:, corresp_idx, last_idx]
+            else:
+                raise ValueError(
+                    f"Invalid token aggregation method: {self.token_aggregation}"
+                )
 
-    all_hidden_states = torch.concat(all_hidden_states, dim=1)
+            all_hidden_states.append(aggregated_states.cpu())
 
-    if norm is not None:
-        all_hidden_states /= all_hidden_states.norm(p=norm, dim=2, keepdim=True)
+        # Combine all batches along batch dimension
+        all_hidden_states = torch.concat(all_hidden_states, dim=1)
 
-    return all_hidden_states
+        # Apply normalization if specified
+        if self.norm is not None:
+            all_hidden_states /= all_hidden_states.norm(
+                p=self.norm, dim=2, keepdim=True
+            )
+
+        return all_hidden_states

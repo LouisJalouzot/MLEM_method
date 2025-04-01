@@ -39,9 +39,6 @@ class PairwiseDataset(Dataset):
         else:
             self.distance = lambda x, y: (x - y).norm(p=distance, dim=-1)
 
-    def __len__(self):
-        return self.n
-
     def sample(self, n_pairs=None, get_idx=False, only_valid=True):
         if n_pairs > self.max_n_pairs:
             logger.debug(

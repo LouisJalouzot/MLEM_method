@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torchsort import soft_rank
 
 
-class BaseModel(nn.Module):
+class SPDBaseModel(nn.Module):
     def __init__(
         self, loss="spearman", regularization="l2", regularization_strength=1
     ):
