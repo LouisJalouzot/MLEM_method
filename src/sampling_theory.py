@@ -94,7 +94,7 @@ class CorrelationEstimatorConfig(BaseModel):
     confidence: float = 0.99
     max_margin: float = 5e-2
     product: bool = False
-    infra: TaskInfra = TaskInfra(version="1")
+    infra: TaskInfra = TaskInfra(version="1", folder=".cache")
 
     @infra.apply
     def estimate_corrs(self, X: torch.Tensor) -> tp.Tuple[torch.Tensor, int]:

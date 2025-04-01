@@ -22,7 +22,7 @@ class FeatureImportanceConfig(BaseModel):
     n_perm: int = 30
     alpha: float = 0.01
     warn_ci: float = 0.01
-    infra: TaskInfra = TaskInfra(version="1")
+    infra: TaskInfra = TaskInfra(version="1", folder=".cache")
 
     @infra.apply
     def compute(

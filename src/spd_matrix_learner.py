@@ -2,10 +2,11 @@ import torch
 from torch import nn
 from torch.nn.utils import parametrize
 from parametrization_cookbook.torch import MatrixSymPosDef
-from src.base_model import SPDBaseModel
 import pandas as pd
 from pydantic import BaseModel
 import typing as tp
+from torchsort import soft_rank
+import torch.nn.functional as F
 
 
 class DiagonalParam(nn.Module):
@@ -36,31 +37,7 @@ class NormFroParam(nn.Module):
         return X / X.norm(p="fro")
 
 
-class SPDMatrixLearnerConfig(BaseModel):
-    num_features: int
-    param: str = "cholesky"
-    fro_norm: bool = True
-    init: tp.Optional[str] = None
-    init_kwargs: dict = {}
-    loss: str = "spearman"
-    spearman_regularization: str = "l2"
-    spearman_regularization_strength: float = 1.0
-
-    def build(self) -> "SPDMatrixLearner":
-        """Build the model using this configuration"""
-        return SPDMatrixLearner(
-            num_features=self.num_features,
-            param=self.param,
-            fro_norm=self.fro_norm,
-            init=self.init,
-            init_kwargs=self.init_kwargs,
-            loss=self.loss,
-            spearman_regularization=self.spearman_regularization,
-            spearman_regularization_strength=self.spearman_regularization_strength,
-        )
-
-
-class SPDMatrixLearner(SPDBaseModel):
+class SPDMatrixLearner(nn.Module):
     def __init__(
         self,
         num_features: int,
@@ -85,11 +62,19 @@ class SPDMatrixLearner(SPDBaseModel):
             spearman_regularization: Type of regularization for Spearman correlation
             spearman_regularization_strength: Strength of the regularization
         """
-        super().__init__(
-            loss=loss,
-            regularization=spearman_regularization,
-            regularization_strength=spearman_regularization_strength,
-        )
+        super().__init__()
+        self.spearman_regularization = spearman_regularization
+        self.spearman_regularization_strength = spearman_regularization_strength
+        if loss == "mse":
+            self.loss = self.mse
+            self.maximize = False
+        elif loss == "spearman":
+            self.loss = self.spearman_diff
+            self.maximize = True
+        else:
+            raise ValueError(
+                f"Invalid loss function {loss}. Choose 'mse' or 'spearman'."
+            )
 
         # Create weight matrix
         self.W = nn.Linear(num_features, num_features, bias=False)
@@ -163,3 +148,90 @@ class SPDMatrixLearner(SPDBaseModel):
     def flat_forward(self, X: torch.Tensor) -> torch.Tensor:
         """Forward pass using flattened weights"""
         return X @ self.get_flat_W()
+
+    def compute_gradient_norm(self, norm_type=2):
+        """
+        Computes the norm of gradients of all parameters in the model.
+
+        Args:
+            model (torch.nn.Module): The neural network model.
+            norm_type (float): The type of norm to compute (default is 2, which is the L2 norm).
+
+        Returns:
+            float: The computed norm of the gradients.
+        """
+        total_norm = 0
+        for p in self.parameters():
+            if p.grad is not None and p.requires_grad:
+                param_norm = p.grad.detach().data.norm(norm_type)
+                total_norm += param_norm.item() ** norm_type
+        total_norm = total_norm ** (1.0 / norm_type)
+
+        return total_norm
+
+    def corrcoef(self, x, y):
+        y_n = y - y.mean()
+        x_n = x - x.mean()
+        y_n = y_n / y_n.norm()
+        x_n = x_n / x_n.norm()
+
+        return (y_n * x_n).sum()
+
+    def spearman(self, x, y):
+        """
+        Calculates Spearman's rank correlation coefficient between two tensors.
+
+        Args:
+            x (torch.Tensor): First tensor.
+            y (torch.Tensor): Second tensor.
+            dim (int): Dimension along which to compute the correlation. Default: 0.
+
+        Returns:
+            float: Spearman's rank correlation coefficient.
+        """
+        dtype = x.dtype
+        x_rank = x.argsort().argsort().to(dtype)
+        y_rank = y.argsort().argsort().to(dtype)
+
+        return self.corrcoef(x_rank, y_rank)
+
+    def spearman_diff(self, x, y):
+        n = x.shape[0]
+        x_rank = soft_rank(
+            x.reshape(1, -1),
+            regularization=self.spearman_regularization,
+            regularization_strength=self.spearman_regularization_strength,
+        )
+        y_rank = soft_rank(
+            y.reshape(1, -1),
+            regularization=self.spearman_regularization,
+            regularization_strength=self.spearman_regularization_strength,
+        )
+
+        return self.corrcoef(x_rank / n, y_rank / n)
+
+    def mse(self, x, y):
+        return F.mse_loss(x, y)
+
+
+class SPDMatrixLearnerCfg(BaseModel):
+    param: str = "cholesky"
+    fro_norm: bool = True
+    init: tp.Optional[str] = None
+    init_kwargs: dict = {}
+    loss: str = "spearman"
+    spearman_regularization: str = "l2"
+    spearman_regularization_strength: float = 1.0
+
+    def build(self, num_features) -> SPDMatrixLearner:
+        """Build the model using this configuration"""
+        return SPDMatrixLearner(
+            num_features=num_features,
+            param=self.param,
+            fro_norm=self.fro_norm,
+            init=self.init,
+            init_kwargs=self.init_kwargs,
+            loss=self.loss,
+            spearman_regularization=self.spearman_regularization,
+            spearman_regularization_strength=self.spearman_regularization_strength,
+        )

@@ -7,19 +7,27 @@ from exca import MapInfra
 import typing as tp
 
 
-class TextRepresentationsConfig(BaseModel):
-    model_name: str
+class TextRepresentations(BaseModel):
+    model_name: str = "bert-base-uncased"
     token_aggregation: str = "mean"
     batch_size: int = 32
+    layer: int = 5
+    units: tp.List[int] = None
     norm: tp.Optional[int] = None
-    device: tp.Optional[torch.device] = None
-    infra: MapInfra = MapInfra(version="1")
+    device: tp.Optional[str] = None
+    infra: MapInfra = MapInfra(version="1", folder=".cache")
 
     # Exclude device from caching as it doesn't affect the result
-    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
+    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
+        "device",
+        "layer",
+        "units",
+    )
 
-    @infra.apply(item_uid=lambda s: str(hash(s)))
-    def compute(self, sentences: tp.List[str]) -> torch.Tensor:
+    @infra.apply(item_uid=str)
+    def compute_representations(
+        self, sentences: tp.Iterable[str]
+    ) -> tp.Iterable[torch.Tensor]:
         """Computes hidden states for all layers of a transformer model.
 
         Args:
@@ -42,10 +50,9 @@ class TextRepresentationsConfig(BaseModel):
         model = model.to(device)
         model.eval()
 
-        all_hidden_states = []
         for i in tqdm(
             range(0, len(sentences), self.batch_size),
-            desc=f"Computing hidden states on device {device}",
+            desc=f"Computing representations on device {device}",
         ):
             # Process batch of sentences
             batch_sentences = sentences[i : i + self.batch_size]
@@ -93,15 +100,28 @@ class TextRepresentationsConfig(BaseModel):
                     f"Invalid token aggregation method: {self.token_aggregation}"
                 )
 
-            all_hidden_states.append(aggregated_states.cpu())
+            # Apply normalization if specified
+            if self.norm is not None:
+                aggregated_states /= aggregated_states.norm(
+                    p=self.norm, dim=2, keepdim=True
+                )
 
-        # Combine all batches along batch dimension
-        all_hidden_states = torch.concat(all_hidden_states, dim=1)
+            for i in range(len(batch_sentences)):
+                # Yield each sentence's representation
+                yield aggregated_states[:, i]
 
-        # Apply normalization if specified
-        if self.norm is not None:
-            all_hidden_states /= all_hidden_states.norm(
-                p=self.norm, dim=2, keepdim=True
-            )
-
-        return all_hidden_states
+    def compute_and_combine_representations(
+        self,
+        sentences: tp.Iterable[str],
+    ) -> torch.Tensor:
+        representations = []
+        for repr in tqdm(
+            self.compute_representations(sentences),
+            desc=f"Retrieving representations",
+            total=len(sentences),
+        ):
+            repr = repr[self.layer]
+            if self.units is not None:
+                repr = repr[self.units]
+            representations.append(repr)
+        return torch.stack(representations)

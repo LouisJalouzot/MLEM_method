@@ -2,6 +2,7 @@ from torch.utils.data import Dataset
 import torch
 import torch.nn.functional as F
 from loguru import logger
+from pydantic import BaseModel
 
 
 class PairwiseDataset(Dataset):
@@ -10,7 +11,7 @@ class PairwiseDataset(Dataset):
         X=None,
         Y=None,
         n_pairs=4096,
-        gamma=1.1,
+        gamma=1,
         distance=2,
         nan_to_num=0,
         min_max_scale=True,
@@ -81,3 +82,22 @@ class PairwiseDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.sample(int(self.n_pairs * (self.gamma**idx)))
+
+
+class PairwiseDatasetCfg(BaseModel):
+    n_pairs: int = 4096
+    gamma: float = 1
+    distance: str | float = 2
+    nan_to_num: float = 0
+    min_max_scale: bool = True
+
+    def build(self, X=None, Y=None):
+        return PairwiseDataset(
+            X=X,
+            Y=Y,
+            n_pairs=self.n_pairs,
+            gamma=self.gamma,
+            distance=self.distance,
+            nan_to_num=self.nan_to_num,
+            min_max_scale=self.min_max_scale,
+        )
