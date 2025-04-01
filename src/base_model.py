@@ -12,8 +12,14 @@ class BaseModel(nn.Module):
         self.regularization_strength = regularization_strength
         if loss == "mse":
             self.loss = self.mse
+            self.maximize = False
         elif loss == "spearman":
             self.loss = self.spearman_diff
+            self.maximize = True
+        else:
+            raise ValueError(
+                f"Invalid loss function {loss}. Choose 'mse' or 'spearman'."
+            )
 
     def compute_gradient_norm(self, norm_type=2):
         """

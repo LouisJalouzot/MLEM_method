@@ -3,7 +3,9 @@ import subprocess
 import random
 import numpy as np
 import pandas as pd
+from tqdm.auto import tqdm
 from sklearn.preprocessing import MinMaxScaler
+from loguru import logger
 
 
 def _get_free_gpu():

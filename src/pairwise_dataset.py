@@ -1,16 +1,14 @@
 from torch.utils.data import Dataset
 import torch
 import torch.nn.functional as F
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class PairwiseDataset(Dataset):
     def __init__(
         self,
-        X,
-        Y,
+        X=None,
+        Y=None,
         n_pairs=4096,
         gamma=1.1,
         distance=2,
@@ -19,12 +17,18 @@ class PairwiseDataset(Dataset):
     ):
         self.X = X
         self.Y = Y
+        if X is not None and Y is not None:
+            assert len(X) == len(Y)
         self.n_pairs = n_pairs
         self.gamma = gamma
-        assert len(X) == len(Y)
-        self.n = len(X)
+        if X is not None:
+            self.n = len(X)
+            self.n_features = X.shape[1]
+        elif Y is not None:
+            self.n = len(Y)
+        else:
+            raise ValueError("Either X or Y must be provided.")
         self.max_n_pairs = self.n * (self.n - 1) // 2
-        self.n_features = X.shape[1]
         self.nan_to_num = nan_to_num
         self.min = torch.inf
         self.max = -torch.inf
@@ -38,28 +42,45 @@ class PairwiseDataset(Dataset):
     def __len__(self):
         return self.n
 
-    def __getitem__(self, idx):
-        batch_n_pairs = int(self.n_pairs * (self.gamma**idx))
-        if batch_n_pairs > self.max_n_pairs:
+    def sample(self, n_pairs=None, get_idx=False, only_valid=True):
+        if n_pairs > self.max_n_pairs:
             logger.debug(
-                f"Number of pairs required ({batch_n_pairs}) is greater than the number of pairs ({self.max_n_pairs}). Clipping to {self.max_n_pairs}."
+                f"Number of pairs required ({n_pairs}) is greater than the number of pairs ({self.max_n_pairs})."
             )
-            batch_n_pairs = self.max_n_pairs
 
-        ind_1 = torch.randint(0, self.n, (batch_n_pairs,))
-        ind_2 = torch.randint(0, self.n, (batch_n_pairs,))
+        ind_1 = torch.randint(0, self.n, (n_pairs,))
+        ind_2 = torch.randint(0, self.n, (n_pairs,))
+        if only_valid:
+            valid = ind_1 != ind_2
+            ind_1 = ind_1[valid]
+            ind_2 = ind_2[valid]
 
-        X_1 = self.X[ind_1]
-        X_2 = self.X[ind_2]
-        X_dist = (X_1 - X_2).nan_to_num(self.nan_to_num).clip(0, 1)
-        X_dist = X_dist.reshape(-1, self.n_features)
+        out = tuple()
 
-        Y_1 = self.Y[ind_1]
-        Y_2 = self.Y[ind_2]
-        Y_dist = self.distance(Y_1, Y_2).reshape(-1)
-        if self.min_max_scale:
-            self.min = min(self.min, Y_dist.min())
-            self.max = max(self.max, Y_dist.max())
-            Y_dist = (Y_dist - self.min) / (self.max - self.min)
+        if self.X is not None:
+            X_1 = self.X[ind_1]
+            X_2 = self.X[ind_2]
+            X_dist = (X_1 - X_2).nan_to_num(self.nan_to_num).abs().clip(0, 1)
+            X_dist = X_dist.reshape(-1, self.n_features)
+            out = (X_dist,)
 
-        return X_dist, Y_dist
+        if self.Y is not None:
+            Y_1 = self.Y[ind_1]
+            Y_2 = self.Y[ind_2]
+            Y_dist = self.distance(Y_1, Y_2).reshape(-1)
+            if self.min_max_scale:
+                self.min = min(self.min, Y_dist.min())
+                self.max = max(self.max, Y_dist.max())
+                Y_dist = (Y_dist - self.min) / (self.max - self.min)
+            out = (*out, Y_dist)
+
+        if get_idx:
+            out = (ind_1, ind_2, *out)
+
+        if len(out) == 1:
+            return out[0]
+        else:
+            return out
+
+    def __getitem__(self, idx):
+        return self.sample(int(self.n_pairs * (self.gamma**idx)))

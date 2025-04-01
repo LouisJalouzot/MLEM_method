@@ -1,14 +1,21 @@
-from requests import get
 import torch
 from torch import nn
 from torch.nn.utils import parametrize
 from parametrization_cookbook.torch import MatrixSymPosDef
 from src.base_model import BaseModel
+import pandas as pd
+
+
+class DiagonalParam(nn.Module):
+    def forward(self, W):
+        W = torch.diag(W)
+        W = torch.exp(W)
+        return torch.diag(W)
 
 
 class SPDExpParam(nn.Module):
-    def forward(self, X):
-        return torch.matrix_exp(X.triu() + X.triu(1).transpose(-1, -2))
+    def forward(self, W):
+        return torch.matrix_exp(W.triu() + W.triu(1).transpose(-1, -2))
 
 
 class CholeskyParam(nn.Module):
@@ -31,7 +38,7 @@ class SPDMatrixLearner(BaseModel):
     def __init__(
         self,
         num_features,
-        param="exp",
+        param="cholesky",
         fro_norm=True,
         init=None,
         init_kwargs={},
@@ -45,6 +52,7 @@ class SPDMatrixLearner(BaseModel):
             regularization_strength=spearman_regularization_strength,
         )
         self.W = nn.Linear(num_features, num_features, bias=False)
+        self.triu_indices = torch.triu_indices(num_features, num_features)
 
         if init is not None:
             getattr(nn.init, init)(self.W.weight, **init_kwargs)
@@ -56,6 +64,10 @@ class SPDMatrixLearner(BaseModel):
         elif param == "cholesky":
             parametrize.register_parametrization(
                 self.W, "weight", CholeskyParam(num_features)
+            )
+        elif param == "diagonal":
+            parametrize.register_parametrization(
+                self.W, "weight", DiagonalParam()
             )
         elif param == "none":
             pass
@@ -69,6 +81,18 @@ class SPDMatrixLearner(BaseModel):
 
     def get_W(self):
         return self.W.weight
+
+    def get_flat_W(self):
+        W = self.get_W()
+        W += W.tril(diagonal=-1).T
+
+        return W[*self.triu_indices]
+
+    def get_formatted_W(self, features=None):
+        W = self.get_W()
+        W += W.triu(1)
+        W[*torch.triu_indices(*W.shape, 1)] = torch.nan
+        W = pd.DataFrame(W.cpu().detach(), columns=features, index=features)
 
     def norm_diff(self):
         W = self.get_W()
@@ -87,3 +111,6 @@ class SPDMatrixLearner(BaseModel):
 
     def forward(self, X):
         return (self.W(X) * X).sum(dim=1)
+
+    def flat_forward(self, X):
+        return X @ self.get_flat_W()

@@ -9,7 +9,12 @@ memory = Memory(location=".cache", verbose=0)
 
 @memory.cache
 def compute_text_representations(
-    sentences, model_name, token_aggregation="mean", batch_size=32, device=None
+    sentences,
+    model_name,
+    token_aggregation="mean",
+    batch_size=32,
+    norm=None,
+    device=None,
 ):
     """Computes hidden states for all layers of a transformer model.
 
@@ -18,6 +23,8 @@ def compute_text_representations(
         model_name (str): Name of the transformer model to use.
         token_aggregation (str): How to aggregate token embeddings (mean, max, min, first, last).
         batch_size (int): Batch size for processing sentences.
+        norm (int): p value for normalization. If None, no normalization is applied.
+        device (torch.device): Device to use for computation. If None, uses the one defined in src.utils.
 
     Returns:
         torch.Tensor: Hidden states for all layers.
@@ -83,4 +90,9 @@ def compute_text_representations(
 
         all_hidden_states.append(aggregated_states.cpu())
 
-    return torch.concat(all_hidden_states, dim=1)
+    all_hidden_states = torch.concat(all_hidden_states, dim=1)
+
+    if norm is not None:
+        all_hidden_states /= all_hidden_states.norm(p=norm, dim=2, keepdim=True)
+
+    return all_hidden_states
