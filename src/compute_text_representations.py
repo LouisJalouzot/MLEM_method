@@ -3,8 +3,7 @@ from joblib.memory import Memory
 from transformers import AutoModel, AutoTokenizer
 import torch
 from tqdm.auto import tqdm
-
-memory = Memory(location=".cache", verbose=0)
+from src.utils import memory
 
 
 @memory.cache

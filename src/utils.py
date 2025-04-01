@@ -6,6 +6,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 from sklearn.preprocessing import MinMaxScaler
 from loguru import logger
+from joblib import Memory
 
 
 def _get_free_gpu():
@@ -57,3 +58,6 @@ def nanmin(tensor, dim=None, keepdim=False):
     max_value = torch.finfo(tensor.dtype).max
     output = tensor.nan_to_num(max_value).min(dim=dim, keepdim=keepdim)
     return output
+
+
+memory = Memory(location=".cache", verbose=0)
