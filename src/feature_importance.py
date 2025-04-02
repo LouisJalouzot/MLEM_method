@@ -2,6 +2,7 @@ from captum.attr import FeaturePermutation
 from tqdm.auto import tqdm
 from statsmodels.stats.descriptivestats import describe
 from loguru import logger
+from src.trainer import Trainer
 import torch
 from time import time
 import numpy as np
@@ -18,7 +19,9 @@ def compute_stats(data, alpha=0.01):
     ).T
 
 
-class FeatureImportanceConfig(BaseModel):
+class FeatureImportance(BaseModel):
+    trainer: Trainer
+
     n_perm: int = 30
     alpha: float = 0.01
     warn_ci: float = 0.01
@@ -27,20 +30,11 @@ class FeatureImportanceConfig(BaseModel):
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     @infra.apply
-    def compute(
-        self, model, dataloader, features
-    ) -> tp.Tuple[pd.DataFrame, pd.Series]:
-        """
-        Compute permutation feature importance with caching support.
+    def compute(self) -> tp.Tuple[pd.DataFrame, pd.Series]:
+        state_dict, _ = self.trainer.train()
+        model, dataset = self.trainer.init(state_dict=state_dict)
+        features = self.trainer.features
 
-        Args:
-            model: The model to evaluate
-            dataloader: Dataloader providing batches of data
-            features: Feature names
-
-        Returns:
-            Tuple containing feature importance DataFrame and Spearman correlation stats
-        """
         n = len(features)
         logger.info(
             f"Computing permutation feature importance with {self.n_perm} permutations "
@@ -59,12 +53,14 @@ class FeatureImportanceConfig(BaseModel):
 
         # Process batches
         with torch.no_grad():
-            for i, (X_batch, Y_batch) in tqdm(
-                enumerate(dataloader),
+            for i in tqdm(
+                range(self.n_perm),
                 desc="Computing feature importance",
-                total=self.n_perm,
             ):
                 t = time()
+
+                # Sample a batch
+                X_batch, Y_batch = dataset[i]
 
                 # Create flattened feature interactions
                 X_batch_flat = X_batch[:, None] * X_batch[:, :, None]

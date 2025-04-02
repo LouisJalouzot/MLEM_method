@@ -26,9 +26,9 @@ def encode_df(df: pd.DataFrame) -> torch.Tensor:
 
 class Stimulis(BaseModel):
     csv_path: str = "datasets/short_sentence.csv"
-    _df: pd.DataFrame = PrivateAttr()
-    _features: tp.List[str] = PrivateAttr()
-    _stimulis: tp.List[tp.Any] = PrivateAttr()
+    _df: pd.DataFrame = None
+    _features: tp.List[str] = None
+    _stimulis: np.array = None
 
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
@@ -39,13 +39,13 @@ class Stimulis(BaseModel):
         elif "sentence" in self._df.columns:
             self._stimulis = self._df["sentence"].values
         self._df = self._df.drop(columns=["word", "sentence"], errors="ignore")
-        self._features = list(self._df.columns)
+        self._features = self._df.columns.values
 
     @property
     def num_features(self) -> int:
         return len(self._features)
 
-    def get_stimulis(self) -> tp.List[tp.Any]:
+    def get_stimulis(self) -> np.array:
         return self._stimulis
 
     def encode(self) -> torch.Tensor:

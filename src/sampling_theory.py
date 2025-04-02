@@ -86,7 +86,7 @@ def compute_ci(data: torch.Tensor, confidence: float = 0.99) -> torch.Tensor:
     return torch.stack([lower_bound, upper_bound], dim=1)
 
 
-class CorrelationEstimatorConfig(BaseModel):
+class CorrelationEstimator(BaseModel):
     bootstrap: int = 5
     init_sample_size: int = 4096
     factor: float = 1.2
@@ -100,19 +100,6 @@ class CorrelationEstimatorConfig(BaseModel):
 
     @infra.apply
     def estimate_corrs(self, X: torch.Tensor) -> tp.Tuple[torch.Tensor, int]:
-        """
-        Estimates the correlation matrix using a bootstrapping approach.
-
-        The function iteratively increases the sample size until the confidence intervals
-        of the correlation coefficients are within a specified margin.
-
-        Args:
-            X: Feature tensor of shape (N, D), N=samples, D=variables.
-
-        Returns:
-            Tuple containing the estimated correlation matrix of shape (D, D)
-            and the sample size used.
-        """
         dataset = PairwiseDataset(X)
         i, j = torch.triu_indices(X.shape[1], X.shape[1])
         sample_size = self.init_sample_size

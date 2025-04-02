@@ -25,10 +25,35 @@ class Trainer(BaseModel):
     scheduler_patience: int = 10
     eps: float = 1e-5
 
-    device: str | None = None
     infra: TaskInfra = TaskInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
-    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
+    _device: str | None = None
+
+    @property
+    def features(self) -> tp.List[str]:
+        return self.dataframe._features
+
+    def init(
+        self, state_dict=None
+    ) -> tp.Tuple[torch.nn.Module, torch.utils.data.Dataset]:
+        torch.set_float32_matmul_precision("medium")
+        if self._device is None:
+            from src.utils import device
+
+            self._device = device
+
+        Y = self.representations.compute_and_combine_representations(
+            self.dataframe.get_stimulis()
+        )
+        model = self.model.build(num_features=self.dataframe.num_features)
+        if state_dict is not None:
+            model.load_state_dict(state_dict)
+        model = model.to(self._device)
+        X = self.dataframe.encode().to(self._device)
+        Y = Y.to(self._device)
+        dataset = self.dataset.build(X, Y)
+
+        return model, dataset
 
     @infra.apply
     def train(self) -> tp.Tuple[torch.Tensor, pd.DataFrame]:
@@ -42,20 +67,7 @@ class Trainer(BaseModel):
         Returns:
             Trained model
         """
-        torch.set_float32_matmul_precision("medium")
-        if self.device is None:
-            from src.utils import device
-        else:
-            device = self.device
-
-        Y = self.representations.compute_and_combine_representations(
-            self.dataframe.get_stimulis()
-        )
-        model = self.model.build(num_features=self.dataframe.num_features)
-        model = model.to(device)
-        X = self.dataframe.encode().to(device)
-        Y = Y.to(device)
-        dataset = self.dataset.build(X, Y)
+        model, dataset = self.init()
 
         optimizer = torch.optim.AdamW(
             model.parameters(),
@@ -73,7 +85,9 @@ class Trainer(BaseModel):
         prev_w = model.get_W().clone()
         start = time()
         logs = []
-        pbar = tqdm(range(self.max_epochs), desc=f"Training on device {device}")
+        pbar = tqdm(
+            range(self.max_epochs), desc=f"Training on device {self._device}"
+        )
         for i in pbar:
             t = time()
 

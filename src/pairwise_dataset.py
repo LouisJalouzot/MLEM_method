@@ -85,19 +85,25 @@ class PairwiseDataset(Dataset):
 
 
 class PairwiseDatasetCfg(BaseModel):
-    n_pairs: int = 4096
+    n_pairs: int = None
     gamma: float = 1
-    distance: str | float = 2
+    distance: str | float | int = 2
     nan_to_num: float = 0
     min_max_scale: bool = True
 
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def build(self, X=None, Y=None):
+        if self.n_pairs is None:
+            n_pairs = 40 * X.shape[1] ** 2
+            logger.info(
+                f"Number of pairs is not specified. Using estimated {n_pairs} pairs."
+            )
+
         return PairwiseDataset(
             X=X,
             Y=Y,
-            n_pairs=self.n_pairs,
+            n_pairs=n_pairs,
             gamma=self.gamma,
             distance=self.distance,
             nan_to_num=self.nan_to_num,
