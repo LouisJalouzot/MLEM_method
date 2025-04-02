@@ -11,18 +11,13 @@ class TextRepresentations(BaseModel):
     model_name: str = "bert-base-uncased"
     token_aggregation: str = "mean"
     batch_size: int = 32
-    layer: int = 5
-    units: tp.List[int] = None
     norm: tp.Optional[int] = None
     device: tp.Optional[str] = None
     infra: MapInfra = MapInfra(version="1", folder=".cache")
 
-    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
-        "device",
-        "layer",
-        "units",
-    )
     model_config: ConfigDict = ConfigDict(extra="forbid")
+
+    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
 
     @infra.apply(item_uid=str)
     def compute_representations(
@@ -111,8 +106,7 @@ class TextRepresentations(BaseModel):
                 yield aggregated_states[:, i]
 
     def compute_and_combine_representations(
-        self,
-        sentences: tp.Iterable[str],
+        self, sentences: tp.Iterable[str]
     ) -> torch.Tensor:
         representations = []
         for repr in tqdm(
@@ -120,8 +114,5 @@ class TextRepresentations(BaseModel):
             desc=f"Retrieving representations",
             total=len(sentences),
         ):
-            repr = repr[self.layer]
-            if self.units is not None:
-                repr = repr[self.units]
             representations.append(repr)
-        return torch.stack(representations)
+        return torch.stack(representations, dim=1)

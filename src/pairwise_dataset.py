@@ -2,7 +2,7 @@ from torch.utils.data import Dataset
 import torch
 import torch.nn.functional as F
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class PairwiseDataset(Dataset):
@@ -90,6 +90,8 @@ class PairwiseDatasetCfg(BaseModel):
     distance: str | float = 2
     nan_to_num: float = 0
     min_max_scale: bool = True
+
+    model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def build(self, X=None, Y=None):
         return PairwiseDataset(

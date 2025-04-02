@@ -3,10 +3,11 @@ from torch import nn
 from torch.nn.utils import parametrize
 from parametrization_cookbook.torch import MatrixSymPosDef
 import pandas as pd
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 import typing as tp
 from torchsort import soft_rank
 import torch.nn.functional as F
+from loguru import logger
 
 
 class DiagonalParam(nn.Module):
@@ -137,9 +138,9 @@ class SPDMatrixLearner(nn.Module):
         return eigenvalues.min().item()
 
     def check_spd(self) -> None:
-        """Print SPD checks"""
-        print(f"|| W - W^T || = {self.norm_diff():.2g}")
-        print(f"Min λ(W) = {self.min_eigenvalue():.2g}")
+        logger.info(
+            f"SPD check - || W - W^T || = {self.norm_diff():.2g} - Min λ(W) = {self.min_eigenvalue():.2g}"
+        )
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         """Forward pass: weighted sum of transformed features"""
@@ -222,6 +223,8 @@ class SPDMatrixLearnerCfg(BaseModel):
     loss: str = "spearman"
     spearman_regularization: str = "l2"
     spearman_regularization_strength: float = 1.0
+
+    model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def build(self, num_features) -> SPDMatrixLearner:
         """Build the model using this configuration"""

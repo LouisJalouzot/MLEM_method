@@ -2,7 +2,7 @@ import torch
 from scipy import stats
 from src.pairwise_dataset import PairwiseDataset
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from exca import TaskInfra
 import typing as tp
 
@@ -94,7 +94,9 @@ class CorrelationEstimatorConfig(BaseModel):
     confidence: float = 0.99
     max_margin: float = 5e-2
     product: bool = False
+
     infra: TaskInfra = TaskInfra(version="1", folder=".cache")
+    model_config: ConfigDict = ConfigDict(extra="forbid")
 
     @infra.apply
     def estimate_corrs(self, X: torch.Tensor) -> tp.Tuple[torch.Tensor, int]:
