@@ -14,17 +14,11 @@ class TextRepresentations(BaseModel):
     layer: int = 5
     units: tp.List[int] = None
     norm: tp.Optional[int] = None
-    device: tp.Optional[str] = None
-    infra: MapInfra = MapInfra(version="1", folder=".cache")
-
-    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
-        "device",
-        "layer",
-        "units",
-    )
+    _device: tp.Optional[str] = None
+    infra: MapInfra = MapInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
-    @infra.apply(item_uid=str)
+    @infra.apply(item_uid=str, exclude_from_cache_uid=["layer", "units"])
     def compute_representations(
         self, sentences: tp.Iterable[str]
     ) -> tp.Iterable[torch.Tensor]:
@@ -36,10 +30,10 @@ class TextRepresentations(BaseModel):
         Returns:
             torch.Tensor: Hidden states for all layers.
         """
-        if self.device is None:
+        if self._device is None:
             from src.utils import device
         else:
-            device = self.device
+            device = self._device
 
         tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         if tokenizer.pad_token is None:

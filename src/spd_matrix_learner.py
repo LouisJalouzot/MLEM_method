@@ -138,9 +138,16 @@ class SPDMatrixLearner(nn.Module):
         return eigenvalues.min().item()
 
     def check_spd(self) -> None:
-        logger.info(
-            f"SPD check - || W - W^T || = {self.norm_diff():.2g} - Min λ(W) = {self.min_eigenvalue():.2g}"
-        )
+        try:
+            min_lambda = self.min_eigenvalue()
+            logger.info(
+                f"SPD check - || W - W^T || = {self.norm_diff():.2g} - Min λ(W) = {min_lambda:.2g}"
+            )
+        except Exception as e:
+            logger.error(
+                f"SPD check failed: {e}.\n"
+                "The matrix is not symmetric positive definite."
+            )
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         """Forward pass: weighted sum of transformed features"""
