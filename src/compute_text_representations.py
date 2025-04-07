@@ -2,7 +2,7 @@ from src.utils import nanmin, nanmax
 from transformers import AutoModel, AutoTokenizer
 import torch
 from tqdm.auto import tqdm
-from pydantic import BaseModel, ConfigDict
+from src.utils import BaseModel, ConfigDict
 from exca import MapInfra
 import typing as tp
 

@@ -2,7 +2,8 @@ from torch.utils.data import Dataset
 import torch
 import torch.nn.functional as F
 from loguru import logger
-from pydantic import BaseModel, ConfigDict
+from src.utils import BaseModel
+from pydantic import ConfigDict
 
 
 class PairwiseDataset(Dataset):

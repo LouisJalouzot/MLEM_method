@@ -24,6 +24,7 @@ dependencies = [
     "sqlmodel>=0.0.24",
     "torch>=2.6.0",
     "torchsort>=0.1.9",
+    "torchvision>=0.21.0",
     "tqdm>=4.67.1",
     "transformers>=4.50.1",
     "turm>=0.7.3",

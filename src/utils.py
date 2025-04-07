@@ -1,6 +1,8 @@
 import torch
 import subprocess
 import random
+from pydantic import BaseModel
+import typing as tp
 
 
 def _get_free_gpu():
@@ -35,3 +37,11 @@ def nanmin(tensor, dim=None, keepdim=False):
     max_value = torch.finfo(tensor.dtype).max
     output = tensor.nan_to_num(max_value).min(dim=dim, keepdim=keepdim)
     return output
+
+
+class BaseModel(BaseModel):
+    def __eq__(self, other: tp.Any) -> bool:
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+
+        return self.model_dump() == other.model_dump()

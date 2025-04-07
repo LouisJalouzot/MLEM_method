@@ -2,9 +2,9 @@ import pandas as pd
 import torch
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
-from pydantic import BaseModel, ConfigDict, PrivateAttr
+from src.utils import BaseModel
+from pydantic import ConfigDict
 import typing as tp
-from exca import TaskInfra
 
 
 def encode_df(df: pd.DataFrame) -> torch.Tensor:
@@ -35,17 +35,28 @@ class Stimulis(BaseModel):
     def model_post_init(self, __context):
         self._df = pd.read_csv(self.csv_path)
         if "word" in self._df.columns:
-            self._stimulis = self._df["word"].values
+            self._stimulis = self._df[["word", "sentence_id"]]
         elif "sentence" in self._df.columns:
             self._stimulis = self._df["sentence"].values
-        self._df = self._df.drop(columns=["word", "sentence"], errors="ignore")
+        self._df = self._df.drop(
+            columns=["word", "sentence", "sentence_id"], errors="ignore"
+        )
         self._features = self._df.columns.values
+
+    @property
+    def df(self) -> pd.DataFrame:
+        return self._df
 
     @property
     def num_features(self) -> int:
         return len(self._features)
 
-    def get_stimulis(self) -> np.array:
+    @property
+    def features(self) -> tp.List[str]:
+        return self._features
+
+    @property
+    def stimulis(self) -> np.array:
         return self._stimulis
 
     def encode(self) -> torch.Tensor:

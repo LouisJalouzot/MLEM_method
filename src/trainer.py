@@ -3,21 +3,22 @@ from time import time
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from loguru import logger
 from tqdm.auto import tqdm
-from pydantic import BaseModel, ConfigDict
+from src.utils import BaseModel
+from pydantic import ConfigDict
 from exca import TaskInfra
 import typing as tp
 from src.spd_matrix_learner import SPDMatrixLearnerCfg
 from src.pairwise_dataset import PairwiseDatasetCfg
 from src.stimulis import Stimulis
-from src.text_representations import TextRepresentations
+from src.sentence_representations import SentenceRepresentations
 import pandas as pd
 
 
 class Trainer(BaseModel):
-    model: SPDMatrixLearnerCfg
-    dataframe: Stimulis
-    representations: TextRepresentations
-    dataset: PairwiseDatasetCfg
+    model: SPDMatrixLearnerCfg = SPDMatrixLearnerCfg()
+    dataframe: Stimulis = Stimulis()
+    representations: SentenceRepresentations = SentenceRepresentations()
+    dataset: PairwiseDatasetCfg = PairwiseDatasetCfg()
     lr: float = 0.1
     weight_decay: float = 0
     max_epochs: int = 500
@@ -43,7 +44,7 @@ class Trainer(BaseModel):
             self._device = device
 
         Y = self.representations.compute_and_combine_representations(
-            self.dataframe.get_stimulis()
+            self.dataframe.stimulis
         )
         model = self.model.build(num_features=self.dataframe.num_features)
         if state_dict is not None:

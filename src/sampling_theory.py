@@ -2,7 +2,7 @@ import torch
 from scipy import stats
 from src.pairwise_dataset import PairwiseDataset
 from loguru import logger
-from pydantic import BaseModel, ConfigDict
+from src.utils import BaseModel, ConfigDict
 from exca import TaskInfra
 import typing as tp
 

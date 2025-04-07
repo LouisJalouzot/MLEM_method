@@ -7,7 +7,8 @@ import torch
 from time import time
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel, ConfigDict
+from src.utils import BaseModel
+from pydantic import ConfigDict
 from exca import TaskInfra
 import typing as tp
 

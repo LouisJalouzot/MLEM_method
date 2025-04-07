@@ -2,12 +2,13 @@ from src.utils import nanmin, nanmax
 from transformers import AutoModel, AutoTokenizer
 import torch
 from tqdm.auto import tqdm
-from pydantic import BaseModel, ConfigDict
+from src.utils import BaseModel
+from pydantic import ConfigDict
 from exca import MapInfra
 import typing as tp
 
 
-class TextRepresentations(BaseModel):
+class SentenceRepresentations(BaseModel):
     model_name: str = "bert-base-uncased"
     token_aggregation: str = "mean"
     batch_size: int = 32

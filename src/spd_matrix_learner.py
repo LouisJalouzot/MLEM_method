@@ -3,7 +3,8 @@ from torch import nn
 from torch.nn.utils import parametrize
 from parametrization_cookbook.torch import MatrixSymPosDef
 import pandas as pd
-from pydantic import BaseModel, ConfigDict
+from src.utils import BaseModel
+from pydantic import ConfigDict
 import typing as tp
 from torchsort import soft_rank
 import torch.nn.functional as F
@@ -15,6 +16,11 @@ class DiagonalParam(nn.Module):
         W = torch.diag(W)
         W = torch.exp(W)
         return torch.diag(W)
+
+
+class SymParam(nn.Module):
+    def forward(self, W):
+        return W.triu() + W.triu(1).transpose(-1, -2)
 
 
 class SPDExpParam(nn.Module):
@@ -98,6 +104,8 @@ class SPDMatrixLearner(nn.Module):
             parametrize.register_parametrization(
                 self.W, "weight", DiagonalParam()
             )
+        elif param == "sym":
+            parametrize.register_parametrization(self.W, "weight", SymParam())
         elif param == "none":
             pass
         else:
