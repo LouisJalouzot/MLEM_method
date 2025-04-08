@@ -1,16 +1,18 @@
-from captum.attr import FeaturePermutation
-from tqdm.auto import tqdm
-from statsmodels.stats.descriptivestats import describe
-from loguru import logger
-from src.trainer import Trainer
-import torch
+import typing as tp
 from time import time
+
 import numpy as np
 import pandas as pd
-from src.utils import BaseModel
-from pydantic import ConfigDict
+import torch
+from captum.attr import FeaturePermutation
 from exca import TaskInfra
-import typing as tp
+from loguru import logger
+from pydantic import ConfigDict
+from statsmodels.stats.descriptivestats import describe
+from tqdm.auto import tqdm
+
+from src.trainer import Trainer
+from src.utils import BaseModel
 
 
 def compute_stats(data, alpha=0.01):

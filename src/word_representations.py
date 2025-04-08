@@ -1,20 +1,21 @@
-import torch
-from src.utils import BaseModel
-from pydantic import ConfigDict
-from exca import MapInfra
-import typing as tp
-import neuralset as ns
-import pandas as pd
-from neuralset.features import HuggingFaceText
 import string
+import typing as tp
+
+import neuralset as ns
 import numpy as np
+import pandas as pd
+import torch
+from exca import MapInfra
+from neuralset.features import HuggingFaceText
+from pydantic import ConfigDict
+
+from src.utils import BaseModel
 
 
 def make_sentence(words):
     s = ""
     cum_s = []
     indices = []
-    df = None
     for word in words:
         if word in string.punctuation:
             s = s.strip()
@@ -49,6 +50,7 @@ def df_from_words(words: pd.DataFrame) -> pd.DataFrame:
 
 
 class WordRepresentations(BaseModel):
+    level: tp.Literal["word"] = "word"
     model_name: str = "gpt2"
     token_aggregation: str = "mean"
     batch_size: int = 32

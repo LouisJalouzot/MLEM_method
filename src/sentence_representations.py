@@ -1,14 +1,16 @@
-from src.utils import nanmin, nanmax
-from transformers import AutoModel, AutoTokenizer
-import torch
-from tqdm.auto import tqdm
-from src.utils import BaseModel
-from pydantic import ConfigDict
-from exca import MapInfra
 import typing as tp
+
+import torch
+from exca import MapInfra
+from pydantic import ConfigDict
+from tqdm.auto import tqdm
+from transformers import AutoModel, AutoTokenizer
+
+from src.utils import BaseModel, nanmax, nanmin
 
 
 class SentenceRepresentations(BaseModel):
+    level: tp.Literal["sentence"] = "sentence"
     model_name: str = "bert-base-uncased"
     token_aggregation: str = "mean"
     batch_size: int = 32
@@ -20,7 +22,7 @@ class SentenceRepresentations(BaseModel):
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     @infra.apply(item_uid=str, exclude_from_cache_uid=["layer", "units"])
-    def compute_representations(
+    def _compute_representations_cached(
         self, sentences: tp.Iterable[str]
     ) -> tp.Iterable[torch.Tensor]:
         """Computes hidden states for all layers of a transformer model.
@@ -105,13 +107,13 @@ class SentenceRepresentations(BaseModel):
                 # Yield each sentence's representation
                 yield aggregated_states[:, i]
 
-    def compute_and_combine_representations(
+    def compute_representations(
         self,
         sentences: tp.Iterable[str],
     ) -> torch.Tensor:
         representations = []
         for repr in tqdm(
-            self.compute_representations(sentences),
+            self._compute_representations_cached(sentences),
             desc=f"Retrieving representations",
             total=len(sentences),
         ):

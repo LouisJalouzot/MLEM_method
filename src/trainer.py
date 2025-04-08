@@ -1,23 +1,28 @@
-import torch
-from time import time
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from loguru import logger
-from tqdm.auto import tqdm
-from src.utils import BaseModel
-from pydantic import ConfigDict
-from exca import TaskInfra
 import typing as tp
-from src.spd_matrix_learner import SPDMatrixLearnerCfg
-from src.pairwise_dataset import PairwiseDatasetCfg
-from src.stimulis import Stimulis
-from src.sentence_representations import SentenceRepresentations
+from time import time
+
 import pandas as pd
+import torch
+from exca import TaskInfra
+from loguru import logger
+from pydantic import ConfigDict, Field
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from tqdm.auto import tqdm
+
+from src.pairwise_dataset import PairwiseDatasetCfg
+from src.sentence_representations import SentenceRepresentations
+from src.spd_matrix_learner import SPDMatrixLearnerCfg
+from src.stimulis import Stimulis
+from src.utils import BaseModel
+from src.word_representations import WordRepresentations
 
 
 class Trainer(BaseModel):
     model: SPDMatrixLearnerCfg = SPDMatrixLearnerCfg()
     dataframe: Stimulis = Stimulis()
-    representations: SentenceRepresentations = SentenceRepresentations()
+    representations: SentenceRepresentations | WordRepresentations = Field(
+        default=SentenceRepresentations(), discriminator="level"
+    )
     dataset: PairwiseDatasetCfg = PairwiseDatasetCfg()
     lr: float = 0.1
     weight_decay: float = 0
@@ -43,7 +48,7 @@ class Trainer(BaseModel):
 
             self._device = device
 
-        Y = self.representations.compute_and_combine_representations(
+        Y = self.representations.compute_representations(
             self.dataframe.stimulis
         )
         model = self.model.build(num_features=self.dataframe.num_features)

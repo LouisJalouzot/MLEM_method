@@ -10,6 +10,7 @@ wheels/
 
 *.lock
 *.text
+*.log
 
 .*
 *.sh

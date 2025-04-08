@@ -1,10 +1,12 @@
+import typing as tp
+
+import numpy as np
 import pandas as pd
 import torch
-import numpy as np
-from sklearn.preprocessing import MinMaxScaler
-from src.utils import BaseModel
 from pydantic import ConfigDict
-import typing as tp
+from sklearn.preprocessing import MinMaxScaler
+
+from src.utils import BaseModel
 
 
 def encode_df(df: pd.DataFrame) -> torch.Tensor:

@@ -1,10 +1,12 @@
-import torch
-from scipy import stats
-from src.pairwise_dataset import PairwiseDataset
-from loguru import logger
-from src.utils import BaseModel, ConfigDict
-from exca import TaskInfra
 import typing as tp
+
+import torch
+from exca import TaskInfra
+from loguru import logger
+from scipy import stats
+
+from src.pairwise_dataset import PairwiseDataset
+from src.utils import BaseModel, ConfigDict
 
 
 def batch_corrcoef(
