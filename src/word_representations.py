@@ -55,14 +55,15 @@ class WordRepresentations(BaseModel):
     token_aggregation: str = "mean"
     batch_size: int = 32
     layer: float = 5 / 13
-    units: tp.List[int] = None
-    norm: tp.Optional[int] = None
+    units: tp.List[int] | None = None
+    norm: tp.Optional[int] | None = None
 
     _device: tp.Optional[str] = "auto"
     infra: MapInfra = MapInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def compute_representations(self, words: pd.DataFrame) -> torch.Tensor:
+        # Does not perform bidirectionnal context!
         feature = HuggingFaceText(
             contextualized=True,
             token_aggregation="mean",
