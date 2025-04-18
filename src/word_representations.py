@@ -14,15 +14,16 @@ from src.utils import BaseModel, nanmax, nanmin
 
 def cum_join_index(words):
     s = ""
-    starts = []
+    starts = [0]
     stops = []
     for w in words:
-        if w in string.punctuation:
-            stops[-1] -= 1
-            s = s.strip()
-        starts.append(len(s))
-        s += w + " "
-        stops.append(len(s))
+        if w not in string.punctuation and len(s) > 0:
+            s += " "
+        s += w
+        n = len(s)
+        stops.append(n)
+        starts.append(n)
+    stops.append(len(s))
 
     return s.strip(), starts, stops
 
@@ -139,7 +140,7 @@ class WordRepresentations(BaseModel):
 
             for aggregated_state in aggregated_states:
                 # Yield each sentence's representation
-                yield aggregated_state
+                yield aggregated_state.cpu()
 
     def compute_representations(self, words: pd.DataFrame) -> torch.Tensor:
         sentences = words.groupby("sentence_id").word.apply(cum_join_index)
@@ -151,7 +152,10 @@ class WordRepresentations(BaseModel):
             total=len(sentences),
             desc="Retrieving sentence representations",
         ):
-            out.append(t[:, self.layer, self.units])
+            t = t[:, self.layer]
+            if self.units is not None:
+                t = t[:, self.units]
+            out.append(t)
         out = torch.concat(out, dim=0)
         # Remove padding
         out = out[~torch.isnan(out).all(dim=1)]
