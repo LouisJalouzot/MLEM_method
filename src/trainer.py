@@ -7,7 +7,9 @@ from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from tqdm.auto import tqdm
+
+# Removed tqdm import
+# from tqdm.auto import tqdm
 
 from src.pairwise_dataset import PairwiseDatasetCfg
 from src.sentence_representations import SentenceRepresentations
@@ -15,6 +17,11 @@ from src.spd_matrix_learner import SPDMatrixLearnerCfg
 from src.stimulis import Stimulis
 from src.utils import BaseModel
 from src.word_representations import WordRepresentations
+
+# Import core trainer function and core model/dataset types
+from src.core.trainer import train_loop
+from src.core.spd_matrix_learner import SPDMatrixLearner
+from src.core.pairwise_dataset import PairwiseDataset
 
 
 class Trainer(BaseModel):
@@ -41,7 +48,7 @@ class Trainer(BaseModel):
 
     def init(
         self, state_dict=None
-    ) -> tp.Tuple[torch.nn.Module, torch.utils.data.Dataset]:
+    ) -> tp.Tuple[SPDMatrixLearner, PairwiseDataset]:  # Updated type hints
         torch.set_float32_matmul_precision("medium")
         if self._device is None:
             from src.utils import device
@@ -71,7 +78,7 @@ class Trainer(BaseModel):
             dataloader: DataLoader providing batches
 
         Returns:
-            Trained model
+            Trained model state dict and logs
         """
         model, dataset = self.init()
 
@@ -87,60 +94,17 @@ class Trainer(BaseModel):
             factor=self.scheduler_factor,
             patience=self.scheduler_patience,
         )
-        model.train()
-        prev_w = model.get_W().clone()
-        start = time()
-        logs = []
-        pbar = tqdm(
-            range(self.max_epochs), desc=f"Training on device {self._device}"
+
+        # Call the core training loop
+        model, logs = train_loop(
+            model=model,
+            dataset=dataset,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            max_epochs=self.max_epochs,
+            eps=self.eps,
+            device=self._device,
         )
-        for i in pbar:
-            t = time()
-
-            X_batch, Y_batch = dataset[i]
-            optimizer.zero_grad(set_to_none=True)
-            Y_pred = model(X_batch)
-            score = model.loss(Y_pred, Y_batch)
-            score.backward()
-            grad_norm = model.compute_gradient_norm()
-            optimizer.step()
-            rho = model.spearman(Y_pred, Y_batch)
-            scheduler.step(rho)
-
-            log = {
-                "Batch size": len(X_batch),
-                "Score": score.item(),
-                "Spearman": rho.item(),
-                "LR": optimizer.param_groups[0]["lr"],
-            }
-            logs.append(log)
-            s = " - ".join([f"{k}: {v:<8.3g}" for k, v in log.items()])
-            pbar.set_postfix_str(s)
-            W = model.get_W()
-            diff_norm = (W - prev_w).norm(p="fro").item()
-            log |= {
-                "Step Duration": time() - t,
-                "Gradient Norm": grad_norm,
-                "Diff norm": diff_norm,
-            }
-            s += " - " + " - ".join([f"{k}: {v:<7.2g}" for k, v in log.items()])
-            logger.debug(f"Step {i:<3} / {self.max_epochs} - " + s)
-            if diff_norm < self.eps:
-                logger.info(
-                    f"Convergence reached at step {i} / {self.max_epochs} "
-                    f"with diff norm = {diff_norm:.3g} < eps = {self.eps:.3g} "
-                    f"after {time() - start:.2g}s"
-                )
-                break
-            prev_w = model.get_W().clone()
-            if i > self.max_epochs:
-                logger.warning(
-                    f"Maximum number of epochs reached without convergence: "
-                    f"diff norm {diff_norm:.3g} > eps {self.eps:.3g}"
-                )
-                break
-
-        model.check_spd()
 
         # Output state_dict as nn.Module can't be serialized for caching
-        return model.state_dict(), pd.DataFrame(logs)
+        return model.state_dict(), logs

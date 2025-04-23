@@ -1,0 +1,116 @@
+import typing as tp
+from time import time
+
+import numpy as np
+import pandas as pd
+import torch
+from captum.attr import FeaturePermutation
+from loguru import logger
+from statsmodels.stats.descriptivestats import describe
+from tqdm.auto import tqdm
+
+from src.core.pairwise_dataset import PairwiseDataset
+from src.core.spd_matrix_learner import SPDMatrixLearner
+
+
+def compute_stats(data, alpha=0.01):
+    """Compute descriptive statistics with confidence intervals"""
+    return describe(
+        data, stats=["mean", "std", "std_err", "ci"], use_t=True, alpha=alpha
+    ).T
+
+
+def compute_feature_importance_core(
+    model: SPDMatrixLearner,
+    dataset: PairwiseDataset,
+    features: list[str],
+    n_perm: int,
+    alpha: float,
+    warn_ci: float,
+) -> tp.Tuple[pd.DataFrame, pd.Series]:
+    """Core logic for computing permutation feature importance."""
+    n = len(features)
+    logger.info(
+        f"Computing permutation feature importance with {n_perm} permutations "
+        f"for {n*(n-1)//2} feature pairs."
+    )
+
+    # Create feature pair names
+    features_arr = np.array(features)
+    pfeatures = np.core.defchararray.add(
+        np.core.defchararray.add(features_arr[None], ", "),
+        features_arr[:, None],
+    )
+    np.fill_diagonal(pfeatures, features)
+    pfeatures = pfeatures[*model.triu_indices]
+
+    # Storage for results
+    importances = []
+    spearman = []
+    start = time()
+
+    # Process batches
+    with torch.no_grad():
+        for i in tqdm(
+            range(n_perm),
+            desc="Computing feature importance",
+        ):
+            t = time()
+
+            # Sample a batch
+            X_batch, Y_batch = dataset[i]
+
+            # Create flattened feature interactions
+            X_batch_flat = X_batch[:, None] * X_batch[:, :, None]
+            X_batch_flat = X_batch_flat[:, *model.triu_indices]
+
+            # Define the function to measure attributions
+            def f(x):
+                pred = model.flat_forward(x)
+                return model.spearman(pred, Y_batch)
+
+            # Calculate feature importance
+            feature_perm = FeaturePermutation(f)
+            batch_importances = feature_perm.attribute(X_batch_flat).cpu()
+            importances.append(batch_importances.double().numpy().squeeze())
+
+            # Calculate baseline performance
+            pred = model(X_batch)
+            s = model.spearman(pred, Y_batch).item()
+            spearman.append(s)
+
+            logger.debug(
+                f"Batch {i:<3} / {n_perm} - "
+                f"Duration: {time() - t:.3g}s - "
+                f"Spearman: {s:<8.3g}"
+            )
+            if i >= n_perm - 1:  # Check if n_perm is reached
+                break
+
+    # Process results
+    importances = np.stack(importances)
+    importances = pd.DataFrame(importances, columns=pfeatures)
+    importances_stats = compute_stats(importances, alpha=alpha)
+    importances_stats = importances_stats.sort_values("mean", ascending=False)
+    importances_stats = importances_stats.reset_index(names="Feature")
+
+    # Compute spearman statistics
+    spearman_stats = compute_stats(spearman, alpha=alpha).iloc[0]
+
+    # Log results
+    logger.info(
+        f"Feature importance computed in {time() - start:.3g}s. "
+        f"Mean Spearman = {spearman_stats['mean']:.3g} ± {spearman_stats['std']:.3g}"
+    )
+
+    # Warn if there's significant variability
+    low, high = spearman_stats["lower_ci"], spearman_stats["upper_ci"]
+    if high - low > warn_ci:
+        logger.warning(
+            f"Significant variability between the batches: "
+            f"the {(1 - alpha)*100:.3g}% confidence interval "
+            f"of the Spearman correlation is [{low:.3g}, {high:.3g}] "
+            f"which is larger than the threshold {warn_ci:.3g}."
+        )
+
+    return importances_stats, spearman_stats

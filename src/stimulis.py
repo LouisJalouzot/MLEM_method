@@ -4,26 +4,9 @@ import numpy as np
 import pandas as pd
 import torch
 from pydantic import ConfigDict
-from sklearn.preprocessing import MinMaxScaler
 
 from src.utils import BaseModel
-
-
-def encode_df(df: pd.DataFrame) -> torch.Tensor:
-    X = np.zeros(df.shape, dtype=np.float32)
-    number_cols = np.array([np.issubdtype(t, np.number) for t in df.dtypes])
-    for i in range(df.shape[1]):
-        s = df.iloc[:, i]
-        if number_cols[i]:
-            X[:, i] = s.values
-        else:
-            s = s.astype("category").cat.codes
-            # -1 category code corresponds to NaN values
-            s[s == -1] = np.nan
-            X[:, i] = s
-    X[:, number_cols] = MinMaxScaler().fit_transform(X[:, number_cols])
-
-    return torch.from_numpy(X)
+from src.core.stimulis import encode_df
 
 
 class Stimulis(BaseModel):

@@ -18,6 +18,7 @@ dependencies = [
     "pingouin>=0.5.5",
     "plotly>=6.0.1",
     "pydantic>=2.11.1",
+    "pytest>=8.3.5",
     "scikit-learn>=1.6.1",
     "scipy>=1.15.2",
     "seaborn>=0.13.2",
@@ -32,3 +33,6 @@ dependencies = [
     "wandb>=0.19.8",
     "xarray>=2025.3.0",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["./"]

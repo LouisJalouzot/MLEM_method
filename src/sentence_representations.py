@@ -4,9 +4,14 @@ import torch
 from exca import MapInfra
 from pydantic import ConfigDict
 from tqdm.auto import tqdm
-from transformers import AutoModel, AutoTokenizer
 
-from src.utils import BaseModel, nanmax, nanmin
+# Removed AutoModel, AutoTokenizer imports
+# from transformers import AutoModel, AutoTokenizer
+
+from src.utils import BaseModel  # Removed nanmax, nanmin
+
+# Import core function
+from src.core.representations import compute_sentence_representations
 
 
 class SentenceRepresentations(BaseModel):
@@ -38,74 +43,15 @@ class SentenceRepresentations(BaseModel):
         else:
             device = self._device
 
-        tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-        model = AutoModel.from_pretrained(
-            self.model_name, output_hidden_states=True
+        # Call the core function
+        yield from compute_sentence_representations(
+            sentences=sentences,
+            model_name=self.model_name,
+            token_aggregation=self.token_aggregation,
+            batch_size=self.batch_size,
+            norm=self.norm,
+            device=device,
         )
-        model = model.to(device)
-        model.eval()
-
-        for i in tqdm(
-            range(0, len(sentences), self.batch_size),
-            desc=f"Computing representations on device {device}",
-        ):
-            # Process batch of sentences
-            batch_sentences = sentences[i : i + self.batch_size]
-            encoded_input = tokenizer(
-                batch_sentences,
-                padding=True,
-                truncation=False,
-                return_tensors="pt",
-            ).to(device)
-
-            # Get hidden states
-            with torch.no_grad():
-                hidden_states = model(**encoded_input).hidden_states
-
-            # Stack to tensor shape (layers, batch, seq_len, hidden_size)
-            hidden_states = torch.stack(hidden_states)
-
-            # Mask padding tokens with NaNs
-            attention_mask_expanded = (
-                encoded_input["attention_mask"]
-                .unsqueeze(-1)
-                .expand(hidden_states.size())
-            )
-            masked_hidden_states = torch.where(
-                attention_mask_expanded > 0,
-                hidden_states,
-                torch.full_like(hidden_states, fill_value=torch.nan),
-            )
-
-            # Aggregate token embeddings based on specified method
-            if self.token_aggregation == "mean":
-                aggregated_states = masked_hidden_states.nanmean(dim=2)
-            elif self.token_aggregation == "max":
-                aggregated_states = nanmax(masked_hidden_states, dim=2)[0]
-            elif self.token_aggregation == "min":
-                aggregated_states = nanmin(masked_hidden_states, dim=2)[0]
-            elif self.token_aggregation == "first":
-                aggregated_states = hidden_states[:, :, 0]
-            elif self.token_aggregation == "last":
-                last_idx = encoded_input["attention_mask"].sum(dim=1) - 1
-                corresp_idx = torch.arange(len(last_idx))
-                aggregated_states = hidden_states[:, corresp_idx, last_idx]
-            else:
-                raise ValueError(
-                    f"Invalid token aggregation method: {self.token_aggregation}"
-                )
-
-            # Apply normalization if specified
-            if self.norm is not None:
-                aggregated_states /= aggregated_states.norm(
-                    p=self.norm, dim=2, keepdim=True
-                )
-
-            for i in range(len(batch_sentences)):
-                # Yield each sentence's representation
-                yield aggregated_states[:, i]
 
     def compute_representations(
         self,
