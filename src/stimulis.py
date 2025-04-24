@@ -5,8 +5,7 @@ import pandas as pd
 import torch
 from pydantic import ConfigDict
 
-from src.utils import BaseModel
-from src.core.stimulis import encode_df
+from src.utils import BaseModel, encode_df
 
 
 class Stimulis(BaseModel):
