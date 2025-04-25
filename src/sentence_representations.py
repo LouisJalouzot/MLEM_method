@@ -1,5 +1,4 @@
 import typing as tp
-from typing import Any
 
 import torch
 from exca import TaskInfra
@@ -32,64 +31,68 @@ def compute_sentence_representations(
 
 
 class SentenceRepresentations(BaseModel):
-    """Computes sentence representations using a pre-trained transformer model.
-
-    This class handles the computation of sentence embeddings by processing a list
-    of sentences through a specified Hugging Face transformer model. It allows
-    configuration of various parameters like model name, batch size, aggregation
-    method for tokens, and selection of specific layers and units. Caching is
-    used to avoid recomputing representations for the same configuration (excluding
-    layer and unit selection).
-
-    Attributes:
-        sentences: A list of strings, where each string is a sentence.
-        level: The level of representation, fixed to "sentence".
-        model_name: The name of the Hugging Face model to use (e.g., "bert-base-uncased").
-        token_aggregation: The method used to aggregate token hidden states into a
-            sentence representation (e.g., "mean", "sum").
-        add_special_tokens: Whether to include special tokens ([CLS], [SEP]) during
-            tokenization.
-        batch_size: The batch size used for processing sentences through the model.
-        layer: The specific layer from which to extract the final sentence representations.
-        units: An optional list of specific hidden unit indices to select from the
-            chosen layer's representation. If None, all units are kept.
-        infra: Configuration for caching mechanism.
-        model_config: Pydantic model configuration.
-    """
-
     sentences: tp.List[str]
-    level: tp.Literal["sentence"] = "sentence"
     model_name: str = "bert-base-uncased"
     token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = (
         "mean"
     )
     add_special_tokens: bool = True
     batch_size: int = 32
-    layer: int = 5
-    units: tp.List[int] = None
-    _device: tp.Optional[torch.device] = None
+    device: tp.Optional[str] = None
     infra: TaskInfra = TaskInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
+    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
+        "device",
+        "batch_size",
+    )
 
-    def model_post_init(self, __context: Any) -> None:
-        if self._device is None:
-            self._device = get_device()
+    def model_post_init(self, __context: tp.Any) -> None:
+        if self.device is None:
+            self.device = get_device()
 
-    @infra.apply(exclude_from_cache_uid=["layer", "units"])
+    @infra.apply(exclude_from_cache_uid=["batch_size", "device"])
     def _compute_representations_cached(self) -> torch.Tensor:
         # (n_sentences, layers, hidden_size)
         return compute_sentence_representations(
             self.sentences,
             model_name=self.model_name,
             batch_size=self.batch_size,
-            device=self._device,
+            device=self.device,
             add_special_tokens=self.add_special_tokens,
             token_aggregation=self.token_aggregation,
         )
 
-    def __call__(self) -> torch.Tensor:
+
+class SentenceRepresentationsCfg(BaseModel):
+    level: tp.Literal["sentence"] = "sentence"
+    model_name: str = "bert-base-uncased"
+    token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = (
+        "mean"
+    )
+    add_special_tokens: bool = True
+    layer: int = 5
+    units: tp.List[int] = None
+    device: tp.Optional[str] = None
+    batch_size: int = 32
+    infra: TaskInfra = TaskInfra(folder=".cache")
+    model_config: ConfigDict = ConfigDict(extra="forbid")
+    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
+        "device",
+        "batch_size",
+    )
+
+    def __call__(self, sentences: tp.List[str]) -> torch.Tensor:
         # (n_sentences, layers, hidden_size)
-        sentence_representations = self._compute_representations_cached()
+        sentence_representations = SentenceRepresentations(
+            sentences=sentences,
+            model_name=self.model_name,
+            token_aggregation=self.token_aggregation,
+            add_special_tokens=self.add_special_tokens,
+            batch_size=self.batch_size,
+            device=self.device,
+            infra=self.infra,
+        )._compute_representations_cached()
+
         if self.units is not None:
             sentence_representations = sentence_representations[
                 :, :, self.units

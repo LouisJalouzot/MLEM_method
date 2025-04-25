@@ -14,7 +14,7 @@ from torch.utils import data
 from tqdm.auto import tqdm
 
 from src.trainer import Trainer
-from src.utils import BaseModel, min_level_debug
+from src.utils import BaseModel
 
 
 def compute_stats(data, alpha=0.01):
@@ -55,7 +55,6 @@ def compute_feature_importance(
         for i in tqdm(
             range(n_perm),
             desc="Computing feature importance",
-            visible=min_level_debug(),
         ):
             t = time()
 

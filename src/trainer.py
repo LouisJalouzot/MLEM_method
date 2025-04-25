@@ -8,21 +8,19 @@ from loguru import logger
 from pydantic import ConfigDict, Field
 from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.utils import data
-from tqdm_loggable.auto import tqdm
+from tqdm.auto import tqdm
 
-from src.pairwise_dataset import DatasetBuilder
-from src.sentence_representations import SentenceRepresentations
-from src.spd_matrix_learner import SPDMatrixLearner, SPDMatrixLearnerCfg
+from src.pairwise_dataset import PairwiseDataset, PairwiseDatasetBuilder
+from src.sentence_representations import SentenceRepresentationsCfg
+from src.spd_matrix_learner import SPDMatrixLearner, SPDMatrixLearnerBuilder
 from src.stimulis import Stimulis
-from src.trainer import train_loop
-from src.utils import BaseModel, min_level_debug
-from src.word_representations import WordRepresentations
+from src.utils import BaseModel, get_device
+from src.word_representations import WordRepresentationsCfg
 
 
-def train_loop(
+def train(
     model: nn.Module,
-    dataset: data.Dataset,
+    dataset: PairwiseDataset,
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler._LRScheduler,
     max_epochs: int,
@@ -37,7 +35,8 @@ def train_loop(
     pbar = tqdm(
         range(max_epochs),
         desc=f"Training on device {device}",
-        disable=min_level_debug(),
+        miniters=1,
+        disable=True,
     )
     for i in pbar:
         t = time()
@@ -90,61 +89,59 @@ def train_loop(
 
 
 class Trainer(BaseModel):
-    model: SPDMatrixLearnerCfg = SPDMatrixLearnerCfg()
-    dataframe: Stimulis = Stimulis()
-    representations: SentenceRepresentations | WordRepresentations = Field(
-        default=SentenceRepresentations(), discriminator="level"
+    model_builder: SPDMatrixLearnerBuilder = SPDMatrixLearnerBuilder()
+    stimulis: Stimulis = Stimulis()
+    representations_cfg: WordRepresentationsCfg | SentenceRepresentationsCfg = (
+        Field(SentenceRepresentationsCfg(), discriminator="level")
     )
-    dataset: PairwiseDatasetCfg = PairwiseDatasetCfg()
+    dataset_builder: PairwiseDatasetBuilder = PairwiseDatasetBuilder()
     lr: float = 0.1
     weight_decay: float = 0
     max_epochs: int = 500
     scheduler_factor: float = 0.5
     scheduler_patience: int = 10
     eps: float = 1e-5
-
+    device: str | None = None
     infra: TaskInfra = TaskInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
-    _device: str | None = None
+    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
+
+    def model_post_init(self, __context: tp.Any) -> None:
+        if self.device is None:
+            self.device = get_device()
 
     @property
     def features(self) -> tp.List[str]:
-        return self.dataframe._features
+        return self.stimulis._features
 
     def init(
         self, state_dict=None
-    ) -> tp.Tuple[SPDMatrixLearner, PairwiseDataset]:  # Updated type hints
+    ) -> tp.Tuple[SPDMatrixLearner, PairwiseDataset]:
         torch.set_float32_matmul_precision("medium")
-        if self._device is None:
-            from src.utils import device
+        if self.device is None:
+            self.device = get_device()
 
-            self._device = device
-
-        Y = self.representations.compute_representations(
-            self.dataframe.stimulis
+        if self.representations_cfg.level == "word":
+            Y = self.representations_cfg(
+                words=self.stimulis.words,
+                sentence_id=self.stimulis.sentence_id,
+            )
+        elif self.representations_cfg.level == "sentence":
+            Y = self.representations_cfg(self.stimulis.sentences)
+        model = self.model_builder.build(
+            num_features=self.stimulis.num_features
         )
-        model = self.model.build(num_features=self.dataframe.num_features)
         if state_dict is not None:
             model.load_state_dict(state_dict)
-        model = model.to(self._device)
-        X = self.dataframe.encode().to(self._device)
-        Y = Y.to(self._device)
-        dataset = self.dataset.build(X, Y)
+        model = model.to(self.device)
+        X = self.stimulis.encode().to(self.device)
+        Y = Y.to(self.device)
+        dataset = self.dataset_builder.build(X, Y)
 
         return model, dataset
 
-    @infra.apply
+    @infra.apply(exclude_from_cache_uid=["device"])
     def train(self) -> tp.Tuple[torch.Tensor, pd.DataFrame]:
-        """
-        Train a model with caching and optional remote execution.
-
-        Args:
-            model: The model to train
-            dataloader: DataLoader providing batches
-
-        Returns:
-            Trained model state dict and logs
-        """
         model, dataset = self.init()
 
         optimizer = torch.optim.AdamW(
@@ -160,15 +157,14 @@ class Trainer(BaseModel):
             patience=self.scheduler_patience,
         )
 
-        # Call the core training loop
-        model, logs = train_loop(
+        model, logs = train(
             model=model,
             dataset=dataset,
             optimizer=optimizer,
             scheduler=scheduler,
             max_epochs=self.max_epochs,
             eps=self.eps,
-            device=self._device,
+            device=self.device,
         )
 
         # Output state_dict as nn.Module can't be serialized for caching

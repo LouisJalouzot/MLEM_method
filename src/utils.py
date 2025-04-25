@@ -5,13 +5,8 @@ import typing as tp
 import numpy as np
 import pandas as pd
 import torch
-from loguru import logger
 from pydantic import BaseModel
 from sklearn.preprocessing import MinMaxScaler
-
-
-def min_level_debug():
-    return logger._core.min_level <= logger.level("DEBUG").no
 
 
 def get_device():
@@ -30,9 +25,9 @@ def get_device():
         )
         gpu_id = random.choice(max_free_idxs)
 
-        return torch.device(f"cuda:{gpu_id}")
+        return f"cuda:{gpu_id}"
     else:
-        return torch.device("cpu")
+        return "cpu"
 
 
 class BaseModel(BaseModel):

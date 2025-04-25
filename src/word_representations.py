@@ -135,75 +135,80 @@ def compute_word_representations(
 
 
 class WordRepresentations(BaseModel):
-    """Computes word representations using a pre-trained transformer model.
-
-    This class handles the computation of word embeddings by processing words grouped
-    by sentence through a specified Hugging Face transformer model. It aligns token
-    representations to words and allows configuration of model name, batch size,
-    token aggregation method, and selection of specific layers and units. Caching is
-    used to avoid recomputing representations for the same configuration (excluding
-    layer and unit selection).
-
-    Attributes:
-        words: A list of strings, where each string is a word.
-        sentence_id: A list of integers mapping each word in `words` to its sentence.
-            Words with the same ID belong to the same sentence and are processed together
-            in their order of appearance.
-        level: The level of representation, fixed to "word".
-        model_name: The name of the Hugging Face model to use (e.g., "bert-base-uncased").
-        token_aggregation: The method used to aggregate token hidden states corresponding
-            to a word into a single word representation ("mean", "max", "min", "first", "last").
-        add_special_tokens: Whether to include special tokens ([CLS], [SEP]) during
-            tokenization. Affects offset mapping used for word alignment.
-        batch_size: The batch size used for processing sentences through the model.
-        layer: The specific layer from which to extract the final word representations.
-        units: An optional list of specific hidden unit indices to select from the
-            chosen layer's representation. If None, all units are kept.
-        infra: Configuration for caching mechanism.
-        model_config: Pydantic model configuration.
-    """
-
     words: tp.List[str]
     sentence_id: tp.List[int]
-    level: tp.Literal["word"] = "word"
     model_name: str = "bert-base-uncased"
     token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = (
         "mean"
     )
     add_special_tokens: bool = True
     batch_size: int = 32
-    layer: int = 5
-    units: tp.List[int] = None
-    _device: tp.Optional[torch.device] = None
+    device: tp.Optional[str] = None
     infra: TaskInfra = TaskInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
+    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
+        "device",
+        "batch_size",
+    )
 
-    def model_post_init(self, __context: Any) -> None:
+    def model_post_init(self, __context: tp.Any) -> None:
         """Sets the device for computation if not provided."""
-        if self._device is None:
-            self._device = get_device()
+        if self.device is None:
+            self.device = get_device()
 
-    @infra.apply(exclude_from_cache_uid=["layer", "units"])
-    def _compute_representations_cached(self):
+    @infra.apply(exclude_from_cache_uid=["batch_size", "device"])
+    def compute_representations_cached(self):
         words = pd.DataFrame(
             {"word": self.words, "sentence_id": self.sentence_id}
         )
 
-        # (n_words, layers, hidden_size)
+        # (n_words, n_layers+1, hidden_size)
         return compute_word_representations(
             words,
             model_name=self.model_name,
             token_aggregation=self.token_aggregation,
             batch_size=self.batch_size,
-            device=self._device,
+            device=self.device,
             add_special_tokens=self.add_special_tokens,
         )
 
-    def __call__(self) -> torch.Tensor:
-        # (n_words, layers, hidden_size)
-        word_representations = self._compute_representations_cached()
+
+class WordRepresentationsCfg(BaseModel):
+    level: tp.Literal["word"] = "word"
+    model_name: str = "bert-base-uncased"
+    token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = (
+        "mean"
+    )
+    add_special_tokens: bool = True
+    layer: int = 5
+    units: tp.List[int] = None
+    batch_size: int = 32
+    device: tp.Optional[str] = None
+    infra: TaskInfra = TaskInfra(folder=".cache")
+    model_config: ConfigDict = ConfigDict(extra="forbid")
+    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
+        "device",
+        "batch_size",
+    )
+
+    def __call__(
+        self, words: tp.List[str], sentence_id: tp.List[tp.Any]
+    ) -> torch.Tensor:
+        # (n_words, n_layers+1, hidden_size)
+        words_representations = WordRepresentations(
+            words=words,
+            sentence_id=sentence_id,
+            model_name=self.model_name,
+            token_aggregation=self.token_aggregation,
+            add_special_tokens=self.add_special_tokens,
+            batch_size=self.batch_size,
+            device=self.device,
+            infra=self.infra,
+        ).compute_representations_cached()
+
         if self.units is not None:
-            word_representations = word_representations[:, :, self.units]
+            # (n_words, n_layers+1, n_units)
+            words_representations = words_representations[:, :, self.units]
 
         # (n_words, hidden_size)
-        return word_representations[:, self.layer]
+        return words_representations[:, self.layer]
