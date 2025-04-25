@@ -18,6 +18,47 @@ def compute_hidden_states(
     add_special_tokens: bool = True,
     return_offsets_mapping: bool = False,
 ) -> MaskedTensor | tp.Tuple[MaskedTensor, torch.Tensor]:
+    """
+    Computes hidden states for a list of sentences using a specified transformer model.
+
+    Args:
+        sentences: A list of strings, where each string is a sentence.
+        model_name: The name of the pre-trained transformer model to use
+            (e.g., 'bert-base-uncased', 'prajjwal1/bert-tiny').
+        batch_size: The number of sentences to process in each batch.
+        device: The device to run the model on ('cpu' or 'cuda').
+        add_special_tokens: Whether to add special tokens (like [CLS], [SEP])
+            during tokenization. Defaults to True.
+        return_offsets_mapping: Whether to return the character offsets mapping
+            for each token. Defaults to False.
+
+    Returns:
+        If `return_offsets_mapping` is False:
+            A MaskedTensor of shape (n_sentences, max_seq_len, n_layers, hidden_size)
+            containing the hidden states for each token in each sentence across all layers.
+            Padding tokens are masked.
+        If `return_offsets_mapping` is True:
+            A tuple containing:
+            - The MaskedTensor of hidden states as described above.
+            - A torch.Tensor of shape (n_sentences, max_seq_len, 2) containing the
+              start and end character offsets for each token.
+
+    Example:
+        >>> sentences = ["This is a test sentence.", "Another example."]
+        >>> hidden_states_masked = compute_hidden_states(sentences, model_name='prajjwal1/bert-tiny')
+        >>> print(hidden_states_masked.shape)
+        torch.Size([2, 8, 3, 128]) # (n_sentences, max_seq_len, n_layers+1, hidden_size)
+        >>> print(hidden_states_masked.get_mask().shape)
+        torch.Size([2, 8, 3, 128])
+
+        >>> hidden_states_masked, offsets = compute_hidden_states(
+        ...     sentences, model_name='prajjwal1/bert-tiny', return_offsets_mapping=True
+        ... )
+        >>> print(hidden_states_masked.shape)
+        torch.Size([2, 8, 3, 128])
+        >>> print(offsets.shape)
+        torch.Size([2, 8, 2])
+    """
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -35,12 +76,12 @@ def compute_hidden_states(
         return_offsets_mapping=return_offsets_mapping,
     )
 
-    # (total_sentences, max_seq_len)
+    # (n_sentences, max_seq_len)
     attention_mask = encoded_input["attention_mask"]
     if return_offsets_mapping:
-        # (total_sentences, max_seq_len, 2)
+        # (n_sentences, max_seq_len, 2)
         offsets_mapping = encoded_input.pop("offset_mapping")
-    # (total_sentences, max_seq_len)
+    # (n_sentences, max_seq_len)
     input_ids = encoded_input["input_ids"]
 
     hidden_states = []
@@ -57,18 +98,20 @@ def compute_hidden_states(
             )
             batch_hidden_states = outputs.hidden_states
 
-        # Stack to tensor shape (layers, batch, seq_len, hidden_size)
+        # Stack to tensor shape (n_layers+1, batch, seq_len, hidden_size)
         batch_hidden_states = torch.stack(batch_hidden_states)
 
         hidden_states.append(batch_hidden_states.cpu())
 
-    # (layers, total_sentences, max_seq_len, hidden_size)
+    # (n_layers+1, n_sentences, max_seq_len, hidden_size)
     hidden_states = torch.cat(hidden_states, dim=1)
+    # (n_sentences, max_seq_len, n_layers+1, hidden_size)
+    hidden_states = hidden_states.permute(1, 2, 0, 3)
 
     # Broadcast attention mask to match hidden states shape and cast to bool
-    # (1, total_sentences, max_seq_len, 1)
-    attention_mask = attention_mask[None, ..., None]
-    # (total_sentences, layers, max_seq_len, hidden_size)
+    # (n_sentences, max_seq_len, 1, 1)
+    attention_mask = attention_mask[:, :, None, None]
+    # (n_sentences, max_seq_len, n_layers+1, hidden_size)
     attention_mask = attention_mask.broadcast_to(hidden_states.shape)
     # Mask hidden states based on the full attention mask
     all_hidden_states_masked = masked_tensor(
@@ -84,6 +127,47 @@ def compute_hidden_states(
 def aggregate_masked_tensor(
     data: MaskedTensor, dim: int, method: str = "mean"
 ) -> torch.Tensor:
+    """
+    Aggregates a MaskedTensor along a specified dimension, ignoring masked values.
+
+    Args:
+        data: The input MaskedTensor.
+        dim: The dimension along which to aggregate.
+        method: The aggregation method to use. Supported methods are:
+            'mean': Computes the mean of unmasked values.
+            'min': Computes the minimum of unmasked values.
+            'max': Computes the maximum of unmasked values.
+            'first': Selects the first unmasked value along the dimension.
+            'last': Selects the last unmasked value along the dimension.
+            Defaults to 'mean'.
+
+    Returns:
+        A torch.Tensor containing the aggregated values. The specified dimension `dim`
+        is removed.
+
+    Raises:
+        ValueError: If an unsupported aggregation method is provided.
+
+    Example:
+        >>> data_tensor = torch.tensor([[1., 2., 3.], [4., 5., 0.]])
+        >>> mask_tensor = torch.tensor([[True, True, True], [True, True, False]])
+        >>> masked_data = masked_tensor(data_tensor, mask_tensor)
+        >>> print(masked_data)
+        MaskedTensor(
+            [
+                [  1.0000,       --,   3.0000],
+                [  4.0000,   5.0000,       --]
+            ]
+        )
+        >>> aggregate_masked_tensor(masked_data, dim=0, method='mean')
+        tensor([2.5000, 5.0000, 3.0000])
+        >>> aggregate_masked_tensor(masked_data, dim=0, method='max')
+        tensor([4., 5., 3.])
+        >>> aggregate_masked_tensor(masked_data, dim=0, method='first')
+        tensor([1., 5., 3.])
+        >>> aggregate_masked_tensor(masked_data, dim=0, method='last')
+        tensor([4., 5., 3.])
+    """
     if method == "mean":
         return data.mean(dim=dim).get_data()
     elif method == "min":
