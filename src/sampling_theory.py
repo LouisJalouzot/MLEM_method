@@ -3,10 +3,11 @@ import typing as tp
 import torch
 from exca import TaskInfra
 from loguru import logger
+from pydantic import ConfigDict
 from scipy import stats
 
-from src.pairwise_dataset import PairwiseDataset
-from src.utils import BaseModel, ConfigDict
+from src.pairwise_dataset import PairwiseDataset, PairwiseDatasetBuilder
+from src.utils import BaseModel
 
 
 def batch_corrcoef(
@@ -88,62 +89,96 @@ def compute_ci(data: torch.Tensor, confidence: float = 0.99) -> torch.Tensor:
     return torch.stack([lower_bound, upper_bound], dim=1)
 
 
+def estimate_corrs(
+    dataset: PairwiseDataset,
+    n_trials: int = 10,
+    init_sample_size: int = 4096,
+    factor: float = 1.2,
+    max_sample_size: float = 2**20,
+    product: bool = False,
+    monitor: tp.Literal["std", "ci_width"] = "std",
+    thresh: float = 0.01,
+    ci_confidence: float = 0.99,
+) -> tp.Tuple[torch.Tensor, int]:
+    _, n_features = dataset.get_X_shape()
+    triu_indices = torch.triu_indices(n_features, n_features)
+    sample_size = init_sample_size
+
+    while sample_size < max_sample_size:
+        logger.debug(
+            f"Estimating correlation with sample size: {sample_size}, n_trials: {n_trials}"
+        )
+
+        # Get samples
+        # (n_trials * n_samples, n_features)
+        X_batch = dataset.sample(n_trials * sample_size)
+        if product:
+            # (n_trials * n_samples, n_features, n_features)
+            X_batch = X_batch[:, None] * X_batch[:, :, None]
+            # (n_trials * n_samples, n_feature_pairs)
+            X_batch = X_batch[:, *triu_indices]
+
+        # Reshape for batch processing
+        # (n_trials, n_samples, n_feature_pairs)
+        X_batch = X_batch.reshape(n_trials, sample_size, -1)
+
+        # Compute correlations and confidence intervals
+        # (n_trials, n_feature_pairs)
+        corrs = batch_corrcoef(X_batch)
+        if monitor == "std":
+            # (n_feature_pairs,)
+            stds = corrs.std(dim=0)
+            variability = stds.max()
+            logger.debug(
+                f"Max std: {variability:<4.2g} (needs to be < {thresh:.2g})"
+            )
+        elif monitor == "ci_width":
+            cis = compute_ci(
+                corrs.reshape(n_trials, -1), confidence=ci_confidence
+            )
+            variability = (cis[:, 1] - cis[:, 0]).max()
+            logger.debug(
+                f"Max CI width: {variability:<4.2g} (needs to be < {thresh:.2g})"
+            )
+
+        # Check if variability is acceptable
+        if variability < thresh:
+            logger.info(
+                f"Sample size {sample_size} is sufficient to estimate correlations "
+                f"with the required variability."
+            )
+            return corrs.mean(dim=0), sample_size
+
+        # Increase sample size for next iteration
+        sample_size = int(sample_size * factor) + 1
+
+    raise ValueError(
+        f"Could not estimate correlations with the required confidence and precision "
+        f"under {max_sample_size} samples."
+    )
+
+
 class CorrelationEstimator(BaseModel):
-    bootstrap: int = 5
+    n_trials: int = 10
     init_sample_size: int = 4096
     factor: float = 1.2
-    max_sample_size: float = 1e6
-    confidence: float = 0.99
-    max_margin: float = 5e-2
+    max_sample_size: float = 2**20
     product: bool = False
+    monitor: tp.Literal["std", "ci_width"] = "std"
+    thresh: float = 0.01
+    ci_confidence: float = 0.99
 
-    infra: TaskInfra = TaskInfra(version="1", folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
-    @infra.apply
-    def estimate_corrs(self, X: torch.Tensor) -> tp.Tuple[torch.Tensor, int]:
-        dataset = PairwiseDataset(X)
-        i, j = torch.triu_indices(X.shape[1], X.shape[1])
-        sample_size = self.init_sample_size
-
-        while sample_size < self.max_sample_size:
-            logger.debug(
-                f"Estimating correlation with sample size: {sample_size}, bootstrap: {self.bootstrap}"
-            )
-
-            # Get samples
-            X_batch = dataset.sample(
-                self.bootstrap * sample_size, only_valid=False
-            )
-            if self.product:
-                X_batch = (X_batch[:, None] * X_batch[:, :, None])[:, i, j]
-
-            # Reshape for batch processing
-            X_batch = X_batch.reshape(self.bootstrap, sample_size, -1)
-
-            # Compute correlations and confidence intervals
-            corrs = batch_corrcoef(X_batch)
-            cis = compute_ci(
-                corrs.reshape(self.bootstrap, -1), confidence=self.confidence
-            )
-            margins = cis[:, 1] - cis[:, 0]
-
-            logger.debug(
-                f"Max margin: {margins.max():.2g} (needs to be < {self.max_margin:.2g})"
-            )
-
-            # Check if margin is acceptable
-            if margins.max() < self.max_margin:
-                logger.info(
-                    f"Sample size {sample_size} is sufficient to estimate correlations "
-                    f"with the required confidence and precision."
-                )
-                return corrs.mean(dim=0), sample_size
-
-            # Increase sample size for next iteration
-            sample_size = int(sample_size * self.factor) + 1
-
-        raise ValueError(
-            f"Could not estimate correlations with the required confidence and precision "
-            f"under {self.max_sample_size} samples."
+    def __call__(self, dataset: PairwiseDataset) -> tp.Tuple[torch.Tensor, int]:
+        return estimate_corrs(
+            dataset,
+            n_trials=self.n_trials,
+            init_sample_size=self.init_sample_size,
+            factor=self.factor,
+            max_sample_size=self.max_sample_size,
+            product=self.product,
+            monitor=self.monitor,
+            thresh=self.thresh,
+            ci_confidence=self.ci_confidence,
         )

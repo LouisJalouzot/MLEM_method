@@ -152,7 +152,7 @@ class WordRepresentations(BaseModel):
         level: The level of representation, fixed to "word".
         model_name: The name of the Hugging Face model to use (e.g., "bert-base-uncased").
         token_aggregation: The method used to aggregate token hidden states corresponding
-            to a word into a single word representation (e.g., "mean", "sum").
+            to a word into a single word representation ("mean", "max", "min", "first", "last").
         add_special_tokens: Whether to include special tokens ([CLS], [SEP]) during
             tokenization. Affects offset mapping used for word alignment.
         batch_size: The batch size used for processing sentences through the model.
@@ -167,7 +167,9 @@ class WordRepresentations(BaseModel):
     sentence_id: tp.List[int]
     level: tp.Literal["word"] = "word"
     model_name: str = "bert-base-uncased"
-    token_aggregation: str = "mean"
+    token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = (
+        "mean"
+    )
     add_special_tokens: bool = True
     batch_size: int = 32
     layer: int = 5

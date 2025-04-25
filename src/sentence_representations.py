@@ -60,7 +60,9 @@ class SentenceRepresentations(BaseModel):
     sentences: tp.List[str]
     level: tp.Literal["sentence"] = "sentence"
     model_name: str = "bert-base-uncased"
-    token_aggregation: str = "mean"
+    token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = (
+        "mean"
+    )
     add_special_tokens: bool = True
     batch_size: int = 32
     layer: int = 5

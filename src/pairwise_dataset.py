@@ -47,7 +47,19 @@ class PairwiseDataset(Dataset):
         else:
             self.distance = lambda x, y: (x - y).norm(p=distance, dim=-1)
 
-    def sample(self, n_pairs=None, get_idx=False, only_valid=True):
+    def get_X_shape(self):
+        if self.X is not None:
+            return self.X.shape
+        else:
+            raise ValueError("X is not provided.")
+
+    def get_Y_shape(self):
+        if self.Y is not None:
+            return self.Y.shape
+        else:
+            raise ValueError("Y is not provided.")
+
+    def sample(self, n_pairs=None, get_idx=False, only_valid=False):
         if n_pairs > self.max_n_pairs:
             logger.debug(
                 f"Number of pairs requested ({n_pairs}) is greater than the total number of pairs in the data ({self.max_n_pairs})."
@@ -91,7 +103,7 @@ class PairwiseDataset(Dataset):
         return self.sample(int(self.n_pairs * (self.gamma**idx)))
 
 
-class DatasetBuilder(BaseModel):
+class PairwiseDatasetBuilder(BaseModel):
     n_pairs: int = None
     gamma: float = 1
     distance: str | float | int = 2
