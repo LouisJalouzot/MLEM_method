@@ -32,6 +32,41 @@ def compute_word_representations(
     device: str = "cpu",
     add_special_tokens: bool = True,
 ) -> torch.Tensor:
+    """Computes word representations from hidden states by aggregating token representations.
+
+    Args:
+        words (pd.DataFrame): DataFrame containing columns 'word' (str) and
+            'sentence_id' (int). Each row represents a word. Words belonging
+            to the same sentence must have the same 'sentence_id' and will be
+            joined into sentences in the order of their appearance in the
+            DataFrame. Assumes English punctuation rules (no space before
+            punctuation marks like ',', '.', '?').
+        model_name (str, optional): Name of the Hugging Face model to use.
+            Defaults to "prajjwal1/bert-tiny".
+        token_aggregation (str, optional): Method to aggregate token representations
+            ('mean', 'sum', etc.). Defaults to "mean".
+        batch_size (int, optional): Batch size for processing sentences. Defaults to 32.
+        device (str, optional): Device to run computations on ('cpu', 'cuda').
+            Defaults to "cpu".
+        add_special_tokens (bool, optional): Whether to include special tokens
+            ([CLS], [SEP]) during tokenization. Defaults to True.
+
+    Returns:
+        torch.Tensor: A tensor containing word representations for all words across
+            all sentences, shaped (layers, total_words, hidden_size).
+
+    Example:
+        The following will process two sentences:
+        "This is an example." and "Another sentence!"
+        ```python
+        import pandas as pd
+        words_df = pd.DataFrame({
+            'word': ['This', 'is', 'an', 'example', '.', 'Another', 'sentence', '!'],
+            'sentence_id': [0, 0, 0, 0, 0, 1, 1, 1]
+        })
+        representations = compute_word_representations(words_df)
+        ```
+    """
     sentences, word_start_index, word_stop_index, word_mask = [], [], [], []
     for _, group in words.groupby("sentence_id"):
         group_words = group.word.tolist()
@@ -97,21 +132,40 @@ def compute_word_representations(
     return hidden_states[:, word_mask]
 
 
-# class WordRepresentations(BaseModel):
-#     level: tp.Literal["word"] = "word"
-#     model_name: str = "bert-base-uncased"
-#     token_aggregation: str = "mean"
-#     batch_size: int = 32
-#     layer: int = 5
-#     units: tp.List[int] = None
-#     norm: tp.Optional[int] = None
-#     _device: tp.Optional[str] = None
-#     infra: TaskInfra = TaskInfra(folder=".cache")
-#     model_config: ConfigDict = ConfigDict(extra="forbid")
+class WordRepresentations(BaseModel):
+    words: tp.List[str]
+    sentence_id: tp.List[int]
+    level: tp.Literal["word"] = "word"
+    model_name: str = "bert-base-uncased"
+    token_aggregation: str = "mean"
+    add_special_tokens: bool = True
+    batch_size: int = 32
+    layer: int = 5
+    units: tp.List[int] = None
+    _device: tp.Optional[str] = None
+    infra: TaskInfra = TaskInfra(folder=".cache")
+    model_config: ConfigDict = ConfigDict(extra="forbid")
 
-#     def __call__(self) -> torch.Tensor:
-#         pass
+    def __call__(self) -> torch.Tensor:
+        # (layers, total_words, hidden_size)
+        word_representations = self._compute_representations_cached()
+        if self.units is not None:
+            word_representations = word_representations[:, :, self.units]
 
-#     @infra.apply(item_uid=str, exclude_from_cache_uid=["layer", "units"])
-#     def _compute_word_representations(self):
-#         pass
+        # (total_words, hidden_size)
+        return word_representations[self.layer]
+
+    @infra.apply(item_uid=str, exclude_from_cache_uid=["layer", "units"])
+    def _compute_representations_cached(self):
+        words = pd.DataFrame(
+            {"word": self.words, "sentence_id": self.sentence_id}
+        )
+
+        return compute_word_representations(
+            words,
+            model_name=self.model_name,
+            token_aggregation=self.token_aggregation,
+            batch_size=self.batch_size,
+            device=self._device,
+            add_special_tokens=self.add_special_tokens,
+        )
