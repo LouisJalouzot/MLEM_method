@@ -5,7 +5,7 @@ import typing as tp
 import numpy as np
 import pandas as pd
 import torch
-from pydantic import BaseModel
+from pydantic import BaseModel as _BaseModel
 from sklearn.preprocessing import MinMaxScaler
 
 
@@ -30,7 +30,7 @@ def get_device():
         return "cpu"
 
 
-class BaseModel(BaseModel):
+class BaseModel(_BaseModel):
     def __eq__(self, other: tp.Any) -> bool:
         if not isinstance(other, self.__class__):
             return NotImplemented

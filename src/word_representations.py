@@ -54,7 +54,7 @@ def compute_word_representations(
 
     Returns:
         torch.Tensor: A tensor containing word representations for all words across
-            all sentences, shaped (n_words, layers, hidden_size).
+            all sentences, shaped (n_words, n_layers+1, hidden_size).
 
     Example:
         The following will process two sentences:
@@ -96,7 +96,7 @@ def compute_word_representations(
 
     # Get a flag for special tokens
     # (n_sentences, max_seq_len)
-    special_tokens = offsets_mapping[:, :, 0] == 0
+    special_tokens = offsets_mapping[:, :, 1] == 0
 
     # Get a mask for tokens and words correspondance
     # (n_sentences, max_words, max_seq_len)
@@ -127,7 +127,7 @@ def compute_word_representations(
 
     # (n_sentences, max_words, n_layers+1, hidden_size)
     hidden_states = aggregate_masked_tensor(
-        data=hidden_states, dim=3, method=token_aggregation
+        data=hidden_states, dim=2, method=token_aggregation
     )
 
     # (n_words, n_layers+1, hidden_size)

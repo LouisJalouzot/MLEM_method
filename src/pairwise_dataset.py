@@ -61,7 +61,7 @@ class PairwiseDataset(Dataset):
 
     def sample(self, n_pairs=None, get_idx=False, only_valid=False):
         if n_pairs > self.max_n_pairs:
-            logger.debug(
+            logger.warning(
                 f"Number of pairs requested ({n_pairs}) is greater than the total number of pairs in the data ({self.max_n_pairs})."
             )
 
@@ -112,7 +112,7 @@ class PairwiseDatasetBuilder(BaseModel):
 
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
-    def build(self, X=None, Y=None):
+    def build(self, X=None, Y=None) -> PairwiseDataset:
         if self.n_pairs is None:
             n_pairs = 40 * X.shape[1] ** 2
             logger.info(

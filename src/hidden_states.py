@@ -34,7 +34,7 @@ def compute_hidden_states(
 
     Returns:
         If `return_offsets_mapping` is False:
-            A MaskedTensor of shape (n_sentences, max_seq_len, n_layers, hidden_size)
+            A MaskedTensor of shape (n_sentences, max_seq_len, n_layers+1, hidden_size)
             containing the hidden states for each token in each sentence across all layers.
             Padding tokens are masked.
         If `return_offsets_mapping` is True:
@@ -84,35 +84,44 @@ def compute_hidden_states(
     # (n_sentences, max_seq_len)
     input_ids = encoded_input["input_ids"]
 
-    hidden_states = []
-    for i in tqdm(
-        range(0, len(sentences), batch_size),
+    hidden_states = []  # Renamed for clarity
+    with tqdm(
         desc=f"Computing sentence representations on device {device}",
-    ):
-        batch_input_ids = input_ids[i : i + batch_size].to(device)
-        batch_attention_mask = attention_mask[i : i + batch_size].to(device)
+        total=len(sentences),
+    ) as pbar:
+        for i in range(0, len(sentences), batch_size):
+            batch_input_ids = input_ids[i : i + batch_size].to(device)
+            batch_attention_mask = attention_mask[i : i + batch_size].to(device)
 
-        with torch.no_grad():
-            outputs = model(
-                input_ids=batch_input_ids, attention_mask=batch_attention_mask
+            with torch.no_grad():
+                outputs = model(
+                    input_ids=batch_input_ids,
+                    attention_mask=batch_attention_mask,
+                )
+                batch_hidden_states = outputs.hidden_states
+
+            # Stack to tensor shape (n_layers+1, batch, max_seq_len, hidden_size)
+            batch_hidden_states = torch.stack(batch_hidden_states)
+
+            # Permute to (batch, max_seq_len, n_layers+1, hidden_size)
+            batch_hidden_states_permuted = batch_hidden_states.permute(
+                1, 2, 0, 3
             )
-            batch_hidden_states = outputs.hidden_states
 
-        # Stack to tensor shape (n_layers+1, batch, seq_len, hidden_size)
-        batch_hidden_states = torch.stack(batch_hidden_states)
+            hidden_states.append(batch_hidden_states_permuted.cpu())
 
-        hidden_states.append(batch_hidden_states.cpu())
+            pbar.update(batch_input_ids.shape[0])
 
-    # (n_layers+1, n_sentences, max_seq_len, hidden_size)
-    hidden_states = torch.cat(hidden_states, dim=1)
-    # (n_sentences, max_seq_len, n_layers+1, hidden_size)
-    hidden_states = hidden_states.permute(1, 2, 0, 3)
+    # Concatenate along batch dimension (dim=0)
+    # Resulting shape: (n_sentences, max_seq_len, n_layers+1, hidden_size)
+    hidden_states = torch.cat(hidden_states, dim=0)
 
     # Broadcast attention mask to match hidden states shape and cast to bool
-    # (n_sentences, max_seq_len, 1, 1)
+    # (n_sentences, max_seq_len) -> (n_sentences, max_seq_len, 1, 1)
     attention_mask = attention_mask[:, :, None, None]
-    # (n_sentences, max_seq_len, n_layers+1, hidden_size)
+    # Broadcast to (n_sentences, max_seq_len, n_layers+1, hidden_size)
     attention_mask = attention_mask.broadcast_to(hidden_states.shape)
+
     # Mask hidden states based on the full attention mask
     all_hidden_states_masked = masked_tensor(
         hidden_states, attention_mask.bool()

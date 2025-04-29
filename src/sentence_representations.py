@@ -16,7 +16,7 @@ def compute_sentence_representations(
     add_special_tokens: bool = True,
     token_aggregation: str = "mean",
 ) -> torch.Tensor:
-    # (n_sentences, layers, max_seq_len, hidden_size)
+    # (n_sentences, max_seq_len, n_layers+1, hidden_size)
     hidden_states = compute_hidden_states(
         sentences=sentences,
         model_name=model_name,
@@ -24,9 +24,9 @@ def compute_sentence_representations(
         device=device,
         add_special_tokens=add_special_tokens,
     )
-    # (n_sentences, layers, hidden_size)
+    # (n_sentences, n_layers+1, hidden_size)
     return aggregate_masked_tensor(
-        hidden_states, dim=2, method=token_aggregation
+        hidden_states, dim=1, method=token_aggregation
     )
 
 
@@ -52,7 +52,7 @@ class SentenceRepresentations(BaseModel):
 
     @infra.apply(exclude_from_cache_uid=["batch_size", "device"])
     def _compute_representations_cached(self) -> torch.Tensor:
-        # (n_sentences, layers, hidden_size)
+        # (n_sentences, n_layers+1, hidden_size)
         return compute_sentence_representations(
             self.sentences,
             model_name=self.model_name,
@@ -82,7 +82,7 @@ class SentenceRepresentationsCfg(BaseModel):
     )
 
     def __call__(self, sentences: tp.List[str]) -> torch.Tensor:
-        # (n_sentences, layers, hidden_size)
+        # (n_sentences, n_layers+1, hidden_size)
         sentence_representations = SentenceRepresentations(
             sentences=sentences,
             model_name=self.model_name,
