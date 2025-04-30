@@ -59,11 +59,13 @@ class PairwiseDataset(Dataset):
         else:
             raise ValueError("Y is not provided.")
 
-    def sample(self, n_pairs=None, get_idx=False, only_valid=False):
+    def sample(self, n_pairs=4096, n_trials=1, get_idx=False, only_valid=False):
         if n_pairs > self.max_n_pairs:
             logger.warning(
                 f"Number of pairs requested ({n_pairs}) is greater than the total number of pairs in the data ({self.max_n_pairs})."
             )
+
+        n_pairs *= n_trials
 
         ind_1 = torch.randint(0, self.n, (n_pairs,))
         ind_2 = torch.randint(0, self.n, (n_pairs,))
@@ -78,7 +80,7 @@ class PairwiseDataset(Dataset):
             X_1 = self.X[ind_1]
             X_2 = self.X[ind_2]
             X_dist = (X_1 - X_2).nan_to_num(self.nan_to_num).abs().clip(0, 1)
-            X_dist = X_dist.reshape(-1, self.n_features)
+            X_dist = X_dist.reshape(n_trials, -1, self.n_features).squeeze()
             out = (X_dist,)
 
         if self.Y is not None:
@@ -89,6 +91,7 @@ class PairwiseDataset(Dataset):
                 self.min = min(self.min, Y_dist.min())
                 self.max = max(self.max, Y_dist.max())
                 Y_dist = (Y_dist - self.min) / (self.max - self.min)
+            Y_dist = Y_dist.reshape(n_trials, -1).squeeze()
             out = (*out, Y_dist)
 
         if get_idx:

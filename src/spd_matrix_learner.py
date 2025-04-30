@@ -139,7 +139,7 @@ class SPDMatrixLearner(nn.Module):
     def norm_diff(self) -> float:
         """Compute the Frobenius norm of W - W^T"""
         W = self.get_W()
-        return torch.norm(W - W.T).item()
+        return torch.norm(W - W.T, p=torch.inf).item()
 
     def min_eigenvalue(self) -> float:
         """Compute the minimum eigenvalue of W"""
@@ -149,15 +149,21 @@ class SPDMatrixLearner(nn.Module):
 
     def check_spd(self) -> None:
         try:
+            norm_diff = self.norm_diff()
+            if norm_diff > 1e-5:
+                logger.warning(
+                    f"Matrix is not symmetric: Max |W - W^T| = {norm_diff:.2g} > 1e-5"
+                )
             min_lambda = self.min_eigenvalue()
+            if min_lambda <= 0:
+                logger.warning(
+                    f"Matrix is not positive definite: Min λ(W) {min_lambda:.2g} <= 0"
+                )
             logger.info(
-                f"SPD check - || W - W^T || = {self.norm_diff():.2g} - Min λ(W) = {min_lambda:.2g}"
+                f"SPD check: Max |W - W^T| = {norm_diff:.2g} - Min λ(W) = {min_lambda:.2g}"
             )
         except Exception as e:
-            logger.error(
-                f"SPD check failed: {e}.\n"
-                "The matrix is not symmetric positive definite."
-            )
+            logger.error(f"SPD check failed: {e}.\n")
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         """Forward pass: weighted sum of transformed features"""

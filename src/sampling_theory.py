@@ -110,17 +110,13 @@ def estimate_corrs(
         )
 
         # Get samples
-        # (n_trials * n_samples, n_features)
-        X_batch = dataset.sample(n_trials * sample_size)
+        # (n_trials, n_samples, n_features)
+        X_batch = dataset.sample(n_pairs=sample_size, n_trials=n_trials)
         if product:
-            # (n_trials * n_samples, n_features, n_features)
-            X_batch = X_batch[:, None] * X_batch[:, :, None]
-            # (n_trials * n_samples, n_feature_pairs)
-            X_batch = X_batch[:, *triu_indices]
-
-        # Reshape for batch processing
-        # (n_trials, n_samples, n_feature_pairs)
-        X_batch = X_batch.reshape(n_trials, sample_size, -1)
+            # (n_trials, n_samples, n_features, n_features)
+            X_batch = X_batch[:, :, None] * X_batch[:, :, :, None]
+            # (n_trials, n_samples, n_feature_pairs)
+            X_batch = X_batch[:, :, *triu_indices]
 
         # Compute correlations and confidence intervals
         # (n_trials, n_feature_pairs)

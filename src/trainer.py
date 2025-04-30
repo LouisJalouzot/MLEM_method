@@ -40,7 +40,7 @@ def train(
     start = time()
     logs = []
     pbar = tqdm(
-        range(max_epochs),
+        range(1, max_epochs + 1),
         desc=f"Training on device {device}",
         miniters=1,
         disable=True,
@@ -65,7 +65,7 @@ def train(
         s = " - ".join([f"{k}: {v:<8.3g}" for k, v in log.items()])
         pbar.set_postfix_str(s)
         W = model.get_W()
-        diff_norm = (W - prev_w).norm(p="fro").item()
+        diff_norm = (W - prev_w).norm(p=torch.inf).item()
         log |= {
             "Step Duration": time() - t,
             "Grad norm": grad_norm,
@@ -91,8 +91,8 @@ def train(
             )
             break
         prev_w = model.get_W().clone()
-        if i >= max_epochs - 1:  # Check if max_epochs is reached
-            logger.warning(
+        if i >= max_epochs:  # Check if max_epochs is reached
+            logger.error(
                 f"Maximum number of epochs reached without convergence: "
                 f"grad norm {grad_norm:.3g} > eps {eps:.3g} and "
                 f"diff norm {diff_norm:.3g} > eps {eps:.3g} and "
