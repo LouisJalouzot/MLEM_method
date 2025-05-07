@@ -114,14 +114,6 @@ class PairwiseDataloaderBuilder(BaseModel):
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def build(self, X=None, Y=None, n_pairs=None, gamma=1) -> PairwiseDataloader:
-        # if self.n_pairs is None:
-        #     n_pairs = 40 * X.shape[1] ** 2
-        #     logger.info(
-        #         f"Number of pairs is not specified. Using estimated {n_pairs} pairs."
-        #     )
-        # else:
-        #     n_pairs = self.n_pairs
-
         return PairwiseDataloader(
             X=X,
             Y=Y,

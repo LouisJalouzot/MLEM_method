@@ -1,6 +1,5 @@
 import string
 import typing as tp
-from typing import Any
 
 import pandas as pd
 import torch
@@ -9,6 +8,7 @@ from pydantic import ConfigDict
 from torch.masked import masked_tensor
 from torch.nn.utils.rnn import pad_sequence
 
+from src.dataset import Dataset
 from src.hidden_states import aggregate_masked_tensor, compute_hidden_states
 from src.utils import BaseModel, get_device
 
@@ -129,13 +129,15 @@ def compute_word_representations(
 
 
 class WordRepresentations(BaseModel):
-    words: tp.List[str]
-    sentence_id: tp.List[int]
+    dataset: Dataset = Dataset()
+    level: tp.Literal["word"] = "word"
     model_name: str = "bert-base-uncased"
     token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = "mean"
     add_special_tokens: bool = True
-    batch_size: int = 32
+    layer: int = 5
+    units: tp.List[int] = None
     device: tp.Optional[str] = None
+    batch_size: int = 32
     infra: TaskInfra = TaskInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
@@ -144,57 +146,33 @@ class WordRepresentations(BaseModel):
     )
 
     def model_post_init(self, __context: tp.Any) -> None:
-        """Sets the device for computation if not provided."""
         if self.device is None:
             self.device = get_device()
 
-    @infra.apply(exclude_from_cache_uid=["batch_size", "device"])
-    def compute_representations_cached(self):
-        words = pd.DataFrame({"word": self.words, "sentence_id": self.sentence_id})
+    def __call__(self):
+        # (n_words, n_layers+1, hidden_size)
+        sentence_representations = self.forward()
+        if self.units is not None:
+            sentence_representations = sentence_representations[:, :, self.units]
+
+        # (n_words, hidden_size)
+        return sentence_representations[:, self.layer]
+
+    @infra.apply(exclude_from_cache_uid=["layer", "units", "batch_size", "device"])
+    def forward(self) -> torch.Tensor:
+        words = pd.DataFrame(
+            {
+                "word": self.dataset.words,
+                "sentence_id": self.dataset.sentence_id,
+            }
+        )
 
         # (n_words, n_layers+1, hidden_size)
         return compute_word_representations(
-            words,
-            model_name=self.model_name,
-            token_aggregation=self.token_aggregation,
-            batch_size=self.batch_size,
-            device=self.device,
-            add_special_tokens=self.add_special_tokens,
-        )
-
-
-class WordRepresentationsCfg(BaseModel):
-    level: tp.Literal["word"] = "word"
-    model_name: str = "bert-base-uncased"
-    token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = "mean"
-    add_special_tokens: bool = True
-    layer: int = 5
-    units: tp.List[int] = None
-    batch_size: int = 32
-    device: tp.Optional[str] = None
-    infra: TaskInfra = TaskInfra(folder=".cache")
-    model_config: ConfigDict = ConfigDict(extra="forbid")
-    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
-        "device",
-        "batch_size",
-    )
-
-    def __call__(self, words: tp.List[str], sentence_id: tp.List[tp.Any]) -> torch.Tensor:
-        # (n_words, n_layers+1, hidden_size)
-        words_representations = WordRepresentations(
             words=words,
-            sentence_id=sentence_id,
             model_name=self.model_name,
-            token_aggregation=self.token_aggregation,
-            add_special_tokens=self.add_special_tokens,
             batch_size=self.batch_size,
             device=self.device,
-            infra=self.infra,
-        ).compute_representations_cached()
-
-        if self.units is not None:
-            # (n_words, n_layers+1, n_units)
-            words_representations = words_representations[:, :, self.units]
-
-        # (n_words, hidden_size)
-        return words_representations[:, self.layer]
+            add_special_tokens=self.add_special_tokens,
+            token_aggregation=self.token_aggregation,
+        )

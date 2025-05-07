@@ -36,7 +36,7 @@ class Dataset(BaseModel):
         return self._df
 
     @property
-    def num_features(self) -> int:
+    def n_features(self) -> int:
         return len(self._features)
 
     @property

@@ -4,6 +4,7 @@ import torch
 from exca import TaskInfra
 from pydantic import ConfigDict
 
+from src.dataset import Dataset
 from src.hidden_states import aggregate_masked_tensor, compute_hidden_states
 from src.utils import BaseModel, get_device
 
@@ -29,37 +30,7 @@ def compute_sentence_representations(
 
 
 class SentenceRepresentations(BaseModel):
-    sentences: tp.List[str]
-    model_name: str = "bert-base-uncased"
-    token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = "mean"
-    add_special_tokens: bool = True
-    batch_size: int = 32
-    device: tp.Optional[str] = None
-    infra: TaskInfra = TaskInfra(folder=".cache")
-    model_config: ConfigDict = ConfigDict(extra="forbid")
-    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
-        "device",
-        "batch_size",
-    )
-
-    def model_post_init(self, __context: tp.Any) -> None:
-        if self.device is None:
-            self.device = get_device()
-
-    @infra.apply(exclude_from_cache_uid=["batch_size", "device"])
-    def _compute_representations_cached(self) -> torch.Tensor:
-        # (n_sentences, n_layers+1, hidden_size)
-        return compute_sentence_representations(
-            self.sentences,
-            model_name=self.model_name,
-            batch_size=self.batch_size,
-            device=self.device,
-            add_special_tokens=self.add_special_tokens,
-            token_aggregation=self.token_aggregation,
-        )
-
-
-class SentenceRepresentationsCfg(BaseModel):
+    dataset: Dataset = Dataset()
     level: tp.Literal["sentence"] = "sentence"
     model_name: str = "bert-base-uncased"
     token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = "mean"
@@ -75,20 +46,27 @@ class SentenceRepresentationsCfg(BaseModel):
         "batch_size",
     )
 
-    def __call__(self, sentences: tp.List[str]) -> torch.Tensor:
-        # (n_sentences, n_layers+1, hidden_size)
-        sentence_representations = SentenceRepresentations(
-            sentences=sentences,
-            model_name=self.model_name,
-            token_aggregation=self.token_aggregation,
-            add_special_tokens=self.add_special_tokens,
-            batch_size=self.batch_size,
-            device=self.device,
-            infra=self.infra,
-        )._compute_representations_cached()
+    def model_post_init(self, __context: tp.Any) -> None:
+        if self.device is None:
+            self.device = get_device()
 
+    def __call__(self):
+        # (n_sentences, n_layers+1, hidden_size)
+        sentence_representations = self.forward()
         if self.units is not None:
             sentence_representations = sentence_representations[:, :, self.units]
 
         # (n_sentences, hidden_size)
         return sentence_representations[:, self.layer]
+
+    @infra.apply(exclude_from_cache_uid=["layer", "units", "batch_size", "device"])
+    def forward(self) -> torch.Tensor:
+        # (n_sentences, n_layers+1, hidden_size)
+        return compute_sentence_representations(
+            sentences=self.dataset.sentences,
+            model_name=self.model_name,
+            batch_size=self.batch_size,
+            device=self.device,
+            add_special_tokens=self.add_special_tokens,
+            token_aggregation=self.token_aggregation,
+        )

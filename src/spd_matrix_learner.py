@@ -49,7 +49,7 @@ class NormFroParam(nn.Module):
 class SPDMatrixLearner(nn.Module):
     def __init__(
         self,
-        num_features: int,
+        n_features: int,
         param: str = "cholesky",
         fro_norm: bool = True,
         init: tp.Optional[str] = None,
@@ -62,7 +62,7 @@ class SPDMatrixLearner(nn.Module):
         Initialize an SPD Matrix Learner model.
 
         Args:
-            num_features: Number of features in the input
+            n_features: Number of features in the input
             param: Parametrization type ("exp", "cholesky", "diagonal", or "none")
             fro_norm: Whether to apply Frobenius norm normalization
             init: Optional initialization function name (from nn.init)
@@ -84,8 +84,8 @@ class SPDMatrixLearner(nn.Module):
             raise ValueError(f"Invalid loss function {loss}. Choose 'mse' or 'spearman'.")
 
         # Create weight matrix
-        self.W = nn.Linear(num_features, num_features, bias=False)
-        self.triu_indices = torch.triu_indices(num_features, num_features)
+        self.W = nn.Linear(n_features, n_features, bias=False)
+        self.triu_indices = torch.triu_indices(n_features, n_features)
 
         # Initialize weights if specified
         if init is not None:
@@ -96,7 +96,7 @@ class SPDMatrixLearner(nn.Module):
             parametrize.register_parametrization(self.W, "weight", SPDExpParam())
         elif param == "cholesky":
             parametrize.register_parametrization(
-                self.W, "weight", CholeskyParam(num_features)
+                self.W, "weight", CholeskyParam(n_features)
             )
         elif param == "diagonal":
             parametrize.register_parametrization(self.W, "weight", DiagonalParam())
@@ -220,10 +220,10 @@ class SPDMatrixLearnerBuilder(BaseModel):
 
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
-    def build(self, num_features) -> SPDMatrixLearner:
+    def build(self, n_features) -> SPDMatrixLearner:
         """Build the model using this configuration"""
         return SPDMatrixLearner(
-            num_features=num_features,
+            n_features=n_features,
             param=self.param,
             fro_norm=self.fro_norm,
             init=self.init,

@@ -13,8 +13,10 @@ from torch import nn
 from torch.utils import data
 from tqdm.auto import tqdm
 
+from src.dataset import Dataset
+from src.pairwise_dataloader import PairwiseDataloader
 from src.trainer import Trainer
-from src.utils import BaseModel
+from src.utils import BaseModelSharing
 
 
 def compute_stats(data, alpha=0.01):
@@ -26,7 +28,7 @@ def compute_stats(data, alpha=0.01):
 
 def compute_feature_importance(
     model: nn.Module,
-    dataset: data.Dataset,
+    dataloader: PairwiseDataloader,
     features: list[str],
     n_perm: int,
     alpha: float,
@@ -59,7 +61,7 @@ def compute_feature_importance(
             t = time()
 
             # Sample a batch
-            X_batch, Y_batch = dataset[i]
+            X_batch, Y_batch = dataloader[i]
 
             # Create flattened feature interactions
             X_batch_flat = X_batch[:, None] * X_batch[:, :, None]
@@ -116,8 +118,9 @@ def compute_feature_importance(
     return importances_stats, spearman_stats
 
 
-class FeatureImportance(BaseModel):
-    trainer: Trainer
+class FeatureImportance(BaseModelSharing):
+    dataset: Dataset = Dataset()
+    trainer: Trainer = Trainer()
 
     n_perm: int = 30
     alpha: float = 0.01
@@ -125,17 +128,20 @@ class FeatureImportance(BaseModel):
 
     infra: TaskInfra = TaskInfra(version="1", folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
+    _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
+        "infra": ["dataset", "trainer"],
+        "dataset": ["trainer"],
+    }
 
     @infra.apply
     def compute(self) -> tp.Tuple[pd.DataFrame, pd.Series]:
         state_dict, _ = self.trainer.train()
-        model, dataset = self.trainer.init(state_dict=state_dict)
-        features = self.trainer.features
+        model, dataloader = self.trainer.init(state_dict=state_dict)
+        features = self.dataset.features
 
-        # Call the core function
         importances, spearman = compute_feature_importance(
             model=model,
-            dataset=dataset,
+            dataloader=dataloader,
             features=features,
             n_perm=self.n_perm,
             alpha=self.alpha,
