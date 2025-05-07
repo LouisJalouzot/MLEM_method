@@ -55,7 +55,7 @@ def compute_feature_importance(
     # Process batches
     with torch.no_grad():
         for i in tqdm(
-            range(n_perm),
+            range(1, n_perm + 1),
             desc="Computing feature importance",
         ):
             t = time()

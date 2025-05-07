@@ -103,21 +103,20 @@ class BaseModelSharing(BaseModel):
                 )
 
             # Retrieve data for the shared field, defaulting to {} for default instantiation
-            shared_instance_payload = data.get(shared_field_name, {})
+            shared_data = data.get(shared_field_name, {})
 
-            if isinstance(shared_instance_payload, shared_field_type):
-                shared_instance = shared_instance_payload
-            elif isinstance(shared_instance_payload, dict):
-                shared_instance = shared_field_type(**shared_instance_payload)
-            else:
+            if not (
+                isinstance(shared_data, shared_field_type)
+                or isinstance(shared_data, dict)
+            ):
                 raise TypeError(
                     f"Invalid data for shared field '{shared_field_name}'. "
                     f"Expected a {shared_field_type.__name__} instance or a dict, "
-                    f"got {type(shared_instance_payload).__name__}."
+                    f"got {type(shared_data).__name__}."
                 )
 
             # Place the resolved shared instance into data for Pydantic validation
-            data[shared_field_name] = shared_instance
+            data[shared_field_name] = shared_data
 
             # 2. Inject the Shared Instance into Dependent Fields' Initialization Data
             for dependent_field_name in dependent_field_names:
@@ -143,7 +142,7 @@ class BaseModelSharing(BaseModel):
                     )
 
                 # Inject the shared instance into the dependent's data
-                dependent_data[shared_field_name] = shared_instance
+                dependent_data[shared_field_name] = shared_data
                 data[dependent_field_name] = dependent_data
 
         return data

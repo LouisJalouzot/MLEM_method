@@ -1,4 +1,5 @@
 import typing as tp
+from pathlib import Path
 
 import pandas as pd
 import torch
@@ -20,41 +21,84 @@ class Dataset(BaseModel):
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def model_post_init(self, __context):
-        self._df = pd.read_csv(self.csv_path)
-        if "word" in self._df.columns:
-            self._words = self._df.word.tolist()
-            self._sentence_id = self._df.sentence_id.tolist()
-        elif "sentence" in self._df.columns:
-            self._sentences = self._df.sentence.tolist()
-        self._df = self._df.drop(
-            columns=["word", "sentence", "sentence_id"], errors="ignore"
-        )
-        self._features = self._df.columns.values
+        self.features
 
     @property
     def df(self) -> pd.DataFrame:
-        return self._df
+        if hasattr(self, "_df"):
+            return self._df
+        else:
+            self._df = pd.read_csv(self.csv_path)
+
+            return self._df
 
     @property
-    def n_features(self) -> int:
-        return len(self._features)
+    def df_features(self) -> pd.DataFrame:
+        return self.df[self.features]
 
     @property
     def features(self) -> tp.List[str]:
-        return self._features
+        if hasattr(self, "_features"):
+            return self._features
+        else:
+            assert Path(self.csv_path).exists(), f"File {self.csv_path} does not exist"
+            features = pd.read_csv(self.csv_path, nrows=0).columns.values
+            if "word" in features:
+                features = features[features != "word"]
+                self._level = "word"
+                assert "sentence" not in features and "sentence_id" not in features
+            elif "sentence" in features:
+                self._level = "sentence"
+                features = features[features != "sentence"]
+                features = features[features != "sentence_id"]
+                assert "sentence_id" in features
+                assert "word" not in features
+            self._features = features
+
+            return self._features
 
     @property
-    def sentences(self) -> tp.List[str]:
-        return self._sentences
+    def n_features(self) -> int:
+        return len(self.features)
+
+    @property
+    def level(self) -> str:
+        self.features
+        return self._level
 
     @property
     def words(self) -> tp.List[str]:
-        return self._words
+        if hasattr(self, "_words"):
+            return self._words
+        else:
+            assert (
+                self.level == "word"
+            ), "words are only available for word level datasets"
+            self._words = self.df.word.to_list()
+            return self._words
+
+    @property
+    def sentences(self) -> tp.List[str]:
+        if hasattr(self, "_sentences"):
+            return self._sentences
+        else:
+            assert (
+                self.level == "sentence"
+            ), "sentences are only available for sentence level datasets"
+            self._sentences = self.df.sentence.to_list()
+            return self._sentences
 
     @property
     def sentence_id(self) -> tp.List[tp.Any]:
-        return self._sentence_id
+        if hasattr(self, "_sentence_id"):
+            return self._sentence_id
+        else:
+            assert (
+                self.level == "sentence"
+            ), "sentence_id is only available for sentence level datasets"
+            self._sentence_id = self.df.sentence_id.to_list()
+            return self._sentence_id
 
     @infra.apply
     def encode(self) -> torch.Tensor:
-        return encode_df(self._df)
+        return encode_df(self.df_features)
