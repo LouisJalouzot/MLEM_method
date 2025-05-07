@@ -14,16 +14,19 @@ from sklearn.preprocessing import MinMaxScaler
 def get_device():
     if torch.cuda.is_available():
         # Get GPU id with the most free memory, select at random if there are multiple
-        gpus = subprocess.check_output(
-            ["nvidia-smi", "--format=csv", "--query-gpu=memory.free"]
-        )
-        gpus = gpus.decode("utf-8").split("\n")
-        free_rams = tuple(map(lambda x: float(x.rstrip(" [MiB]")), gpus[1:-1]))
-        max_free = max(free_rams)
-        max_free_idxs = tuple(
-            i for i in range(len(free_rams)) if abs(max_free - free_rams[i]) <= 200
-        )
-        gpu_id = random.choice(max_free_idxs)
+        try:
+            gpus = subprocess.check_output(
+                ["nvidia-smi", "--format=csv", "--query-gpu=memory.free"]
+            )
+            gpus = gpus.decode("utf-8").split("\n")
+            free_rams = tuple(map(lambda x: float(x.rstrip(" [MiB]")), gpus[1:-1]))
+            max_free = max(free_rams)
+            max_free_idxs = tuple(
+                i for i in range(len(free_rams)) if abs(max_free - free_rams[i]) <= 200
+            )
+            gpu_id = random.choice(max_free_idxs)
+        except:
+            return "cuda"
 
         return f"cuda:{gpu_id}"
     else:
