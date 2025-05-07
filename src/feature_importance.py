@@ -84,7 +84,7 @@ def compute_feature_importance(
 
             logger.debug(
                 f"Batch {i:<3} / {n_perm} - "
-                f"Duration: {time() - t:.3g}s - "
+                f"Duration: {time() - t:<8.3f}s - "
                 f"Spearman: {s:<8.3g}"
             )
 
