@@ -25,7 +25,7 @@ dependencies = [
     "scipy>=1.15.2",
     "seaborn>=0.13.2",
     "sqlmodel>=0.0.24",
-    "torch>=2.6.0",
+    "torch>=2.7.0",
     "torchvision>=0.21.0",
     "torchsort>=0.1.9",
     "tqdm>=4.67.1",
@@ -38,3 +38,6 @@ dependencies = [
 
 [tool.pytest.ini_options]
 pythonpath = ["./"]
+
+[tool.uv.sources]
+torchsort = { git = "https://github.com/LouisJalouzot/torchsort" }
