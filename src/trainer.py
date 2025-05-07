@@ -20,7 +20,7 @@ from src.word_representations import WordRepresentations
 
 def train(
     model: nn.Module,
-    dataset: PairwiseDataloader,
+    dataloader: PairwiseDataloader,
     lr: float = 0.1,
     weight_decay: float = 0,
     max_epochs: int = 500,
@@ -46,7 +46,7 @@ def train(
     for i in pbar:
         t = time()
 
-        X_batch, Y_batch = dataset[i]
+        X_batch, Y_batch = dataloader[i]
         optimizer.zero_grad(set_to_none=True)
         Y_pred = model(X_batch)
         score = model.loss(Y_pred, Y_batch)
@@ -126,6 +126,10 @@ class Trainer(BaseModelSharing):
     }
 
     def model_post_init(self, __context: tp.Any) -> None:
+        assert self.dataset.level == self.representations.level, (
+            f"Dataset level {self.dataset.level} does not match "
+            f"representations level {self.representations.level}"
+        )
         if self.device is None:
             self.device = get_device()
 

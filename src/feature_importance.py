@@ -10,7 +10,6 @@ from loguru import logger
 from pydantic import ConfigDict
 from statsmodels.stats.descriptivestats import describe
 from torch import nn
-from torch.utils import data
 from tqdm.auto import tqdm
 
 from src.dataset import Dataset
@@ -31,8 +30,9 @@ def compute_feature_importance(
     dataloader: PairwiseDataloader,
     features: list[str],
     n_perm: int,
-    alpha: float,
-    warn_ci: float,
+    monitor: tp.Literal["std", "ci_width"] = "std",
+    thresh: float = 0.01,
+    alpha: float = 0.01,
 ) -> tp.Tuple[pd.DataFrame, pd.Series]:
     """Core logic for computing permutation feature importance."""
     n = len(features)
@@ -106,13 +106,19 @@ def compute_feature_importance(
 
     # Warn if there's significant variability on the Spearman correlation
     # across batches
-    low, high = spearman_stats["lower_ci"], spearman_stats["upper_ci"]
-    if high - low > warn_ci:
+    if monitor == "ci_width":
+        variability = spearman_stats["upper_ci"] - spearman_stats["lower_ci"]
+        message = f"the width of the {(1 - alpha)*100:.3g}% confidence interval of the Spearman correlation is {variability:.3g} "
+    elif monitor == "std":
+        variability = spearman_stats["std"]
+        message = (
+            f"the standard deviation of the Spearman correlation is {variability:.3g} "
+        )
+    if variability > thresh:
         logger.warning(
             f"Significant variability between batches: "
-            f"the {(1 - alpha)*100:.3g}% confidence interval "
-            f"of the Spearman correlation is [{low:.3g}, {high:.3g}] "
-            f"which is larger than the threshold {warn_ci:.3g}."
+            + message
+            + f"which is larger than the threshold {thresh:.3g}."
         )
 
     return importances_stats, spearman_stats
@@ -123,8 +129,9 @@ class FeatureImportance(BaseModelSharing):
     trainer: Trainer = Trainer()
 
     n_perm: int = 30
+    monitor: tp.Literal["std", "ci_width"] = "std"
+    thresh: float = 0.01
     alpha: float = 0.01
-    warn_ci: float = 0.01
 
     infra: TaskInfra = TaskInfra(version="1", folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
@@ -144,8 +151,9 @@ class FeatureImportance(BaseModelSharing):
             dataloader=dataloader,
             features=features,
             n_perm=self.n_perm,
+            monitor=self.monitor,
+            thresh=self.thresh,
             alpha=self.alpha,
-            warn_ci=self.warn_ci,
         )
 
         return importances, spearman
