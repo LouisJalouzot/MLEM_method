@@ -10,9 +10,7 @@ from src.pairwise_dataset import PairwiseDataset, PairwiseDatasetBuilder
 from src.utils import BaseModel
 
 
-def batch_corrcoef(
-    x: torch.Tensor, ddof: int = 1, eps: float = 1e-8
-) -> torch.Tensor:
+def batch_corrcoef(x: torch.Tensor, ddof: int = 1, eps: float = 1e-8) -> torch.Tensor:
     """
     Computes batched Pearson correlation coefficient matrix manually.
 
@@ -26,9 +24,7 @@ def batch_corrcoef(
     """
     B, N, D = x.shape
     if N <= ddof:
-        raise ValueError(
-            f"Number of observations N={N} must be greater than ddof={ddof}"
-        )
+        raise ValueError(f"Number of observations N={N} must be greater than ddof={ddof}")
 
     # Center data: (B, N, D)
     mean = torch.mean(x, dim=1, keepdim=True)
@@ -125,13 +121,9 @@ def estimate_corrs(
             # (n_feature_pairs,)
             stds = corrs.std(dim=0)
             variability = stds.max()
-            logger.debug(
-                f"Max std: {variability:<4.2g} (needs to be < {thresh:.2g})"
-            )
+            logger.debug(f"Max std: {variability:<4.2g} (needs to be < {thresh:.2g})")
         elif monitor == "ci_width":
-            cis = compute_ci(
-                corrs.reshape(n_trials, -1), confidence=ci_confidence
-            )
+            cis = compute_ci(corrs.reshape(n_trials, -1), confidence=ci_confidence)
             variability = (cis[:, 1] - cis[:, 0]).max()
             logger.debug(
                 f"Max CI width: {variability:<4.2g} (needs to be < {thresh:.2g})"

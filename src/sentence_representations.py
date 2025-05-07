@@ -25,17 +25,13 @@ def compute_sentence_representations(
         add_special_tokens=add_special_tokens,
     )
     # (n_sentences, n_layers+1, hidden_size)
-    return aggregate_masked_tensor(
-        hidden_states, dim=1, method=token_aggregation
-    )
+    return aggregate_masked_tensor(hidden_states, dim=1, method=token_aggregation)
 
 
 class SentenceRepresentations(BaseModel):
     sentences: tp.List[str]
     model_name: str = "bert-base-uncased"
-    token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = (
-        "mean"
-    )
+    token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = "mean"
     add_special_tokens: bool = True
     batch_size: int = 32
     device: tp.Optional[str] = None
@@ -66,9 +62,7 @@ class SentenceRepresentations(BaseModel):
 class SentenceRepresentationsCfg(BaseModel):
     level: tp.Literal["sentence"] = "sentence"
     model_name: str = "bert-base-uncased"
-    token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = (
-        "mean"
-    )
+    token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = "mean"
     add_special_tokens: bool = True
     layer: int = 5
     units: tp.List[int] = None
@@ -94,9 +88,7 @@ class SentenceRepresentationsCfg(BaseModel):
         )._compute_representations_cached()
 
         if self.units is not None:
-            sentence_representations = sentence_representations[
-                :, :, self.units
-            ]
+            sentence_representations = sentence_representations[:, :, self.units]
 
         # (n_sentences, hidden_size)
         return sentence_representations[:, self.layer]

@@ -100,18 +100,12 @@ def compute_word_representations(
 
     # Get a mask for tokens and words correspondance
     # (n_sentences, max_words, max_seq_len)
-    beg_tok_in_word = (
-        word_start_index[:, :, None] <= offsets_mapping[:, None, :, 0]
-    )
-    end_tok_in_word = (
-        offsets_mapping[:, None, :, 1] <= word_stop_index[:, :, None]
-    )
+    beg_tok_in_word = word_start_index[:, :, None] <= offsets_mapping[:, None, :, 0]
+    end_tok_in_word = offsets_mapping[:, None, :, 1] <= word_stop_index[:, :, None]
 
     # Aggregate into a single mask
     # (n_sentences, max_words, max_seq_len)
-    token_word_mask = (
-        beg_tok_in_word * end_tok_in_word * ~special_tokens[:, None]
-    )
+    token_word_mask = beg_tok_in_word * end_tok_in_word * ~special_tokens[:, None]
 
     # Broadcast
     # (n_sentences, 1, max_seq_len, n_layers+1, hidden_size)
@@ -138,9 +132,7 @@ class WordRepresentations(BaseModel):
     words: tp.List[str]
     sentence_id: tp.List[int]
     model_name: str = "bert-base-uncased"
-    token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = (
-        "mean"
-    )
+    token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = "mean"
     add_special_tokens: bool = True
     batch_size: int = 32
     device: tp.Optional[str] = None
@@ -158,9 +150,7 @@ class WordRepresentations(BaseModel):
 
     @infra.apply(exclude_from_cache_uid=["batch_size", "device"])
     def compute_representations_cached(self):
-        words = pd.DataFrame(
-            {"word": self.words, "sentence_id": self.sentence_id}
-        )
+        words = pd.DataFrame({"word": self.words, "sentence_id": self.sentence_id})
 
         # (n_words, n_layers+1, hidden_size)
         return compute_word_representations(
@@ -176,9 +166,7 @@ class WordRepresentations(BaseModel):
 class WordRepresentationsCfg(BaseModel):
     level: tp.Literal["word"] = "word"
     model_name: str = "bert-base-uncased"
-    token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = (
-        "mean"
-    )
+    token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = "mean"
     add_special_tokens: bool = True
     layer: int = 5
     units: tp.List[int] = None
@@ -191,9 +179,7 @@ class WordRepresentationsCfg(BaseModel):
         "batch_size",
     )
 
-    def __call__(
-        self, words: tp.List[str], sentence_id: tp.List[tp.Any]
-    ) -> torch.Tensor:
+    def __call__(self, words: tp.List[str], sentence_id: tp.List[tp.Any]) -> torch.Tensor:
         # (n_words, n_layers+1, hidden_size)
         words_representations = WordRepresentations(
             words=words,

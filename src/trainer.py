@@ -106,8 +106,8 @@ def train(
 class Trainer(BaseModel):
     model_builder: SPDMatrixLearnerBuilder = SPDMatrixLearnerBuilder()
     stimulis: Stimulis = Stimulis()
-    representations_cfg: WordRepresentationsCfg | SentenceRepresentationsCfg = (
-        Field(SentenceRepresentationsCfg(), discriminator="level")
+    representations_cfg: WordRepresentationsCfg | SentenceRepresentationsCfg = Field(
+        SentenceRepresentationsCfg(), discriminator="level"
     )
     dataset_builder: PairwiseDatasetBuilder = PairwiseDatasetBuilder()
     lr: float = 0.1
@@ -127,9 +127,7 @@ class Trainer(BaseModel):
     def features(self) -> tp.List[str]:
         return self.stimulis._features
 
-    def init(
-        self, state_dict=None
-    ) -> tp.Tuple[SPDMatrixLearner, PairwiseDataset]:
+    def init(self, state_dict=None) -> tp.Tuple[SPDMatrixLearner, PairwiseDataset]:
         torch.set_float32_matmul_precision("medium")
         if self.device is None:
             self.device = get_device()
@@ -141,9 +139,7 @@ class Trainer(BaseModel):
             )
         elif self.representations_cfg.level == "sentence":
             Y = self.representations_cfg(sentences=self.stimulis.sentences)
-        model = self.model_builder.build(
-            num_features=self.stimulis.num_features
-        )
+        model = self.model_builder.build(num_features=self.stimulis.num_features)
         if state_dict is not None:
             model.load_state_dict(state_dict=state_dict)
         model = model.to(self.device)

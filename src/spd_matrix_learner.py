@@ -81,9 +81,7 @@ class SPDMatrixLearner(nn.Module):
             self.loss = self.spearman_diff
             self.maximize = True
         else:
-            raise ValueError(
-                f"Invalid loss function {loss}. Choose 'mse' or 'spearman'."
-            )
+            raise ValueError(f"Invalid loss function {loss}. Choose 'mse' or 'spearman'.")
 
         # Create weight matrix
         self.W = nn.Linear(num_features, num_features, bias=False)
@@ -95,17 +93,13 @@ class SPDMatrixLearner(nn.Module):
 
         # Add appropriate parametrization
         if param == "exp":
-            parametrize.register_parametrization(
-                self.W, "weight", SPDExpParam()
-            )
+            parametrize.register_parametrization(self.W, "weight", SPDExpParam())
         elif param == "cholesky":
             parametrize.register_parametrization(
                 self.W, "weight", CholeskyParam(num_features)
             )
         elif param == "diagonal":
-            parametrize.register_parametrization(
-                self.W, "weight", DiagonalParam()
-            )
+            parametrize.register_parametrization(self.W, "weight", DiagonalParam())
         elif param == "sym":
             parametrize.register_parametrization(self.W, "weight", SymParam())
         elif param == "none":
@@ -115,9 +109,7 @@ class SPDMatrixLearner(nn.Module):
 
         # Add normalization if requested
         if fro_norm:
-            parametrize.register_parametrization(
-                self.W, "weight", NormFroParam()
-            )
+            parametrize.register_parametrization(self.W, "weight", NormFroParam())
 
     def get_W(self) -> torch.Tensor:
         """Get the weight matrix"""

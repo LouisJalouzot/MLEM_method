@@ -104,9 +104,7 @@ def compute_hidden_states(
             batch_hidden_states = torch.stack(batch_hidden_states)
 
             # Permute to (batch, max_seq_len, n_layers+1, hidden_size)
-            batch_hidden_states_permuted = batch_hidden_states.permute(
-                1, 2, 0, 3
-            )
+            batch_hidden_states_permuted = batch_hidden_states.permute(1, 2, 0, 3)
 
             hidden_states.append(batch_hidden_states_permuted.cpu())
 
@@ -123,9 +121,7 @@ def compute_hidden_states(
     attention_mask = attention_mask.broadcast_to(hidden_states.shape)
 
     # Mask hidden states based on the full attention mask
-    all_hidden_states_masked = masked_tensor(
-        hidden_states, attention_mask.bool()
-    )
+    all_hidden_states_masked = masked_tensor(hidden_states, attention_mask.bool())
 
     if return_offsets_mapping:
         return all_hidden_states_masked, offsets_mapping
@@ -191,11 +187,7 @@ def aggregate_masked_tensor(
     elif method == "last":
         mask = data.get_mask().int()
         max_seq_len = mask.shape[dim]
-        last_idx = (
-            max_seq_len
-            - mask.flip(dims=(dim,)).argmax(dim=dim, keepdim=True)
-            - 1
-        )
+        last_idx = max_seq_len - mask.flip(dims=(dim,)).argmax(dim=dim, keepdim=True) - 1
         agg = data.get_data().gather(dim, last_idx)
         return agg.select(dim, 0)
     else:

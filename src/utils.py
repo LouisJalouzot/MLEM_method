@@ -19,9 +19,7 @@ def get_device():
         free_rams = tuple(map(lambda x: float(x.rstrip(" [MiB]")), gpus[1:-1]))
         max_free = max(free_rams)
         max_free_idxs = tuple(
-            i
-            for i in range(len(free_rams))
-            if abs(max_free - free_rams[i]) <= 200
+            i for i in range(len(free_rams)) if abs(max_free - free_rams[i]) <= 200
         )
         gpu_id = random.choice(max_free_idxs)
 
