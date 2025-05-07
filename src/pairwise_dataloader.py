@@ -7,7 +7,7 @@ from torch.utils.data import Dataset
 from src.utils import BaseModel
 
 
-class PairwiseDataset(Dataset):
+class PairwiseDataloader(Dataset):
     """
     A dataset that generates pairs of samples from two datasets (X and Y) and computes the distance between them.
     The dataset can be used for training models that learn to predict the distance between samples.
@@ -106,29 +106,27 @@ class PairwiseDataset(Dataset):
         return self.sample(int(self.n_pairs * (self.gamma**idx)))
 
 
-class PairwiseDatasetBuilder(BaseModel):
-    n_pairs: int = None
-    gamma: float = 1
+class PairwiseDataloaderBuilder(BaseModel):
     distance: str | float | int = 2
     nan_to_num: float = 0
     min_max_scale: bool = True
 
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
-    def build(self, X=None, Y=None) -> PairwiseDataset:
-        if self.n_pairs is None:
-            n_pairs = 40 * X.shape[1] ** 2
-            logger.info(
-                f"Number of pairs is not specified. Using estimated {n_pairs} pairs."
-            )
-        else:
-            n_pairs = self.n_pairs
+    def build(self, X=None, Y=None, n_pairs=None, gamma=1) -> PairwiseDataloader:
+        # if self.n_pairs is None:
+        #     n_pairs = 40 * X.shape[1] ** 2
+        #     logger.info(
+        #         f"Number of pairs is not specified. Using estimated {n_pairs} pairs."
+        #     )
+        # else:
+        #     n_pairs = self.n_pairs
 
-        return PairwiseDataset(
+        return PairwiseDataloader(
             X=X,
             Y=Y,
             n_pairs=n_pairs,
-            gamma=self.gamma,
+            gamma=gamma,
             distance=self.distance,
             nan_to_num=self.nan_to_num,
             min_max_scale=self.min_max_scale,

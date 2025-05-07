@@ -1,20 +1,21 @@
 import typing as tp
 
-import numpy as np
 import pandas as pd
 import torch
+from exca import TaskInfra
 from pydantic import ConfigDict
 
 from src.utils import BaseModel, encode_df
 
 
-class Stimulis(BaseModel):
+class Dataset(BaseModel):
     csv_path: str = "datasets/short_sentence.csv"
     _df: pd.DataFrame = None
     _features: tp.List[str] = None
     _sentences: tp.List[str] = None
     _words: tp.List[str] = None
     _sentence_id: tp.List[tp.Any] = None
+    infra: TaskInfra = TaskInfra(folder=".cache")
 
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
@@ -54,5 +55,6 @@ class Stimulis(BaseModel):
     def sentence_id(self) -> tp.List[tp.Any]:
         return self._sentence_id
 
+    @infra.apply
     def encode(self) -> torch.Tensor:
         return encode_df(self._df)

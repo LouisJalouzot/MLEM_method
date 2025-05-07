@@ -11,17 +11,17 @@ from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm.auto import tqdm
 
-from src.pairwise_dataset import PairwiseDataset, PairwiseDatasetBuilder
+from src.dataset import Stimulis
+from src.pairwise_dataloader import PairwiseDataloader, PairwiseDataloaderBuilder
 from src.sentence_representations import SentenceRepresentationsCfg
 from src.spd_matrix_learner import SPDMatrixLearner, SPDMatrixLearnerBuilder
-from src.stimulis import Stimulis
 from src.utils import BaseModel, get_device
 from src.word_representations import WordRepresentationsCfg
 
 
 def train(
     model: nn.Module,
-    dataset: PairwiseDataset,
+    dataset: PairwiseDataloader,
     lr: float = 0.1,
     weight_decay: float = 0,
     max_epochs: int = 500,
@@ -109,7 +109,7 @@ class Trainer(BaseModel):
     representations_cfg: WordRepresentationsCfg | SentenceRepresentationsCfg = Field(
         SentenceRepresentationsCfg(), discriminator="level"
     )
-    dataset_builder: PairwiseDatasetBuilder = PairwiseDatasetBuilder()
+    dataset_builder: PairwiseDataloaderBuilder = PairwiseDataloaderBuilder()
     lr: float = 0.1
     weight_decay: float = 0
     max_epochs: int = 500
@@ -127,7 +127,7 @@ class Trainer(BaseModel):
     def features(self) -> tp.List[str]:
         return self.stimulis._features
 
-    def init(self, state_dict=None) -> tp.Tuple[SPDMatrixLearner, PairwiseDataset]:
+    def init(self, state_dict=None) -> tp.Tuple[SPDMatrixLearner, PairwiseDataloader]:
         torch.set_float32_matmul_precision("medium")
         if self.device is None:
             self.device = get_device()

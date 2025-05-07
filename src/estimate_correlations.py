@@ -6,7 +6,8 @@ from loguru import logger
 from pydantic import ConfigDict
 from scipy import stats
 
-from src.pairwise_dataset import PairwiseDataset, PairwiseDatasetBuilder
+from src.dataset import Dataset
+from src.pairwise_dataloader import PairwiseDataloader, PairwiseDataloaderBuilder
 from src.utils import BaseModel
 
 
@@ -85,8 +86,8 @@ def compute_ci(data: torch.Tensor, confidence: float = 0.99) -> torch.Tensor:
     return torch.stack([lower_bound, upper_bound], dim=1)
 
 
-def estimate_corrs(
-    dataset: PairwiseDataset,
+def estimate_correlations(
+    dataloader: PairwiseDataloader,
     n_trials: int = 10,
     init_sample_size: int = 4096,
     factor: float = 1.2,
@@ -96,7 +97,7 @@ def estimate_corrs(
     thresh: float = 0.01,
     ci_confidence: float = 0.99,
 ) -> tp.Tuple[torch.Tensor, int]:
-    _, n_features = dataset.get_X_shape()
+    _, n_features = dataloader.get_X_shape()
     triu_indices = torch.triu_indices(n_features, n_features)
     sample_size = init_sample_size
 
@@ -107,7 +108,7 @@ def estimate_corrs(
 
         # Get samples
         # (n_trials, n_samples, n_features)
-        X_batch = dataset.sample(n_pairs=sample_size, n_trials=n_trials)
+        X_batch = dataloader.sample(n_pairs=sample_size, n_trials=n_trials)
         if product:
             # (n_trials, n_samples, n_features, n_features)
             X_batch = X_batch[:, :, None] * X_batch[:, :, :, None]
@@ -146,7 +147,9 @@ def estimate_corrs(
     )
 
 
-class CorrelationEstimator(BaseModel):
+class EstimateCorrelations(BaseModel):
+    dataset: Dataset = Dataset()
+    dataloader_builder: PairwiseDataloaderBuilder = PairwiseDataloaderBuilder()
     n_trials: int = 10
     init_sample_size: int = 4096
     factor: float = 1.2
@@ -155,12 +158,17 @@ class CorrelationEstimator(BaseModel):
     monitor: tp.Literal["std", "ci_width"] = "std"
     thresh: float = 0.01
     ci_confidence: float = 0.99
+    infra: TaskInfra = TaskInfra(folder=".cache")
 
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
-    def __call__(self, dataset: PairwiseDataset) -> tp.Tuple[torch.Tensor, int]:
-        return estimate_corrs(
-            dataset,
+    @infra.apply
+    def estimate_correlations(self) -> tp.Tuple[torch.Tensor, int]:
+        X = self.dataset.encode()
+        dataloader = self.dataloader_builder.build(X=X)
+
+        return estimate_correlations(
+            dataloader=dataloader,
             n_trials=self.n_trials,
             init_sample_size=self.init_sample_size,
             factor=self.factor,

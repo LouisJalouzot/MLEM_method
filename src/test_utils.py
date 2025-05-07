@@ -3,10 +3,10 @@ import logging
 import pytest
 from pydantic import BaseModel, ValidationError
 
-# Assuming BaseModelSharing is in the same directory or accessible via PYTHONPATH
-from pydantic_base_model_sharing import BaseModelSharing
+from src.utils import BaseModelSharing
 
 # --- Test Models ---
+# TODO: make it work
 
 
 class SharedConfig(BaseModel):
@@ -45,9 +45,7 @@ class ModelWithBadConfig(BaseModelSharing):
 
 
 class ModelWithBadDependentConfig(BaseModelSharing):
-    _shared_fields_config = {
-        "shared_config": ["non_existent_comp"]
-    }  # Config error
+    _shared_fields_config = {"shared_config": ["non_existent_comp"]}  # Config error
     shared_config: SharedConfig
 
 
@@ -84,9 +82,7 @@ def test_instantiation_with_shared_instance():
     }
     model = MainModel(**data)
 
-    assert (
-        model.shared_config is pre_shared
-    )  # Should be the exact same instance
+    assert model.shared_config is pre_shared  # Should be the exact same instance
     assert model.shared_config.param_a == "pre_a"
     assert model.shared_config.param_b == 20
     assert model.component_a.comp_a_param == "a2"
@@ -161,9 +157,7 @@ def test_redundant_shared_in_dependent(caplog):
     assert model.shared_config.param_b == 100  # Top level wins
     assert model.component_a.comp_a_param == "a5"
     assert model.component_b.comp_b_param == 6.0
-    assert (
-        model.shared_config is model.component_a.shared
-    )  # Still shared correctly
+    assert model.shared_config is model.component_a.shared  # Still shared correctly
     assert model.shared_config is model.component_b.shared
 
 
@@ -177,9 +171,7 @@ def test_invalid_data_type_for_shared(caplog):
     with caplog.at_level(logging.WARNING):
         model = MainModel(**data)
 
-    assert (
-        "is neither a valid instance nor a dict. Using defaults." in caplog.text
-    )
+    assert "is neither a valid instance nor a dict. Using defaults." in caplog.text
     # Should fall back to defaults for the shared config
     assert model.shared_config.param_a == "default_a"
     assert model.shared_config.param_b == 1
@@ -204,10 +196,7 @@ def test_config_warning_dependent_field_not_in_model(caplog):
         ModelWithBadDependentConfig(
             **data
         )  # Instantiation should still work, just skip bad dependent
-    assert (
-        "Config Warning: Dependent field 'non_existent_comp' not found"
-        in caplog.text
-    )
+    assert "Config Warning: Dependent field 'non_existent_comp' not found" in caplog.text
 
 
 def test_shared_field_not_basemodel(caplog):
