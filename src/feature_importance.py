@@ -129,7 +129,7 @@ class FeatureImportance(BaseModelSharing):
     )
     trainer: Trainer = Field(default_factory=lambda: Trainer())
 
-    n_perm: int = 30
+    n_perm: int = 10
     monitor: tp.Literal["std", "ci_width"] = "std"
     thresh: float = 0.01
     alpha: float = 0.01

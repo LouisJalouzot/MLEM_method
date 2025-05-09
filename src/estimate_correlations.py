@@ -156,7 +156,7 @@ class EstimateCorrelations(BaseModel):
     init_sample_size: int = 4096
     factor: float = 1.2
     max_sample_size: float = 2**20
-    product: bool = False
+    product: bool = True
     monitor: tp.Literal["std", "ci_width"] = "std"
     thresh: float = 0.01
     ci_confidence: float = 0.99
