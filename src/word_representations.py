@@ -4,9 +4,11 @@ import typing as tp
 import pandas as pd
 import torch
 from exca import TaskInfra
-from pydantic import ConfigDict
+from loguru import logger
+from pydantic import ConfigDict, Field
 from torch.masked import masked_tensor
 from torch.nn.utils.rnn import pad_sequence
+from transformers import AutoConfig
 
 from src.dataset import Dataset
 from src.hidden_states import aggregate_masked_tensor, compute_hidden_states
@@ -129,7 +131,9 @@ def compute_word_representations(
 
 
 class WordRepresentations(BaseModel):
-    dataset: Dataset = Dataset()
+    dataset: Dataset = Field(
+        default_factory=lambda: Dataset(csv_path="datasets/svo_word_level.csv")
+    )
     level: tp.Literal["word"] = "word"
     model_name: str = "bert-base-uncased"
     token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = "mean"
@@ -148,6 +152,25 @@ class WordRepresentations(BaseModel):
     def model_post_init(self, __context: tp.Any) -> None:
         if self.device is None:
             self.device = get_device()
+        # config = AutoConfig.from_pretrained(self.model_name)
+        # num_layers = (
+        #     config.num_hidden_layers
+        #     if hasattr(config, "num_hidden_layers")
+        #     else config.num_layers
+        # )
+        # logger.debug(
+        #     f"Model {self.model_name} has {num_layers} layers and {config.hidden_size} hidden size."
+        # )
+        # assert (
+        #     self.layer <= num_layers
+        # ), f"Layer {self.layer} is out of range for model {self.model_name} with {num_layers} layers."
+        # if self.units is not None:
+        #     assert (
+        #         min(self.units) >= 0
+        #     ), f"Units must be non-negative. Found {min(self.units)}."
+        #     assert (
+        #         max(self.units) < config.hidden_size
+        #     ), f"Unit {max(self.units)} are out of range for model {self.model_name} with {config.hidden_size} hidden size."
 
     def __call__(self):
         # (n_words, n_layers+1, hidden_size)

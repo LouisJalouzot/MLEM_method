@@ -7,12 +7,13 @@ import torch
 from captum.attr import FeaturePermutation
 from exca import TaskInfra
 from loguru import logger
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 from statsmodels.stats.descriptivestats import describe
 from torch import nn
 from tqdm.auto import tqdm
 
 from src.dataset import Dataset
+from src.estimate_correlations import EstimateCorrelations
 from src.pairwise_dataloader import PairwiseDataloader
 from src.trainer import Trainer
 from src.utils import BaseModelSharing
@@ -34,7 +35,6 @@ def compute_feature_importance(
     thresh: float = 0.01,
     alpha: float = 0.01,
 ) -> tp.Tuple[pd.DataFrame, pd.Series]:
-    """Core logic for computing permutation feature importance."""
     n = len(features)
     logger.info(
         f"Computing permutation feature importance with {n_perm} permutations "
@@ -52,41 +52,39 @@ def compute_feature_importance(
     spearman = []
     start = time()
 
-    # Process batches
-    with torch.no_grad():
-        for i in tqdm(
-            range(1, n_perm + 1),
-            desc="Computing feature importance",
-        ):
-            t = time()
+    for i in tqdm(
+        range(1, n_perm + 1),
+        desc="Computing feature importance",
+        disable=True,
+    ):
+        t = time()
+        X_batch, Y_batch = dataloader[i]
 
-            # Sample a batch
-            X_batch, Y_batch = dataloader[i]
+        # Create flattened feature interactions
+        X_batch_flat = X_batch[:, None] * X_batch[:, :, None]
+        X_batch_flat = X_batch_flat[:, *model.triu_indices]
 
-            # Create flattened feature interactions
-            X_batch_flat = X_batch[:, None] * X_batch[:, :, None]
-            X_batch_flat = X_batch_flat[:, *model.triu_indices]
-
-            # Define the function to measure attributions
-            def f(x):
+        # Define the function to measure attributions
+        def f(x):
+            with torch.no_grad():
                 pred = model.flat_forward(x)
                 return model.spearman(pred, Y_batch)
 
-            # Calculate feature importance
-            feature_perm = FeaturePermutation(f)
-            batch_importances = feature_perm.attribute(X_batch_flat).cpu()
-            importances.append(batch_importances.double().numpy().squeeze())
+        # Calculate feature importance
+        feature_perm = FeaturePermutation(f)
+        batch_importances = feature_perm.attribute(X_batch_flat).cpu()
+        importances.append(batch_importances.double().numpy().squeeze())
 
-            # Calculate baseline performance
-            pred = model(X_batch)
-            s = model.spearman(pred, Y_batch).item()
-            spearman.append(s)
+        # Calculate baseline performance
+        pred = model(X_batch)
+        s = model.spearman(pred, Y_batch).item()
+        spearman.append(s)
 
-            logger.debug(
-                f"Batch {i:<3} / {n_perm} - "
-                f"Duration: {time() - t:<8.3f}s - "
-                f"Spearman: {s:<8.3g}"
-            )
+        logger.debug(
+            f"Batch {i:<3} / {n_perm} - "
+            f"Duration: {time() - t:<8.3f}s - "
+            f"Spearman: {s:<8.3g}"
+        )
 
     # Compute importances statistics
     importances = np.stack(importances)
@@ -125,8 +123,11 @@ def compute_feature_importance(
 
 
 class FeatureImportance(BaseModelSharing):
-    dataset: Dataset = Dataset()
-    trainer: Trainer = Trainer()
+    dataset: Dataset = Field(default_factory=lambda: Dataset())
+    estimate_correlations: EstimateCorrelations = Field(
+        default_factory=lambda: EstimateCorrelations()
+    )
+    trainer: Trainer = Field(default_factory=lambda: Trainer())
 
     n_perm: int = 30
     monitor: tp.Literal["std", "ci_width"] = "std"
@@ -137,7 +138,8 @@ class FeatureImportance(BaseModelSharing):
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
         "dataset": ["trainer"],
-        "infra": ["dataset", "trainer"],
+        "estimate_correlations": ["trainer"],
+        "infra": ["dataset", "estimate_correlations", "trainer"],
     }
 
     @infra.apply

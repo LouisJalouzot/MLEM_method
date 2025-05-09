@@ -3,7 +3,7 @@ import typing as tp
 import torch
 from exca import TaskInfra
 from loguru import logger
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 from scipy import stats
 
 from src.dataset import Dataset
@@ -142,14 +142,16 @@ def estimate_correlations(
         sample_size = int(sample_size * factor) + 1
 
     raise ValueError(
-        f"Could not estimate correlations with the required confidence and precision "
+        f"Could not estimate correlations with the required variability "
         f"under {max_sample_size} samples."
     )
 
 
 class EstimateCorrelations(BaseModel):
-    dataset: Dataset = Dataset()
-    dataloader_builder: PairwiseDataloaderBuilder = PairwiseDataloaderBuilder()
+    dataset: Dataset = Field(default_factory=lambda: Dataset())
+    dataloader_builder: PairwiseDataloaderBuilder = Field(
+        default_factory=lambda: PairwiseDataloaderBuilder()
+    )
     n_trials: int = 10
     init_sample_size: int = 4096
     factor: float = 1.2

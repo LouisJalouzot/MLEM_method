@@ -102,16 +102,23 @@ def train(
 
 
 class Trainer(BaseModelSharing):
-    dataset: Dataset = Dataset()
-    estimate_correlations: EstimateCorrelations = EstimateCorrelations()
+    dataset: Dataset = Field(default_factory=lambda: Dataset())
+    estimate_correlations: EstimateCorrelations = Field(
+        default_factory=lambda: EstimateCorrelations()
+    )
     representations: (
         tp.Annotated[
-            SentenceRepresentations | WordRepresentations, Field(discriminator="level")
+            SentenceRepresentations | WordRepresentations,
+            Field(discriminator="level"),
         ]  # Use sentence or word representations based on the specified level
         | SentenceRepresentations  # Fallback to sentence representations if not specified
-    ) = SentenceRepresentations()
-    dataloader_builder: PairwiseDataloaderBuilder = PairwiseDataloaderBuilder()
-    model_builder: SPDMatrixLearnerBuilder = SPDMatrixLearnerBuilder()
+    ) = Field(default_factory=lambda: SentenceRepresentations())
+    dataloader_builder: PairwiseDataloaderBuilder = Field(
+        default_factory=lambda: PairwiseDataloaderBuilder()
+    )
+    model_builder: SPDMatrixLearnerBuilder = Field(
+        default_factory=lambda: SPDMatrixLearnerBuilder()
+    )
     lr: float = 0.1
     weight_decay: float = 0
     max_epochs: int = 500
@@ -156,15 +163,15 @@ class Trainer(BaseModelSharing):
     @infra.apply(exclude_from_cache_uid=["device"])
     def train(self) -> tp.Tuple[torch.Tensor, pd.DataFrame]:
         model, dataloader = self.init()
-        model, logs = train(
-            model=model,
-            dataloader=dataloader,
-            lr=self.lr,
-            weight_decay=self.weight_decay,
-            max_epochs=self.max_epochs,
-            eps=self.eps,
-            device=self.device,
-        )
+        # model, logs = train(
+        #     model=model,
+        #     dataloader=dataloader,
+        #     lr=self.lr,
+        #     weight_decay=self.weight_decay,
+        #     max_epochs=self.max_epochs,
+        #     eps=self.eps,
+        #     device=self.device,
+        # )
 
-        # Output state_dict as nn.Module can't be serialized for caching
-        return model.state_dict(), logs
+        # # Output state_dict as nn.Module can't be serialized for caching
+        # return model.state_dict(), logs
