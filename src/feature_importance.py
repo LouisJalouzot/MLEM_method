@@ -16,7 +16,7 @@ from src.dataset import Dataset
 from src.estimate_correlations import EstimateCorrelations
 from src.pairwise_dataloader import PairwiseDataloader
 from src.trainer import Trainer
-from src.utils import BaseModelSharing
+from src.utils import BaseModelSharing, get_device
 
 
 def compute_stats(data, alpha=0.01):
@@ -134,6 +134,7 @@ class FeatureImportance(BaseModelSharing):
     thresh: float = 0.01
     alpha: float = 0.01
 
+    device: str | None = None
     infra: TaskInfra = TaskInfra(version="1", folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
@@ -142,10 +143,15 @@ class FeatureImportance(BaseModelSharing):
         "infra": ["dataset", "estimate_correlations", "trainer"],
     }
 
-    @infra.apply
+    def model_post_init(self, __context: tp.Any) -> None:
+        if self.device is None:
+            self.device = get_device()
+
+    @infra.apply(exclude_from_cache_uid=["device"])
     def compute(self) -> tp.Tuple[pd.DataFrame, pd.Series]:
         state_dict, _ = self.trainer.train()
-        model, dataloader = self.trainer.init(state_dict=state_dict)
+        model, dataloader = self.trainer.init(state_dict=state_dict, device=self.device)
+        model.eval()
         features = self.dataset.features
 
         importances, spearman = compute_feature_importance(

@@ -140,22 +140,22 @@ class Trainer(BaseModelSharing):
         if self.device is None:
             self.device = get_device()
 
-    def init(self, state_dict=None) -> tp.Tuple[SPDMatrixLearner, PairwiseDataloader]:
+    def init(
+        self, state_dict=None, device=None
+    ) -> tp.Tuple[SPDMatrixLearner, PairwiseDataloader]:
         torch.set_float32_matmul_precision("medium")
-        if self.device is None:
-            self.device = get_device()
+        if device is None:
+            device = self.device
 
         # Estimate number of pairs for acceptable variability
         n_pairs = self.estimate_correlations.estimate_correlations()[1]
 
-        X = self.dataset.encode().to(self.device)
-        Y = self.representations().to(self.device)
         model = self.model_builder.build(n_features=self.dataset.n_features)
         if state_dict is not None:
             model.load_state_dict(state_dict=state_dict)
-        model = model.to(self.device)
-        X = self.dataset.encode().to(self.device)
-        Y = Y.to(self.device)
+        model = model.to(device)
+        X = self.dataset.encode().to(device)
+        Y = self.representations().to(device)
         dataloader = self.dataloader_builder.build(X, Y, n_pairs)
 
         return model, dataloader
@@ -163,15 +163,15 @@ class Trainer(BaseModelSharing):
     @infra.apply(exclude_from_cache_uid=["device"])
     def train(self) -> tp.Tuple[torch.Tensor, pd.DataFrame]:
         model, dataloader = self.init()
-        # model, logs = train(
-        #     model=model,
-        #     dataloader=dataloader,
-        #     lr=self.lr,
-        #     weight_decay=self.weight_decay,
-        #     max_epochs=self.max_epochs,
-        #     eps=self.eps,
-        #     device=self.device,
-        # )
+        model, logs = train(
+            model=model,
+            dataloader=dataloader,
+            lr=self.lr,
+            weight_decay=self.weight_decay,
+            max_epochs=self.max_epochs,
+            eps=self.eps,
+            device=self.device,
+        )
 
-        # # Output state_dict as nn.Module can't be serialized for caching
-        # return model.state_dict(), logs
+        # Output state_dict as nn.Module can't be serialized for caching
+        return model.state_dict(), logs

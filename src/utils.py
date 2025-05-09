@@ -5,10 +5,12 @@ import typing as tp
 import numpy as np
 import pandas as pd
 import torch
-from loguru import logger
 from pydantic import BaseModel as _BaseModel
-from pydantic import ValidationError, model_validator
+from pydantic import model_validator
 from sklearn.preprocessing import MinMaxScaler
+
+np.random.seed(0)
+torch.manual_seed(0)
 
 
 def get_device():
