@@ -179,7 +179,7 @@ class FeatureImportance(BaseModelSharing):
     infra: TaskInfra = TaskInfra(version="1", folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
-        "dataset": ["trainer"],
+        "dataset": ["trainer", "estimate_correlations"],
         "estimate_correlations": ["trainer"],
         "infra": ["dataset", "estimate_correlations", "trainer"],
     }

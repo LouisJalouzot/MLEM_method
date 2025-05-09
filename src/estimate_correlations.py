@@ -152,7 +152,7 @@ class EstimateCorrelations(BaseModel):
     dataloader_builder: PairwiseDataloaderBuilder = Field(
         default_factory=lambda: PairwiseDataloaderBuilder()
     )
-    n_trials: int = 10
+    n_trials: int = 30
     init_sample_size: int = 4096
     factor: float = 1.2
     max_sample_size: float = 2**20

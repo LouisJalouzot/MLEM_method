@@ -35,6 +35,8 @@ dependencies = [
     "wandb>=0.19.8",
     "xarray>=2025.3.0",
     "llm2vec>=0.2.1",
+    "sentencepiece>=0.2.0",
+    "joblib>=1.5.0",
 ]
 
 [tool.pytest.ini_options]
