@@ -8,6 +8,7 @@ from captum.attr import FeaturePermutation
 from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
+from sklearn.cluster import AgglomerativeClustering
 from statsmodels.stats.descriptivestats import describe
 from torch import nn
 from tqdm.auto import tqdm
@@ -31,21 +32,39 @@ def compute_feature_importance(
     dataloader: PairwiseDataloader,
     features: list[str],
     n_perm: int,
+    correlations: torch.Tensor = None,
+    linkage: str = "single",
+    threshold: float = 0.4,
     monitor: tp.Literal["std", "ci_width"] = "std",
     thresh: float = 0.01,
     alpha: float = 0.01,
 ) -> tp.Tuple[pd.DataFrame, pd.Series]:
-    n = len(features)
-    logger.info(
-        f"Computing permutation feature importance with {n_perm} permutations "
-        f"for {n*(n-1)//2} feature pairs."
-    )
-
     # Create feature pair names
     features_arr = np.array(features)
-    pfeatures = features_arr[None] + ", " + features_arr[:, None]
+    pfeatures = "(" + features_arr[None] + " x " + features_arr[:, None] + ")"
     np.fill_diagonal(pfeatures, features)
     pfeatures = pfeatures[*model.triu_indices]
+
+    logger.info(
+        f"Computing permutation feature importance with {n_perm} permutations "
+        f"for {len(pfeatures)} feature pairs."
+    )
+
+    # Cluster feature pairs if correlations are provided
+    if correlations is not None:
+        clustering = AgglomerativeClustering(
+            metric="precomputed",
+            distance_threshold=threshold,
+            linkage=linkage,
+            n_clusters=None,
+        )
+        clusters = clustering.fit_predict(1 - abs(correlations))
+        logger.info(
+            f"{len(pfeatures)} feature pairs clustered into {clusters.max() + 1} clusters."
+        )
+        clusters = torch.from_numpy(clusters)[None]
+    else:
+        clusters = None
 
     # Storage for results
     importances = []
@@ -72,7 +91,9 @@ def compute_feature_importance(
 
         # Calculate feature importance
         feature_perm = FeaturePermutation(f)
-        batch_importances = feature_perm.attribute(X_batch_flat).cpu()
+        batch_importances = feature_perm.attribute(
+            X_batch_flat, feature_mask=clusters
+        ).cpu()
         importances.append(batch_importances.double().numpy().squeeze())
 
         # Calculate baseline performance
@@ -89,9 +110,26 @@ def compute_feature_importance(
     # Compute importances statistics
     importances = np.stack(importances)
     importances = pd.DataFrame(importances, columns=pfeatures)
-    importances_stats = compute_stats(importances, alpha=alpha)
-    importances_stats = importances_stats.sort_values("mean", ascending=False)
-    importances_stats = importances_stats.reset_index(names="Feature")
+    importances = compute_stats(importances, alpha=alpha)
+    importances = importances.reset_index(names="Feature")
+    if clusters is not None:
+        importances["Cluster"] = clusters.squeeze()
+        cols = [col for col in importances.columns if col not in ["Cluster", "Feature"]]
+        aggregations = {
+            "Feature": [
+                ("Feature", lambda x: min(x, key=len)),
+                ("AllFeatures", list),
+            ]
+        } | {col: "first" for col in cols}
+        importances = importances.groupby("Cluster").agg(aggregations)
+        new_columns = [
+            col_tuple[1] if col_tuple[0] == "Feature" else col_tuple[0]
+            for col_tuple in importances.columns
+        ]
+        importances.columns = new_columns
+        importances = importances.reset_index()
+
+    importances = importances.sort_values("mean", ascending=False)
 
     # Compute spearman statistics
     spearman_stats = compute_stats(spearman, alpha=alpha).iloc[0]
@@ -119,7 +157,7 @@ def compute_feature_importance(
             + f"which is larger than the threshold {thresh:.3g}."
         )
 
-    return importances_stats, spearman_stats
+    return importances, spearman_stats
 
 
 class FeatureImportance(BaseModelSharing):
@@ -133,6 +171,9 @@ class FeatureImportance(BaseModelSharing):
     monitor: tp.Literal["std", "ci_width"] = "std"
     thresh: float = 0.01
     alpha: float = 0.01
+
+    linkage: str = "single"
+    threshold: float = 0.4
 
     device: str | None = None
     infra: TaskInfra = TaskInfra(version="1", folder=".cache")
@@ -154,11 +195,19 @@ class FeatureImportance(BaseModelSharing):
         model.eval()
         features = self.dataset.features
 
+        # Estimate correlations with forced product
+        ec_params = self.estimate_correlations.model_dump()
+        ec_params["product"] = True
+        correlations, _ = EstimateCorrelations(**ec_params).estimate_correlations()
+
         importances, spearman = compute_feature_importance(
             model=model,
             dataloader=dataloader,
             features=features,
             n_perm=self.n_perm,
+            correlations=correlations,
+            linkage=self.linkage,
+            threshold=self.threshold,
             monitor=self.monitor,
             thresh=self.thresh,
             alpha=self.alpha,
