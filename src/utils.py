@@ -12,8 +12,13 @@ from sklearn.preprocessing import MinMaxScaler
 np.random.seed(0)
 torch.manual_seed(0)
 
+DEVICE = None
+
 
 def get_device():
+    global DEVICE
+    if DEVICE is not None:
+        return DEVICE
     if torch.cuda.is_available():
         # Get GPU id with the most free memory, select at random if there are multiple
         try:
@@ -27,12 +32,13 @@ def get_device():
                 i for i in range(len(free_rams)) if abs(max_free - free_rams[i]) <= 200
             )
             gpu_id = random.choice(max_free_idxs)
+            DEVICE = f"cuda:{gpu_id}"
         except:
-            return "cuda"
-
-        return f"cuda:{gpu_id}"
+            DEVICE = "cuda"
     else:
-        return "cpu"
+        DEVICE = "cpu"
+
+    return DEVICE
 
 
 def encode_df(df: pd.DataFrame) -> torch.Tensor:

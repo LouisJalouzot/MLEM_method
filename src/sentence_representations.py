@@ -37,15 +37,17 @@ class SentenceRepresentations(BaseModel):
     model_name: str = "bert-base-uncased"
     token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = "mean"
     add_special_tokens: bool = True
+
     layer: int = 5
     units: tp.List[int] = None
+
     device: tp.Optional[str] = None
     batch_size: int = 32
     infra: TaskInfra = TaskInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
-        "device",
         "batch_size",
+        "device",
     )
 
     def model_post_init(self, __context: tp.Any) -> None:
@@ -80,7 +82,7 @@ class SentenceRepresentations(BaseModel):
         # (n_sentences, hidden_size)
         return sentence_representations[:, self.layer]
 
-    @infra.apply(exclude_from_cache_uid=["layer", "units", "batch_size", "device"])
+    @infra.apply(exclude_from_cache_uid=["layer", "units"])
     def forward(self) -> torch.Tensor:
         # (n_sentences, n_layers+1, hidden_size)
         return compute_sentence_representations(

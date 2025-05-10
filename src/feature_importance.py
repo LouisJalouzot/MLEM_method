@@ -157,7 +157,7 @@ def compute_feature_importance(
             + f"which is larger than the threshold {thresh:.3g}."
         )
 
-    return importances, spearman_stats
+    return importances, spearman_stats.to_frame().T
 
 
 class FeatureImportance(BaseModelSharing):
@@ -183,12 +183,13 @@ class FeatureImportance(BaseModelSharing):
         "estimate_correlations": ["trainer"],
         "infra": ["dataset", "estimate_correlations", "trainer"],
     }
+    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
 
     def model_post_init(self, __context: tp.Any) -> None:
         if self.device is None:
             self.device = get_device()
 
-    @infra.apply(exclude_from_cache_uid=["device"])
+    @infra.apply
     def compute(self) -> tp.Tuple[pd.DataFrame, pd.Series]:
         state_dict, _ = self.trainer.train()
         model, dataloader = self.trainer.init(state_dict=state_dict, device=self.device)

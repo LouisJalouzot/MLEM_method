@@ -8,7 +8,7 @@ from scipy import stats
 
 from src.dataset import Dataset
 from src.pairwise_dataloader import PairwiseDataloader, PairwiseDataloaderBuilder
-from src.utils import BaseModel
+from src.utils import BaseModel, get_device
 
 
 def batch_corrcoef(x: torch.Tensor, ddof: int = 1, eps: float = 1e-8) -> torch.Tensor:
@@ -88,7 +88,7 @@ def compute_ci(data: torch.Tensor, confidence: float = 0.99) -> torch.Tensor:
 
 def estimate_correlations(
     dataloader: PairwiseDataloader,
-    n_trials: int = 10,
+    n_trials: int = 64,
     init_sample_size: int = 4096,
     factor: float = 1.2,
     max_sample_size: float = 2**20,
@@ -136,7 +136,7 @@ def estimate_correlations(
                 f"Sample size {sample_size} is sufficient to estimate correlations "
                 f"with the required variability."
             )
-            return corrs.mean(dim=0), sample_size
+            return corrs.mean(dim=0).cpu(), sample_size
 
         # Increase sample size for next iteration
         sample_size = int(sample_size * factor) + 1
@@ -152,7 +152,7 @@ class EstimateCorrelations(BaseModel):
     dataloader_builder: PairwiseDataloaderBuilder = Field(
         default_factory=lambda: PairwiseDataloaderBuilder()
     )
-    n_trials: int = 30
+    n_trials: int = 64
     init_sample_size: int = 4096
     factor: float = 1.2
     max_sample_size: float = 2**20
@@ -160,13 +160,19 @@ class EstimateCorrelations(BaseModel):
     monitor: tp.Literal["std", "ci_width"] = "std"
     thresh: float = 0.01
     ci_confidence: float = 0.99
-    infra: TaskInfra = TaskInfra(folder=".cache")
 
+    device: str = None
+    infra: TaskInfra = TaskInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
+    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
+
+    def model_post_init(self, __context: tp.Any) -> None:
+        if self.device is None:
+            self.device = get_device()
 
     @infra.apply
     def estimate_correlations(self) -> tp.Tuple[torch.Tensor, int]:
-        X = self.dataset.encode()
+        X = self.dataset.encode().to(self.device)
         dataloader = self.dataloader_builder.build(X=X)
 
         return estimate_correlations(

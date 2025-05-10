@@ -32,8 +32,10 @@ class PairwiseDataloader(Dataset):
         if X is not None:
             self.n = len(X)
             self.n_features = X.shape[1]
+            self.device = X.device
         elif Y is not None:
             self.n = len(Y)
+            self.device = Y.device
         else:
             raise ValueError("Either X or Y must be provided.")
         self.max_n_pairs = self.n * (self.n - 1) // 2
@@ -67,8 +69,8 @@ class PairwiseDataloader(Dataset):
 
         n_pairs *= n_trials
 
-        ind_1 = torch.randint(0, self.n, (n_pairs,))
-        ind_2 = torch.randint(0, self.n, (n_pairs,))
+        ind_1 = torch.randint(0, self.n, (n_pairs,), device=self.device)
+        ind_2 = torch.randint(0, self.n, (n_pairs,), device=self.device)
         if only_valid:
             valid = ind_1 != ind_2
             ind_1 = ind_1[valid]

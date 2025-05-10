@@ -18,8 +18,8 @@ class Dataset(BaseModel):
     _sentences: tp.List[str] = None
     _words: tp.List[str] = None
     _sentence_id: tp.List[tp.Any] = None
-    infra: TaskInfra = TaskInfra(folder=".cache")
 
+    infra: TaskInfra = TaskInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def model_post_init(self, __context):
