@@ -31,12 +31,16 @@ def process(model_name, layer, dataset):
     cfg = f"""
     dataset:
         csv_path: datasets/{dataset}.csv
+    estimate_correlations:
+        device: cpu
     trainer:
         representations:
             level: {"word" if "word" in dataset else "sentence"}
             model_name: {model_name}
             layer: {layer}
+            device: cpu
         device: cpu
+    device: cpu
     """
     cfg = yaml.safe_load(cfg)
     fi = FeatureImportance(**cfg)
@@ -66,7 +70,7 @@ models = [
     ("mistralai/Mistral-7B-v0.3", 33),
     ("bert-base-uncased", 13),
     ("microsoft/deberta-xlarge-mnli", 49),
-    # ("McGill-NLP/LLM2Vec-Meta-Llama-31-8B-Instruct-mntp", 33),
+    ("McGill-NLP/LLM2Vec-Meta-Llama-31-8B-Instruct-mntp", 33),
 ]
 
 datasets = [
@@ -98,7 +102,7 @@ all_spearman = []
 # `require="sharedmem"` is a fix to make joblib Parallel work with loggers
 for importances, spearman, model_name, layer, dataset in (
     pbar := tqdm(
-        Parallel(n_jobs=8, return_as="generator", require="sharedmem")(
+        Parallel(n_jobs=1, return_as="generator", require="sharedmem")(
             delayed(process)(model_name, layer, dataset)
             for model_name, layer, dataset in params
         ),
@@ -111,6 +115,6 @@ for importances, spearman, model_name, layer, dataset in (
     pbar.set_postfix_str(f"Processed {model_name} - {layer} - {dataset}")
 
 all_importances = pd.concat(all_importances, ignore_index=True)
-all_spearman = pd.concat(all_spearman, ignore_index=True)
 all_importances.to_csv(path / "fi.csv.gz", index=False)
-all_importances.to_csv(path / "spearman.csv.gz", index=False)
+all_spearman = pd.concat(all_spearman, ignore_index=True)
+all_spearman.to_csv(path / "spearman.csv.gz", index=False)
