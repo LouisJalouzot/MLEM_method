@@ -1,6 +1,7 @@
 import typing as tp
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import torch
 from exca import TaskInfra
@@ -12,6 +13,8 @@ from src.utils import BaseModel, encode_df
 class Dataset(BaseModel):
     csv_path: str = "datasets/short_sentence.csv"
     _features: tp.List[str] = None
+    _triu_indices: tp.Tuple[np.ndarray, np.ndarray] = None
+    _pfeatures: tp.List[str] = None
     _level: str = None
     _df: pd.DataFrame = None
     _df_features: pd.DataFrame = None
@@ -24,19 +27,6 @@ class Dataset(BaseModel):
 
     def model_post_init(self, __context):
         self.features
-
-    @property
-    def df(self) -> pd.DataFrame:
-        if self._df is not None:
-            return self._df
-        else:
-            self._df = pd.read_csv(self.csv_path)
-
-            return self._df
-
-    @property
-    def df_features(self) -> pd.DataFrame:
-        return self.df[self.features]
 
     @property
     def features(self) -> tp.List[str]:
@@ -56,8 +46,42 @@ class Dataset(BaseModel):
                 features = features[features != "sentence"]
                 assert "word" not in features and "sentence_id" not in features
             self._features = features
+            self._triu_indices = np.triu_indices(len(features))
+            self._pfeatures = [
+                f"({features[i]} x {features[j]})" if i != j else features[i]
+                for i, j in zip(*self._triu_indices)
+            ]
 
             return self._features
+
+    @property
+    def triu_indices(self) -> tp.Tuple[np.ndarray, np.ndarray]:
+        self.features
+        return self._triu_indices
+
+    @property
+    def pfeatures(self) -> tp.List[str]:
+        self.features
+        return self._pfeatures
+
+    @property
+    def df(self) -> pd.DataFrame:
+        if self._df is not None:
+            return self._df
+        else:
+            df = pd.read_csv(self.csv_path)
+            # Add pairwise features
+            for i, f_1 in enumerate(self.features):
+                for f_2 in self.features[i + 1 :]:
+                    df[f"({f_1} x {f_2})"] = (
+                        df[f_1].astype(str) + ", " + df[f_2].astype(str)
+                    )
+
+            return df
+
+    @property
+    def df_features(self) -> pd.DataFrame:
+        return self.df[self.features]
 
     @property
     def n_features(self) -> int:

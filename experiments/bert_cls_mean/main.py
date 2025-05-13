@@ -27,10 +27,10 @@ datasets = [
 
 all_importances = []
 all_spearman = []
-with tqdm(total=len(datasets) * 13 * 2) as pbar:
+with tqdm(total=len(datasets) * 12 * 2) as pbar:
     for dataset in datasets:
         for token_aggregation in ["mean", "first"]:
-            for layer in range(13):
+            for layer in range(1, 13):
                 pbar.set_postfix_str(f"Processing {dataset} - {token_aggregation}")
                 logger.warning(f"Processing {dataset} - {token_aggregation} - {layer}")
                 cfg = f"""
@@ -41,6 +41,7 @@ with tqdm(total=len(datasets) * 13 * 2) as pbar:
                         model_name: bert-base-uncased
                         token_aggregation: {token_aggregation}
                         layer: {layer}
+                threshold: 0.3
                 """
                 cfg = yaml.safe_load(cfg)
                 fi = FeatureImportance(**cfg)

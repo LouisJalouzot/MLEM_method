@@ -33,6 +33,7 @@ def train(
         lr=lr,
         maximize=model.maximize,
         weight_decay=weight_decay,
+        fused=True,
     )
     prev_w = model.get_W().clone()
     start = time()
