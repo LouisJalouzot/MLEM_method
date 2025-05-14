@@ -8,7 +8,6 @@ from captum.attr import FeaturePermutation
 from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
-from statsmodels.stats.descriptivestats import describe
 from torch import nn
 from tqdm.auto import tqdm
 
@@ -16,14 +15,7 @@ from src.dataset import Dataset
 from src.estimate_correlations import EstimateCorrelations
 from src.pairwise_dataloader import PairwiseDataloader
 from src.trainer import Trainer
-from src.utils import BaseModelSharing, get_device
-
-
-def compute_stats(data, alpha=0.01):
-    """Compute descriptive statistics with confidence intervals"""
-    return describe(
-        data, stats=["mean", "std", "std_err", "ci"], use_t=True, alpha=alpha
-    ).T
+from src.utils import BaseModelSharing, compute_stats, get_device
 
 
 def compute_feature_importance(

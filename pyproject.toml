@@ -17,7 +17,6 @@ dependencies = [
     "pandas>=2.2.3",
     "pandas-stubs>=2.2.3.250308",
     "parametrization-cookbook>=0.18",
-    "pingouin>=0.5.5",
     "plotly>=6.0.1",
     "pydantic>=2.11.1",
     "pytest>=8.3.5",

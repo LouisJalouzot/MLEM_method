@@ -8,6 +8,7 @@ import torch
 from pydantic import BaseModel as _BaseModel
 from pydantic import model_validator
 from sklearn.preprocessing import MinMaxScaler
+from statsmodels.stats.descriptivestats import describe
 
 np.random.seed(0)
 torch.manual_seed(0)
@@ -157,3 +158,10 @@ class BaseModelSharing(BaseModel):
                 data[dependent_field_name] = dependent_data
 
         return data
+
+
+def compute_stats(data, alpha=0.01):
+    """Compute descriptive statistics with confidence intervals"""
+    return describe(
+        data, stats=["mean", "std", "std_err", "ci"], use_t=True, alpha=alpha
+    ).T
