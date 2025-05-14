@@ -1,4 +1,5 @@
 import typing as tp
+from tabnanny import verbose
 
 from exca import TaskInfra
 from pydantic import ConfigDict, Field
@@ -38,11 +39,14 @@ class ReduceDimensions(BaseModelSharing):
         "jaccard",
     ] = "euclidean"
 
+    n_jobs: int = -1
+    verbose: bool = True
     infra: TaskInfra = TaskInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
         "dataset": ["representations"]
     }
+    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("n_jobs", "verbose")
 
     def model_post_init(self, __context: tp.Any) -> None:
         # Ensure dataset level and representations level match
@@ -68,6 +72,8 @@ class ReduceDimensions(BaseModelSharing):
                     n_components=self.n_components,
                     metric=self.distance,
                     random_state=0,
+                    n_jobs=self.n_jobs,
+                    verbose=self.verbose,
                 )
                 proj = model.fit_transform(data)
             case "umap":
@@ -75,6 +81,8 @@ class ReduceDimensions(BaseModelSharing):
                     n_components=self.n_components,
                     metric=self.distance,
                     random_state=0,
+                    n_jobs=self.n_jobs,
+                    verbose=self.verbose,
                 )
                 proj = model.fit_transform(data)
             case "mds":
@@ -83,6 +91,8 @@ class ReduceDimensions(BaseModelSharing):
                     n_components=self.n_components,
                     dissimilarity="precomputed",
                     random_state=0,
+                    n_jobs=self.n_jobs,
+                    verbose=self.verbose,
                 )
                 proj = model.fit_transform(distance_matrix)
             case _:
