@@ -149,7 +149,7 @@ class Trainer(BaseModelSharing):
             device = self.device
 
         # Estimate number of pairs for acceptable variability
-        n_pairs = self.estimate_correlations.estimate_correlations()[1]
+        _, n_pairs = self.estimate_correlations.estimate_correlations()
 
         model = self.model_builder.build(n_features=self.dataset.n_features)
         if state_dict is not None:

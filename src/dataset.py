@@ -71,11 +71,14 @@ class Dataset(BaseModel):
         else:
             df = pd.read_csv(self.csv_path)
             # Add pairwise features
+            pairwise_features = []
             for i, f_1 in enumerate(self.features):
                 for f_2 in self.features[i + 1 :]:
-                    df[f"({f_1} x {f_2})"] = (
-                        df[f_1].astype(str) + ", " + df[f_2].astype(str)
-                    )
+                    s = df[f_1].astype(str) + ", " + df[f_2].astype(str)
+                    s.name = f"({f_1} x {f_2})"
+                    pairwise_features.append(s)
+            df = pd.concat([df, *pairwise_features], axis=1)
+            self._df = df
 
             return df
 

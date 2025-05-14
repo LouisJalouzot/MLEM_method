@@ -1,10 +1,12 @@
 import typing as tp
 
+import pandas as pd
 import torch
 from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
 from scipy import stats
+from sklearn.cluster import AgglomerativeClustering
 
 from src.dataset import Dataset
 from src.pairwise_dataloader import PairwiseDataloader, PairwiseDataloaderBuilder
@@ -161,6 +163,9 @@ class EstimateCorrelations(BaseModel):
     thresh: float = 0.01
     ci_confidence: float = 0.99
 
+    clustering_linkage: tp.Literal["single", "complete", "average", "ward"] = "single"
+    clustering_threshold: float = 0.3
+
     device: str = None
     infra: TaskInfra = TaskInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
@@ -175,7 +180,7 @@ class EstimateCorrelations(BaseModel):
         X = self.dataset.encode().to(self.device)
         dataloader = self.dataloader_builder.build(X=X)
 
-        return estimate_correlations(
+        correlations, n_pairs = estimate_correlations(
             dataloader=dataloader,
             n_trials=self.n_trials,
             init_sample_size=self.init_sample_size,
@@ -186,3 +191,29 @@ class EstimateCorrelations(BaseModel):
             thresh=self.thresh,
             ci_confidence=self.ci_confidence,
         )
+        if self.product:
+            labels = self.dataset.pfeatures
+        else:
+            labels = self.dataset.features
+        correlations = pd.DataFrame(
+            correlations,
+            columns=labels,
+            index=labels,
+        )
+
+        return correlations, n_pairs
+
+    def cluster_features(self) -> pd.DataFrame:
+        correlations, _ = self.estimate_correlations()
+        clustering = AgglomerativeClustering(
+            metric="precomputed",
+            linkage=self.clustering_linkage,
+            distance_threshold=self.clustering_threshold,
+            n_clusters=None,
+        )
+        clusters = clustering.fit_predict(1 - abs(correlations))
+        logger.info(
+            f"{len(correlations)} feature{' pairs' if self.product else 's'} clustered into {clusters.max() + 1} clusters."
+        )
+
+        return pd.DataFrame({"Cluster": clusters, "Feature": correlations.columns})
