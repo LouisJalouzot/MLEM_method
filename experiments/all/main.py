@@ -62,18 +62,18 @@ def process(model_name, layer, dataset):
 
 models = [
     ("gpt2", 13),
-    # ("meta-llama/Llama-3.1-8B", 33),
-    # ("mistralai/Mistral-7B-v0.3", 33),
+    ("meta-llama/Llama-3.1-8B", 33),
+    ("mistralai/Mistral-7B-v0.3", 33),
     ("bert-base-uncased", 13),
-    # ("microsoft/deberta-xlarge-mnli", 49),
-    # ("McGill-NLP/LLM2Vec-Meta-Llama-31-8B-Instruct-mntp", 33),
+    ("microsoft/deberta-xlarge-mnli", 49),
+    ("McGill-NLP/LLM2Vec-Meta-Llama-31-8B-Instruct-mntp", 33),
 ]
 
 datasets = [
     "svo_word_level",
-    # "short_sentence",
-    # "relative_clause",
-    # "long_range_agreement",
+    "short_sentence",
+    "relative_clause",
+    "long_range_agreement",
 ]
 
 
