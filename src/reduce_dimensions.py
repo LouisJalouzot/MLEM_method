@@ -1,5 +1,4 @@
 import typing as tp
-from tabnanny import verbose
 
 from exca import TaskInfra
 from pydantic import ConfigDict, Field
@@ -10,6 +9,7 @@ from umap import UMAP
 
 from src.dataset import Dataset
 from src.sentence_representations import SentenceRepresentations
+from src.simulated_representations import SimulatedRepresentations
 from src.utils import BaseModelSharing
 from src.word_representations import WordRepresentations
 
@@ -18,7 +18,7 @@ class ReduceDimensions(BaseModelSharing):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
     representations: (
         tp.Annotated[
-            SentenceRepresentations | WordRepresentations,
+            SentenceRepresentations | WordRepresentations | SimulatedRepresentations,
             Field(discriminator="level"),
         ]  # Use sentence or word representations based on the specified level
         | SentenceRepresentations  # Fallback to sentence representations if not specified

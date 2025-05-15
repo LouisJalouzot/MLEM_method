@@ -13,6 +13,7 @@ from src.dataset import Dataset
 from src.estimate_correlations import EstimateCorrelations
 from src.pairwise_dataloader import PairwiseDataloader, PairwiseDataloaderBuilder
 from src.sentence_representations import SentenceRepresentations
+from src.simulated_representations import SimulatedRepresentations
 from src.spd_matrix_learner import SPDMatrixLearner, SPDMatrixLearnerBuilder
 from src.utils import BaseModelSharing, get_device
 from src.word_representations import WordRepresentations
@@ -109,7 +110,7 @@ class Trainer(BaseModelSharing):
     )
     representations: (
         tp.Annotated[
-            SentenceRepresentations | WordRepresentations,
+            SentenceRepresentations | WordRepresentations | SimulatedRepresentations,
             Field(discriminator="level"),
         ]  # Use sentence or word representations based on the specified level
         | SentenceRepresentations  # Fallback to sentence representations if not specified

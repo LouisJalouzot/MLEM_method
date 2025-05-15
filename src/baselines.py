@@ -13,6 +13,7 @@ from tqdm.auto import tqdm
 
 from src.dataset import Dataset
 from src.sentence_representations import SentenceRepresentations
+from src.simulated_representations import SimulatedRepresentations
 from src.utils import BaseModelSharing, compute_stats
 from src.word_representations import WordRepresentations
 
@@ -31,7 +32,7 @@ class EncodingBaseline(BaseModelSharing):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
     representations: (
         tp.Annotated[
-            SentenceRepresentations | WordRepresentations,
+            SentenceRepresentations | WordRepresentations | SimulatedRepresentations,
             Field(discriminator="level"),
         ]  # Use sentence or word representations based on the specified level
         | SentenceRepresentations  # Fallback to sentence representations if not specified
@@ -91,7 +92,7 @@ class DecodingBaseline(BaseModelSharing):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
     representations: (
         tp.Annotated[
-            SentenceRepresentations | WordRepresentations,
+            SentenceRepresentations | WordRepresentations | SimulatedRepresentations,
             Field(discriminator="level"),
         ]  # Use sentence or word representations based on the specified level
         | SentenceRepresentations  # Fallback to sentence representations if not specified

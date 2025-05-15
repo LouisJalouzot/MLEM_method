@@ -45,6 +45,9 @@ class Dataset(BaseModel):
                 self._level = "sentence"
                 features = features[features != "sentence"]
                 assert "word" not in features and "sentence_id" not in features
+            elif "simulated" in features:
+                self._level = "simulated"
+                features = features[features != "simulated"]
             self._features = features
             self._triu_indices = np.triu_indices(len(features))
             self._pfeatures = [
