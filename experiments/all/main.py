@@ -12,7 +12,7 @@ sys.path.append(str(Path.cwd()))
 
 from src.feature_importance import FeatureImportance
 
-path = Path("experiments/all_high_level")
+path = Path("experiments/all")
 assert (
     path.exists()
 ), f"{path} does not exist, the script should be run from the root directory"
@@ -31,16 +31,12 @@ def process(model_name, layer, dataset):
     cfg = f"""
     dataset:
         csv_path: datasets/{dataset}.csv
-    estimate_correlations:
-        device: cpu
     trainer:
         representations:
             level: {"word" if "word" in dataset else "sentence"}
             model_name: {model_name}
             layer: {layer}
-            device: cpu
         device: cpu
-    device: cpu
     """
     cfg = yaml.safe_load(cfg)
     fi = FeatureImportance(**cfg)
@@ -66,18 +62,18 @@ def process(model_name, layer, dataset):
 
 models = [
     ("gpt2", 13),
-    ("meta-llama/Llama-3.1-8B", 33),
-    ("mistralai/Mistral-7B-v0.3", 33),
+    # ("meta-llama/Llama-3.1-8B", 33),
+    # ("mistralai/Mistral-7B-v0.3", 33),
     ("bert-base-uncased", 13),
-    ("microsoft/deberta-xlarge-mnli", 49),
-    ("McGill-NLP/LLM2Vec-Meta-Llama-31-8B-Instruct-mntp", 33),
+    # ("microsoft/deberta-xlarge-mnli", 49),
+    # ("McGill-NLP/LLM2Vec-Meta-Llama-31-8B-Instruct-mntp", 33),
 ]
 
 datasets = [
     "svo_word_level",
-    "short_sentence",
-    "relative_clause",
-    "long_range_agreement",
+    # "short_sentence",
+    # "relative_clause",
+    # "long_range_agreement",
 ]
 
 
@@ -85,8 +81,8 @@ datasets = [
 with tqdm(total=len(models) * len(datasets)) as pbar:
     for model_name, _ in models:
         for dataset in datasets:
-            pbar.set_postfix_str(f"Processing {model_name} - 0 - {dataset}")
-            process(model_name, 0, dataset)
+            pbar.set_postfix_str(f"Processing {model_name} - 1 - {dataset}")
+            process(model_name, 1, dataset)
             pbar.update(1)
 
 # Then compute feature importance with multi processing for all layers
@@ -94,15 +90,13 @@ params = [
     (model_name, layer, dataset)
     for dataset in datasets
     for model_name, n_layers in models
-    for layer in range(n_layers)
+    for layer in range(1, n_layers)
 ]
 
-all_importances = []
-all_spearman = []
 # `require="sharedmem"` is a fix to make joblib Parallel work with loggers
-for importances, spearman, model_name, layer, dataset in (
+for _, _, model_name, layer, dataset in (
     pbar := tqdm(
-        Parallel(n_jobs=1, return_as="generator", require="sharedmem")(
+        Parallel(n_jobs=8, return_as="generator", require="sharedmem")(
             delayed(process)(model_name, layer, dataset)
             for model_name, layer, dataset in params
         ),
@@ -110,11 +104,26 @@ for importances, spearman, model_name, layer, dataset in (
         desc="Computing feature importance",
     )
 ):
-    all_importances.append(importances)
-    all_spearman.append(spearman)
     pbar.set_postfix_str(f"Processed {model_name} - {layer} - {dataset}")
 
-all_importances = pd.concat(all_importances, ignore_index=True)
+# Then retrieve the results, aggregate and save
+all_importances = []
+all_spearman = []
+for importances, spearman, _, _, _ in (
+    pbar := tqdm(
+        Parallel(
+            n_jobs=8, return_as="generator", backend="threading", require="sharedmem"
+        )(
+            delayed(process)(model_name, layer, dataset)
+            for model_name, layer, dataset in params
+        ),
+        total=len(params),
+        desc="Retrieving results",
+    )
+):
+    all_importances.append(importances)
+    all_spearman.append(spearman)
+all_importances = pd.concat(all_importances)
 all_importances.to_csv(path / "fi.csv.gz", index=False)
-all_spearman = pd.concat(all_spearman, ignore_index=True)
+all_spearman = pd.concat(all_spearman)
 all_spearman.to_csv(path / "spearman.csv.gz", index=False)

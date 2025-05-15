@@ -94,11 +94,12 @@ def compute_hidden_states(
             batch_attention_mask = attention_mask[i : i + batch_size].to(device)
 
             with torch.no_grad():
-                outputs = model(
-                    input_ids=batch_input_ids,
-                    attention_mask=batch_attention_mask,
-                )
-                batch_hidden_states = outputs.hidden_states
+                with torch.amp.autocast(device_type=device.split(":")[0]):
+                    outputs = model(
+                        input_ids=batch_input_ids,
+                        attention_mask=batch_attention_mask,
+                    )
+                    batch_hidden_states = outputs.hidden_states
 
             # Stack to tensor shape (n_layers+1, batch, max_seq_len, hidden_size)
             batch_hidden_states = torch.stack(batch_hidden_states)
