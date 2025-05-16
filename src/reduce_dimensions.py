@@ -25,6 +25,7 @@ class ReduceDimensions(BaseModelSharing):
     ) = Field(default_factory=lambda: SentenceRepresentations())
     n_components: int = 2
     method: tp.Literal[
+        "none",
         "pca",
         "tsne",
         "umap",
@@ -40,7 +41,7 @@ class ReduceDimensions(BaseModelSharing):
     ] = "euclidean"
 
     n_jobs: int = -1
-    verbose: bool = True
+    verbose: bool = False
     infra: TaskInfra = TaskInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
@@ -95,6 +96,8 @@ class ReduceDimensions(BaseModelSharing):
                     verbose=self.verbose,
                 )
                 proj = model.fit_transform(distance_matrix)
+            case "none":
+                proj = data[:, : self.n_components]
             case _:
                 raise ValueError(
                     f"Unsupported dimensionality reduction method: {self.method}"

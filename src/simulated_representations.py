@@ -14,18 +14,17 @@ class SimulatedRepresentations(BaseModel):
         default_factory=lambda: Dataset(csv_path="datasets/simulated.csv")
     )
     level: tp.Literal["simulated"] = "simulated"
-    noise_level: float = 0.2
-    interaction_strength: float = 0.5
+    noise: float = 0.5
+    interaction_strength: int = 3
     model_config: ConfigDict = ConfigDict(extra="forbid")
     infra: TaskInfra = TaskInfra(folder=".cache")
 
     def __call__(self):
         df = self.dataset.df_features
         repr = np.zeros((len(df), 2))
-        repr[:, 0] += df.Encoded1 == "A"
-        repr[:, 1] += df.Encoded2 == "A"
+        repr[:, 1] = 2 * (df.Encoded1 == "A") - 1
         interaction = df.Encoded1 == df.Encoded2
-        repr += (2 * interaction - 1).values[:, None] * self.interaction_strength
-        repr += np.random.normal(size=repr.shape) * self.noise_level
+        repr[:, 0] += self.interaction_strength * (2 * interaction - 1)
+        repr += np.random.normal(size=repr.shape) * self.noise
 
         return torch.from_numpy(repr)

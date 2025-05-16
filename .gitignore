@@ -16,3 +16,4 @@ wheels/
 *.sh
 *.db
 *.ipynb
+!experiments/simulations/simulation.ipynb
