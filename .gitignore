@@ -16,4 +16,5 @@ wheels/
 *.sh
 *.db
 *.ipynb
+*.conllu
 !experiments/simulations/simulation.ipynb

@@ -10,7 +10,7 @@ from sklearn.cluster import AgglomerativeClustering
 
 from src.dataset import Dataset
 from src.pairwise_dataloader import PairwiseDataloader, PairwiseDataloaderBuilder
-from src.utils import BaseModel, get_device
+from src.utils import BaseModelSharing, get_device
 
 
 def batch_corrcoef(x: torch.Tensor, ddof: int = 1, eps: float = 1e-8) -> torch.Tensor:
@@ -149,7 +149,7 @@ def estimate_correlations(
     )
 
 
-class EstimateCorrelations(BaseModel):
+class EstimateCorrelations(BaseModelSharing):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
     dataloader_builder: PairwiseDataloaderBuilder = Field(
         default_factory=lambda: PairwiseDataloaderBuilder()
@@ -170,6 +170,9 @@ class EstimateCorrelations(BaseModel):
     infra: TaskInfra = TaskInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
+    _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
+        "infra": ["dataset"]
+    }
 
     def model_post_init(self, __context: tp.Any) -> None:
         if self.device is None:
