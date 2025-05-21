@@ -5,13 +5,14 @@ import numpy as np
 import pandas as pd
 import torch
 from exca import TaskInfra
+from pyarrow import parquet
 from pydantic import ConfigDict
 
 from src.utils import BaseModel, encode_df
 
 
 class Dataset(BaseModel):
-    csv_path: str = "datasets/short_sentence.csv"
+    path: str = "datasets/short_sentence.csv"
     _features: tp.List[str] = None
     _triu_indices: tp.Tuple[np.ndarray, np.ndarray] = None
     _pfeatures: tp.List[str] = None
@@ -28,23 +29,33 @@ class Dataset(BaseModel):
     def model_post_init(self, __context):
         self.features
 
+    def read(self, only_columns=False) -> pd.DataFrame:
+        if self.path.endswith(".csv"):
+            data = pd.read_csv(self.path, nrows=0 if only_columns else None)
+            if only_columns:
+                return data.columns.values
+        else:
+            if only_columns:
+                return np.array([col.name for col in parquet.read_schema(self.path)])
+            else:
+                data = pd.read_parquet(self.path)
+        return data
+
     @property
-    def features(self) -> tp.List[str]:
+    def features(self) -> np.ndarray:
         if self._features is not None:
             return self._features
         else:
-            assert Path(self.csv_path).exists(), f"File {self.csv_path} does not exist"
-            features = pd.read_csv(self.csv_path, nrows=0).columns.values
+            assert Path(self.path).exists(), f"File {self.path} does not exist"
+            features = self.read(only_columns=True)
             if "word" in features:
-                assert "sentence_id" in features
-                features = features[features != "word"]
-                features = features[features != "sentence_id"]
+                features = features[
+                    ~np.isin(features, ["word", "start_idx", "end_idx", "sentence"])
+                ]
                 self._level = "word"
-                assert "sentence" not in features
             elif "sentence" in features:
                 self._level = "sentence"
                 features = features[features != "sentence"]
-                assert "word" not in features and "sentence_id" not in features
             elif "simulated" in features:
                 self._level = "simulated"
                 features = features[features != "simulated"]
@@ -72,7 +83,7 @@ class Dataset(BaseModel):
         if self._df is not None:
             return self._df
         else:
-            df = pd.read_csv(self.csv_path)
+            df = self.read()
             # Add pairwise features
             pairwise_features = []
             for i, f_1 in enumerate(self.features):

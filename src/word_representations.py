@@ -185,6 +185,8 @@ class WordRepresentations(BaseModel):
 
     @infra.apply(exclude_from_cache_uid=["layer", "units"])
     def forward(self) -> torch.Tensor:
+        raise NotImplementedError()
+        # TODO: Now data has word, sentence, start_idx, end_idx: need to change
         words = pd.DataFrame(
             {
                 "word": self.dataset.words,

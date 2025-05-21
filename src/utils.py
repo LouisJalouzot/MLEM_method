@@ -48,7 +48,12 @@ def encode_df(df: pd.DataFrame) -> torch.Tensor:
         return torch.empty((0, df.shape[1]), dtype=torch.float32)
 
     X = np.zeros(df.shape, dtype=np.float32)
-    number_cols = np.array([np.issubdtype(t, np.number) for t in df.dtypes])
+    number_cols = np.array(
+        [
+            (not pd.api.types.is_categorical_dtype(t) and np.issubdtype(t, np.number))
+            for t in df.dtypes
+        ]
+    )
     for i in range(df.shape[1]):
         s = df.iloc[:, i]
         if number_cols[i]:
