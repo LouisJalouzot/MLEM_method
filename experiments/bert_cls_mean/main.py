@@ -35,7 +35,7 @@ with tqdm(total=len(datasets) * 12 * 2) as pbar:
                 logger.warning(f"Processing {dataset} - {token_aggregation} - {layer}")
                 cfg = f"""
                 dataset:
-                    csv_path: datasets/{dataset}.csv
+                    path: datasets/{dataset}.csv
                 trainer:
                     representations:
                         model_name: bert-base-uncased

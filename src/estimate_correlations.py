@@ -164,7 +164,7 @@ class EstimateCorrelations(BaseModelSharing):
     ci_confidence: float = 0.99
 
     clustering_linkage: tp.Literal["single", "complete", "average", "ward"] = "single"
-    clustering_threshold: float = 0.3
+    clustering_threshold: float = 0
 
     device: str = None
     infra: TaskInfra = TaskInfra(folder=".cache")

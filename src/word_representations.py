@@ -38,12 +38,12 @@ def compute_word_representations(
     """Computes word representations from hidden states by aggregating token representations.
 
     Args:
-        words (pd.DataFrame): DataFrame containing columns 'word' (str) and
-            'sentence_id' (int). Each row represents a word. Words belonging
-            to the same sentence must have the same 'sentence_id' and will be
-            joined into sentences in the order of their appearance in the
-            DataFrame. Assumes English punctuation rules (no space before
-            punctuation marks like ',', '.', '?').
+        words (pd.DataFrame): DataFrame containing columns:
+            - 'word' (str): the token text
+            - 'sentence' (str): full context sentence for this token
+            - 'start_idx' (int): start character index of the token in sentence
+            - 'end_idx' (int): end character index of the token in sentence
+          Each row is one word occurrence; no grouping by sentence_id is needed.
         model_name (str, optional): Name of the Hugging Face model to use.
             Defaults to "prajjwal1/bert-tiny".
         token_aggregation (str, optional): Method to aggregate token representations
@@ -55,35 +55,32 @@ def compute_word_representations(
             ([CLS], [SEP]) during tokenization. Defaults to True.
 
     Returns:
-        torch.Tensor: A tensor containing word representations for all words across
-            all sentences, shaped (n_words, n_layers+1, hidden_size).
+        torch.Tensor: A tensor containing word representations for all words,
+        shaped (n_words, n_layers+1, hidden_size).
 
     Example:
-        The following will process two sentences:
-        "This is an example." and "Another sentence!"
         ```python
         import pandas as pd
         words_df = pd.DataFrame({
-            'word': ['This', 'is', 'an', 'example', '.', 'Another', 'sentence', '!'],
-            'sentence_id': [0, 0, 0, 0, 0, 1, 1, 1]
+            'word': ['example', 'sentence'],
+            'sentence': [
+                'This is an example sentence.',
+                'Another example sentence!'
+            ],
+            'start_idx': [10, 15],
+            'end_idx': [18, 24]
         })
-        representations = compute_word_representations(words_df)
+        reps = compute_word_representations(words_df)
         ```
     """
-    sentences, word_start_index, word_stop_index, word_mask = [], [], [], []
-    for _, group in words.groupby("sentence_id"):
-        group_words = group.word.tolist()
-        word_mask.append(torch.full((len(group_words),), True))
-        sentence, starts, stops = cum_join_index(group_words)
-        sentences.append(sentence)
-        word_start_index.append(torch.Tensor(starts))
-        word_stop_index.append(torch.Tensor(stops))
+    sentences = words.sentence.tolist()
+    # (n_words)
+    word_start_index = torch.tensor(words.start_idx.values, dtype=torch.long)
+    word_end_index = torch.tensor(words.end_idx.values, dtype=torch.long)
 
-    # (n_sentences, max_words)
-    word_start_index = pad_sequence(word_start_index, batch_first=True)
-    word_stop_index = pad_sequence(word_stop_index, batch_first=True)
-    word_mask = pad_sequence(word_mask, batch_first=True, padding_value=False)
-
+    # (n_words, max_seq_len, n_layers+1, hidden_size)
+    # and
+    # (n_words, max_seq_len, 2)
     hidden_states, offsets_mapping = compute_hidden_states(
         sentences,
         model_name,
@@ -93,46 +90,41 @@ def compute_word_representations(
         return_offsets_mapping=True,
     )
     # Get rid of original attention masking
-    # (n_sentences, max_seq_len, n_layers+1, hidden_size)
     hidden_states = hidden_states.get_data()
 
     # Get a flag for special tokens
-    # (n_sentences, max_seq_len)
+    # (n_words, max_seq_len)
     special_tokens = offsets_mapping[:, :, 1] == 0
 
     # Get a mask for tokens and words correspondance
-    # (n_sentences, max_words, max_seq_len)
-    beg_tok_in_word = word_start_index[:, :, None] <= offsets_mapping[:, None, :, 0]
-    end_tok_in_word = offsets_mapping[:, None, :, 1] <= word_stop_index[:, :, None]
+    # (n_words, max_seq_len)
+    beg_tok_in_word = word_start_index[:, None] <= offsets_mapping[:, :, 0]
+    end_tok_in_word = offsets_mapping[:, :, 1] <= word_end_index[:, None]
 
     # Aggregate into a single mask
-    # (n_sentences, max_words, max_seq_len)
-    token_word_mask = beg_tok_in_word * end_tok_in_word * ~special_tokens[:, None]
+    # (n_words, max_seq_len)
+    token_word_mask = beg_tok_in_word * end_tok_in_word * ~special_tokens
 
     # Broadcast
-    # (n_sentences, 1, max_seq_len, n_layers+1, hidden_size)
-    hidden_states = hidden_states[:, None]
-    # (n_sentences, max_words, max_seq_len, 1, 1)
-    token_word_mask = token_word_mask[:, :, :, None, None]
-    # (n_sentences, max_words, max_seq_len, n_layers+1, hidden_size)
-    hidden_states, token_word_mask = torch.broadcast_tensors(
-        hidden_states, token_word_mask
-    )
+    # (n_words, max_seq_len, 1, 1)
+    token_word_mask = token_word_mask[:, :, None, None]
+    # (n_words, max_seq_len, n_layers+1, hidden_size)
+    token_word_mask = token_word_mask.broadcast_to(hidden_states.shape)
     # Build new masked tensor
     hidden_states = masked_tensor(hidden_states, token_word_mask)
 
-    # (n_sentences, max_words, n_layers+1, hidden_size)
+    # (n_words, n_layers+1, hidden_size)
     hidden_states = aggregate_masked_tensor(
-        data=hidden_states, dim=2, method=token_aggregation
+        data=hidden_states, dim=1, method=token_aggregation
     )
 
     # (n_words, n_layers+1, hidden_size)
-    return hidden_states[word_mask]
+    return hidden_states
 
 
 class WordRepresentations(BaseModel):
     dataset: Dataset = Field(
-        default_factory=lambda: Dataset(csv_path="datasets/svo_word_level.csv")
+        default_factory=lambda: Dataset(path="datasets/svo_word_level.csv")
     )
     level: tp.Literal["word"] = "word"
     model_name: str = "bert-base-uncased"
@@ -176,27 +168,26 @@ class WordRepresentations(BaseModel):
 
     def __call__(self):
         # (n_words, n_layers+1, hidden_size)
-        sentence_representations = self.forward()
+        word_representations = self.forward()
         if self.units is not None:
-            sentence_representations = sentence_representations[:, :, self.units]
+            word_representations = word_representations[:, :, self.units]
 
         # (n_words, hidden_size)
-        return sentence_representations[:, self.layer]
+        word_representations = word_representations[:, self.layer]
+        na_words = torch.isnan(word_representations).any(dim=1)
+        if na_words.any():
+            logger.warning(
+                f"Found {na_words.sum()}/{len(na_words)} words not containing any tokens (mismatch between data and tokenizers splits). Setting their representation to 0"
+            )
+            word_representations[na_words] = 0
+
+        return word_representations
 
     @infra.apply(exclude_from_cache_uid=["layer", "units"])
     def forward(self) -> torch.Tensor:
-        raise NotImplementedError()
-        # TODO: Now data has word, sentence, start_idx, end_idx: need to change
-        words = pd.DataFrame(
-            {
-                "word": self.dataset.words,
-                "sentence_id": self.dataset.sentence_id,
-            }
-        )
-
         # (n_words, n_layers+1, hidden_size)
         return compute_word_representations(
-            words=words,
+            words=self.dataset.words_df,
             model_name=self.model_name,
             batch_size=self.batch_size,
             device=self.device,

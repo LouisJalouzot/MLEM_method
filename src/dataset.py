@@ -59,12 +59,15 @@ class Dataset(BaseModel):
             elif "simulated" in features:
                 self._level = "simulated"
                 features = features[features != "simulated"]
-            self._features = features
+            self._features = np.array(features, dtype=str)
             self._triu_indices = np.triu_indices(len(features))
-            self._pfeatures = [
-                f"({features[i]} x {features[j]})" if i != j else features[i]
-                for i, j in zip(*self._triu_indices)
-            ]
+            self._pfeatures = np.array(
+                [
+                    f"({features[i]} x {features[j]})" if i != j else features[i]
+                    for i, j in zip(*self._triu_indices)
+                ],
+                dtype=str,
+            )
 
             return self._features
 
@@ -111,36 +114,11 @@ class Dataset(BaseModel):
 
     @property
     def sentences(self) -> tp.List[str]:
-        if self._sentences is not None:
-            return self._sentences
-        else:
-            assert (
-                self.level == "sentence"
-            ), "sentences are only available for sentence level datasets"
-            self._sentences = self.df.sentence.to_list()
-            return self._sentences
+        return self.df.sentence.to_list()
 
     @property
-    def words(self) -> tp.List[str]:
-        if self._words is not None:
-            return self._words
-        else:
-            assert (
-                self.level == "word"
-            ), "words are only available for word level datasets"
-            self._words = self.df.word.to_list()
-            return self._words
-
-    @property
-    def sentence_id(self) -> tp.List[tp.Any]:
-        if self._sentence_id is not None:
-            return self._sentence_id
-        else:
-            assert (
-                self.level == "word"
-            ), "sentence_id is only available for word level datasets"
-            self._sentence_id = self.df.sentence_id.to_list()
-            return self._sentence_id
+    def words_df(self) -> pd.DataFrame:
+        return self.df[["word", "sentence", "start_idx", "end_idx"]]
 
     @infra.apply
     def encode(self) -> torch.Tensor:

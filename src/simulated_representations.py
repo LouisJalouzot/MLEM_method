@@ -11,7 +11,7 @@ from src.utils import BaseModel
 
 class SimulatedRepresentations(BaseModel):
     dataset: Dataset = Field(
-        default_factory=lambda: Dataset(csv_path="datasets/simulated.csv")
+        default_factory=lambda: Dataset(path="datasets/simulated.csv")
     )
     level: tp.Literal["simulated"] = "simulated"
     noise: float = 0.5

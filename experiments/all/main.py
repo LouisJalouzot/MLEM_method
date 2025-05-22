@@ -30,7 +30,7 @@ def process(model_name, layer, dataset):
     logger_id = logger.add(logs_path, backtrace=True, level="INFO")
     cfg = f"""
     dataset:
-        csv_path: datasets/{dataset}.csv
+        path: datasets/{dataset}.csv
     trainer:
         representations:
             level: {"word" if "word" in dataset else "sentence"}
