@@ -130,7 +130,6 @@ class Trainer(BaseModelSharing):
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
-        "infra": ["dataset", "estimate_correlations", "representations"],
         "dataset": ["estimate_correlations", "representations"],
     }
 

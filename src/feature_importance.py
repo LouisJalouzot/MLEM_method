@@ -147,7 +147,6 @@ class FeatureImportance(BaseModelSharing):
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
         "dataset": ["trainer", "estimate_correlations"],
         "estimate_correlations": ["trainer"],
-        "infra": ["dataset", "estimate_correlations", "trainer"],
     }
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
 
