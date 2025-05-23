@@ -124,7 +124,7 @@ def compute_word_representations(
 
 class WordRepresentations(BaseModel):
     dataset: Dataset = Field(
-        default_factory=lambda: Dataset(path="datasets/svo_word_level.csv")
+        default_factory=lambda: Dataset(path="datasets/svo_word_level.parquet")
     )
     level: tp.Literal["word"] = "word"
     model_name: str = "bert-base-uncased"
