@@ -175,4 +175,8 @@ class FeatureImportance(BaseModelSharing):
             alpha=self.alpha,
         )
 
+        importances = importances.merge(
+            model.get_flat_forwatted_W(pfeatures=self.dataset.pfeatures)
+        )
+
         return importances, spearman

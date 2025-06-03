@@ -119,7 +119,14 @@ class SPDMatrixLearner(nn.Module):
         """Get flattened weight matrix (upper triangular)"""
         W = self.get_W()
         W += W.tril(diagonal=-1).T
-        return W[*self.triu_indices]
+        W = W[*self.triu_indices]
+
+        return W
+
+    def get_flat_forwatted_W(self, pfeatures) -> pd.DataFrame:
+        return pd.DataFrame(
+            {"Feature": pfeatures, "Weight": self.get_flat_W().cpu().detach()}
+        )
 
     def get_formatted_W(self, features=None) -> pd.DataFrame:
         """Get the weight matrix as a pandas DataFrame with feature names"""

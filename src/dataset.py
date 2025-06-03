@@ -56,9 +56,8 @@ class Dataset(BaseModel):
             elif "sentence" in features:
                 self._level = "sentence"
                 features = features[features != "sentence"]
-            elif "simulated" in features:
+            elif "simulated" in self.path:
                 self._level = "simulated"
-                features = features[features != "simulated"]
             self._features = np.array(features, dtype=str)
             self._triu_indices = np.triu_indices(len(features))
             self._pfeatures = np.array(
