@@ -128,6 +128,7 @@ def compute_feature_importance(
 
 def compute_cv_stats_per_split(df, alpha=0.01):
     values = "mean" if "mean" in df.columns else "Weight"
+    df[values] = df[values].astype(float)
     if "AllFeatures" in df.columns:
         all_features = df[["Feature", "AllFeatures"]].drop_duplicates("Feature")
     else:
