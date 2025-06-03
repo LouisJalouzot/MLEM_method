@@ -178,7 +178,7 @@ class FeatureImportance(BaseModelSharing):
             self.device = get_device()
 
     @infra.apply
-    def compute(self) -> tp.Tuple[pd.DataFrame, pd.Series]:
+    def compute(self) -> tp.Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         # Estimate correlations with forced product
         ec_params = self.estimate_correlations.model_dump()
         ec_params["product"] = True
@@ -220,6 +220,11 @@ class FeatureImportance(BaseModelSharing):
         all_importances = pd.concat(all_importances)
         all_spearman = pd.concat(all_spearman)
         all_weights = pd.concat(all_weights)
+
+        return all_importances, all_spearman, all_weights
+
+    def compute_and_aggregate(self) -> tp.Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        all_importances, all_spearman, all_weights = self.compute()
 
         if all_importances.cv.nunique() > 1:
             all_importances = compute_cv_stats_per_split(
