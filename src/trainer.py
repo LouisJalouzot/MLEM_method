@@ -11,12 +11,18 @@ from tqdm.auto import tqdm
 
 from src.dataset import Dataset
 from src.estimate_correlations import EstimateCorrelations
-from src.pairwise_dataloader import PairwiseDataloader, PairwiseDataloaderBuilder
+from src.pairwise_dataloader import (
+    PairwiseDataloader,
+    PairwiseDataloaderBuilder,
+    PairwiseDataLoaderGenerator,
+)
 from src.sentence_representations import SentenceRepresentations
 from src.simulated_representations import SimulatedRepresentations
 from src.spd_matrix_learner import SPDMatrixLearner, SPDMatrixLearnerBuilder
 from src.utils import BaseModelSharing, get_device
 from src.word_representations import WordRepresentations
+
+torch.set_float32_matmul_precision("medium")
 
 
 def train(
@@ -141,38 +147,52 @@ class Trainer(BaseModelSharing):
         if self.device is None:
             self.device = get_device()
 
-    def init(
-        self, state_dict=None, device=None
-    ) -> tp.Tuple[SPDMatrixLearner, PairwiseDataloader]:
-        torch.set_float32_matmul_precision("medium")
+    def get_model(self, state_dict=None, device=None) -> SPDMatrixLearner:
         if device is None:
             device = self.device
-
-        # Estimate number of pairs for acceptable variability
-        _, n_pairs = self.estimate_correlations.estimate_correlations()
 
         model = self.model_builder.build(n_features=self.dataset.n_features)
         if state_dict is not None:
             model.load_state_dict(state_dict=state_dict)
-        model = model.to(device)
-        X = self.dataset.encode().to(device)
-        Y = self.representations().to(device)
-        dataloader = self.dataloader_builder.build(X, Y, n_pairs)
 
-        return model, dataloader
+        return model.to(self.device)
+
+    def get_folds(self) -> PairwiseDataLoaderGenerator:
+        # Estimate number of pairs for acceptable variability
+        _, n_pairs = self.estimate_correlations.estimate_correlations()
+
+        X = self.dataset.encode().to(self.device)
+        Y = self.representations().to(self.device)
+
+        return self.dataloader_builder.build(X=X, Y=Y, n_pairs=n_pairs)
 
     @infra.apply(exclude_from_cache_uid=["device"])
-    def train(self) -> tp.Tuple[torch.Tensor, pd.DataFrame]:
-        model, dataloader = self.init()
-        model, logs = train(
-            model=model,
-            dataloader=dataloader,
-            lr=self.lr,
-            weight_decay=self.weight_decay,
-            max_epochs=self.max_epochs,
-            eps=self.eps,
-            device=self.device,
-        )
-
+    def _train_cached(self) -> tp.Tuple[tp.List[torch.Tensor], pd.DataFrame]:
         # Output state_dict as nn.Module can't be serialized for caching
-        return model.state_dict(), logs
+        all_state_dicts = []
+        all_logs = []
+
+        for i, (train_dl, _) in enumerate(self.get_folds()):
+            model, logs = train(
+                model=self.get_model(),
+                dataloader=train_dl,
+                lr=self.lr,
+                weight_decay=self.weight_decay,
+                max_epochs=self.max_epochs,
+                eps=self.eps,
+                device=self.device,
+            )
+            logs["cv"] = i
+            all_state_dicts.append(model.state_dict())
+            all_logs.append(logs)
+
+        return all_state_dicts, pd.concat(all_logs)
+
+    def train(self) -> tp.Tuple[tp.List[SPDMatrixLearner], pd.DataFrame]:
+        all_state_dicts, all_logs = self._train_cached()
+
+        all_models = [
+            self.get_model(state_dict=sd, device=self.device) for sd in all_state_dicts
+        ]
+
+        return all_models, all_logs

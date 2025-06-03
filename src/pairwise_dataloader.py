@@ -1,7 +1,10 @@
+import typing as tp
+
 import torch
 import torch.nn.functional as F
 from loguru import logger
 from pydantic import ConfigDict
+from sklearn.model_selection import KFold
 from torch.utils.data import Dataset
 
 from src.utils import BaseModel
@@ -108,20 +111,49 @@ class PairwiseDataloader(Dataset):
         return self.sample(int(self.n_pairs * (self.gamma**idx)))
 
 
+PairwiseDataLoaderGenerator = tp.Generator[
+    tp.Tuple[PairwiseDataloader, PairwiseDataloader]
+]
+
+
 class PairwiseDataloaderBuilder(BaseModel):
+    cv: int | None = None
     distance: str | float | int = 2
     nan_to_num: float = 0
     min_max_scale: bool = True
 
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
-    def build(self, X=None, Y=None, n_pairs=None, gamma=1) -> PairwiseDataloader:
+    def build_for_estimation(self, X) -> PairwiseDataloader:
         return PairwiseDataloader(
             X=X,
-            Y=Y,
+            distance=self.distance,
+            nan_to_num=self.nan_to_num,
+            min_max_scale=self.min_max_scale,
+        )
+
+    def build(
+        self,
+        X=None,
+        Y=None,
+        n_pairs=None,
+        gamma=1,
+    ) -> PairwiseDataLoaderGenerator:
+        build_dl = lambda x, y: PairwiseDataloader(
+            X=x,
+            Y=y,
             n_pairs=n_pairs,
             gamma=gamma,
             distance=self.distance,
             nan_to_num=self.nan_to_num,
             min_max_scale=self.min_max_scale,
         )
+        if self.cv:
+            kf = KFold(n_splits=self.cv, shuffle=True, random_state=0)
+            for i, (train_index, test_index) in enumerate(kf.split(X), start=1):
+                train_dl = build_dl(X[train_index], Y[train_index])
+                test_dl = build_dl(X[test_index], Y[test_index])
+                logger.info(f"Split {i} of {self.cv}")
+                yield train_dl, test_dl
+        else:
+            yield build_dl(X, Y), build_dl(X, Y)

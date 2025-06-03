@@ -178,7 +178,7 @@ class EstimateCorrelations(BaseModel):
     @infra.apply
     def estimate_correlations(self) -> tp.Tuple[torch.Tensor, int]:
         X = self.dataset.encode().to(self.device)
-        dataloader = self.dataloader_builder.build(X=X)
+        dataloader = self.dataloader_builder.build_for_estimation(X)
 
         correlations, n_pairs = estimate_correlations(
             dataloader=dataloader,

@@ -8,6 +8,7 @@ from captum.attr import FeaturePermutation
 from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
+from sqlmodel import all_
 from torch import nn
 from tqdm.auto import tqdm
 
@@ -27,10 +28,6 @@ def compute_feature_importance(
     thresh: float = 0.01,
     alpha: float = 0.01,
 ) -> tp.Tuple[pd.DataFrame, pd.Series]:
-    logger.info(
-        f"Computing permutation feature importance with {n_perm} permutations "
-        f"for {clusters.Cluster.max() + 1} clusters of feature pairs."
-    )
 
     features = clusters.Feature
     clusters = torch.from_numpy(clusters.Cluster.values)
@@ -129,6 +126,31 @@ def compute_feature_importance(
     return importances, spearman_stats.to_frame().T
 
 
+def compute_cv_stats_per_split(df, alpha=0.01):
+    values = "mean" if "mean" in df.columns else "Weight"
+    if "AllFeatures" in df.columns:
+        all_features = df[["Feature", "AllFeatures"]].drop_duplicates("Feature")
+    else:
+        all_features = None
+    if "Feature" in df.columns:
+        df_pivot = df.pivot(index=["cv", "split"], columns="Feature", values=values)
+        gb = df_pivot.groupby("split")
+    else:
+        gb = df.groupby("split")["mean"]
+
+    all_stats = []
+    for split, group in gb:
+        stats = compute_stats(group, alpha)
+        stats["split"] = split
+        all_stats.append(stats.reset_index())
+    all_stats = pd.concat(all_stats, ignore_index=True)
+
+    if all_features is not None:
+        all_stats = all_features.merge(all_stats)
+
+    return all_stats.sort_values("mean", ascending=False)
+
+
 class FeatureImportance(BaseModelSharing):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
     estimate_correlations: EstimateCorrelations = Field(
@@ -142,7 +164,7 @@ class FeatureImportance(BaseModelSharing):
     alpha: float = 0.01
 
     device: str | None = None
-    infra: TaskInfra = TaskInfra(version="1", folder=".cache")
+    infra: TaskInfra = TaskInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
         "dataset": ["trainer", "estimate_correlations"],
@@ -156,27 +178,53 @@ class FeatureImportance(BaseModelSharing):
 
     @infra.apply
     def compute(self) -> tp.Tuple[pd.DataFrame, pd.Series]:
-        state_dict, _ = self.trainer.train()
-        model, dataloader = self.trainer.init(state_dict=state_dict, device=self.device)
-        model.eval()
-
         # Estimate correlations with forced product
         ec_params = self.estimate_correlations.model_dump()
         ec_params["product"] = True
         clusters = EstimateCorrelations(**ec_params).cluster_features()
-
-        importances, spearman = compute_feature_importance(
-            model=model,
-            dataloader=dataloader,
-            clusters=clusters,
-            n_perm=self.n_perm,
-            monitor=self.monitor,
-            thresh=self.thresh,
-            alpha=self.alpha,
+        logger.info(
+            f"Computing permutation feature importance with {self.n_perm} permutations "
+            f"for {clusters.Cluster.max() + 1} clusters of feature pairs."
         )
 
-        importances = importances.merge(
-            model.get_flat_forwatted_W(pfeatures=self.dataset.pfeatures)
-        )
+        all_models, _ = self.trainer.train()
 
-        return importances, spearman
+        all_importances = []
+        all_spearman = []
+        all_weights = []
+
+        for i, (model, (train_dl, test_dl)) in enumerate(
+            zip(all_models, self.trainer.get_folds())
+        ):
+            weights = model.get_flat_forwatted_W(pfeatures=self.dataset.pfeatures)
+            weights["cv"] = i
+            weights["split"] = "train"
+            all_weights.append(weights)
+            for dl, split in [(train_dl, "train"), (test_dl, "test")]:
+                importances, spearman = compute_feature_importance(
+                    model=model,
+                    dataloader=dl,
+                    clusters=clusters,
+                    n_perm=self.n_perm,
+                    monitor=self.monitor,
+                    thresh=self.thresh,
+                    alpha=self.alpha,
+                )
+                for e in [importances, spearman]:
+                    e["cv"] = i
+                    e["split"] = split
+                all_importances.append(importances)
+                all_spearman.append(spearman)
+
+        all_importances = pd.concat(all_importances)
+        all_spearman = pd.concat(all_spearman)
+        all_weights = pd.concat(all_weights)
+
+        if all_importances.cv.nunique() > 1:
+            all_importances = compute_cv_stats_per_split(
+                all_importances, alpha=self.alpha
+            )
+            all_spearman = compute_cv_stats_per_split(all_spearman, alpha=self.alpha)
+            all_weights = compute_cv_stats_per_split(all_weights, alpha=self.alpha)
+
+        return all_importances, all_spearman, all_weights
