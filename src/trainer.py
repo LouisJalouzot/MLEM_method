@@ -45,6 +45,7 @@ def train(
     prev_w = model.get_W().clone()
     start = time()
     logs = []
+    converged = False
     pbar = tqdm(
         range(1, max_epochs + 1),
         desc=f"Training on device {device}",
@@ -95,6 +96,7 @@ def train(
                 f"with diff norm={diff_norm:.3g} < eps={eps:.3g} "
                 f"after {time() - start:.2g}s"
             )
+            converged = True
             break
         prev_w = model.get_W().clone()
         if i >= max_epochs:  # Check if max_epochs is reached
@@ -103,10 +105,15 @@ def train(
                 f"grad norm {grad_norm:.3g} > eps {eps:.3g} and "
                 f"diff norm {diff_norm:.3g} > eps {eps:.3g} and "
             )
+            converged = True
             break
 
     model.check_spd()
-    return model, pd.DataFrame(logs)
+
+    logs = pd.DataFrame(logs)
+    logs["converged"] = converged
+
+    return model, logs
 
 
 class Trainer(BaseModelSharing):
@@ -186,7 +193,7 @@ class Trainer(BaseModelSharing):
             all_state_dicts.append(model.state_dict())
             all_logs.append(logs)
 
-        return all_state_dicts, pd.concat(all_logs)
+        return all_state_dicts, all_logs
 
     def train(self) -> tp.Tuple[tp.List[SPDMatrixLearner], pd.DataFrame]:
         all_state_dicts, all_logs = self._train_cached()

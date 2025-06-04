@@ -188,18 +188,21 @@ class FeatureImportance(BaseModelSharing):
             f"for {clusters.Cluster.max() + 1} clusters of feature pairs."
         )
 
-        all_models, _ = self.trainer.train()
+        all_models, all_logs = self.trainer.train()
 
         all_importances = []
         all_spearman = []
         all_weights = []
 
-        for i, (model, (train_dl, test_dl)) in enumerate(
-            zip(all_models, self.trainer.get_folds())
+        for i, (model, logs, (train_dl, test_dl)) in enumerate(
+            zip(all_models, all_logs, self.trainer.get_folds())
         ):
             weights = model.get_flat_forwatted_W(pfeatures=self.dataset.pfeatures)
             weights["cv"] = i
             weights["split"] = "train"
+            weights["converged"] = logs.converged.iloc[0]
+            weights["training_duration"] = logs["Step Duration"].sum()
+            weights["n_epochs"] = len(logs)
             all_weights.append(weights)
             for dl, split in [(train_dl, "train"), (test_dl, "test")]:
                 importances, spearman = compute_feature_importance(
