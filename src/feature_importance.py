@@ -8,7 +8,6 @@ from captum.attr import FeaturePermutation
 from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
-from sqlmodel import all_
 from torch import nn
 from tqdm.auto import tqdm
 

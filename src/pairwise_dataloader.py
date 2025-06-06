@@ -66,7 +66,7 @@ class PairwiseDataloader(Dataset):
 
     def sample(self, n_pairs=4096, n_trials=1, get_idx=False, only_valid=False):
         if n_pairs > self.max_n_pairs:
-            logger.warning(
+            logger.debug(
                 f"Number of pairs requested ({n_pairs}) is greater than the total number of pairs in the data ({self.max_n_pairs})."
             )
 

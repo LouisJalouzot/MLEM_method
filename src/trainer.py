@@ -89,6 +89,7 @@ def train(
                 f"with grad norm={grad_norm:.3g} < eps={eps:.3g} "
                 f"after {time() - start:.2g}s"
             )
+            converged = True
             break
         if diff_norm < eps:
             logger.info(
@@ -105,7 +106,6 @@ def train(
                 f"grad norm {grad_norm:.3g} > eps {eps:.3g} and "
                 f"diff norm {diff_norm:.3g} > eps {eps:.3g} and "
             )
-            converged = True
             break
 
     model.check_spd()
