@@ -30,6 +30,11 @@ class SPDExpParam(nn.Module):
         return torch.matrix_exp(W.triu() + W.triu(1).transpose(-1, -2))
 
 
+class TriuParam(nn.Module):
+    def forward(self, W):
+        return W.triu()
+
+
 class CholeskyParam(nn.Module):
     def __init__(self, dim):
         super().__init__()
@@ -63,7 +68,7 @@ class SPDMatrixLearner(nn.Module):
 
         Args:
             n_features: Number of features in the input
-            param: Parametrization type ("exp", "cholesky", "diagonal", or "none")
+            param: Parametrization type ("exp", "cholesky", "diagonal", "sym", "triu", or "none")
             fro_norm: Whether to apply Frobenius norm normalization
             init: Optional initialization function name (from nn.init)
             init_kwargs: Keyword arguments for initialization function
@@ -92,20 +97,25 @@ class SPDMatrixLearner(nn.Module):
             getattr(nn.init, init)(self.W.weight, **init_kwargs)
 
         # Add appropriate parametrization
-        if param == "exp":
-            parametrize.register_parametrization(self.W, "weight", SPDExpParam())
-        elif param == "cholesky":
-            parametrize.register_parametrization(
-                self.W, "weight", CholeskyParam(n_features)
-            )
-        elif param == "diagonal":
-            parametrize.register_parametrization(self.W, "weight", DiagonalParam())
-        elif param == "sym":
-            parametrize.register_parametrization(self.W, "weight", SymParam())
-        elif param == "none":
-            pass
-        else:
-            raise ValueError(f"Invalid parametrization: {param}")
+        match param:
+            case "exp":
+                parametrize.register_parametrization(self.W, "weight", SPDExpParam())
+            case "cholesky":
+                parametrize.register_parametrization(
+                    self.W, "weight", CholeskyParam(n_features)
+                )
+            case "diagonal":
+                parametrize.register_parametrization(self.W, "weight", DiagonalParam())
+            case "sym":
+                parametrize.register_parametrization(self.W, "weight", SymParam())
+            case "triu":
+                parametrize.register_parametrization(self.W, "weight", TriuParam())
+            case "none":
+                pass
+            case _:
+                raise ValueError(
+                    f"Invalid parametrization: {param}. Choose from 'exp', 'cholesky', 'diagonal', 'sym', 'triu', or 'none'."
+                )
 
         # Add normalization if requested
         if fro_norm:
