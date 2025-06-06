@@ -17,7 +17,7 @@ class SimulatedRepresentations(BaseModel):
     level: tp.Literal["simulated"] = "simulated"
     type: tp.Literal["ground-truth", "interaction"] = "ground-truth"
     noise_level: float = 0.1
-    noise: tp.Literal["normal", "uniform"] = "normal"
+    scales: tp.List[float] = [0.5, 1, 2]
     interaction_strength: int = 3
     model_config: ConfigDict = ConfigDict(extra="forbid")
     infra: TaskInfra = TaskInfra(folder=".cache")
@@ -41,11 +41,6 @@ class SimulatedRepresentations(BaseModel):
             interaction = df["Feat. 1"] == df["Feat. 2"]
             repr[:, 0] += self.interaction_strength * (2 * interaction - 1)
 
-        if self.noise == "uniform":
-            repr += np.random.uniform(
-                low=-self.noise_level, high=self.noise_level, size=repr.shape
-            )
-        else:
-            repr += np.random.normal(size=repr.shape) * self.noise_level
+        repr += np.random.normal(size=repr.shape, scale=self.scales) * self.noise_level
 
         return torch.from_numpy(repr)
