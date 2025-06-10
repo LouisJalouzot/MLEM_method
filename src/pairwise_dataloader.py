@@ -113,7 +113,7 @@ class PairwiseDataloader(Dataset):
 
 
 PairwiseDataLoaderGenerator = tp.Generator[
-    tp.Tuple[PairwiseDataloader, PairwiseDataloader]
+    tp.Tuple[PairwiseDataloader, PairwiseDataloader], None, None
 ]
 
 
