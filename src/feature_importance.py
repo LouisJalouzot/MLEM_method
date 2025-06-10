@@ -33,7 +33,7 @@ def compute_feature_importance(
 
     # Storage for results
     importances = []
-    spearman = []
+    score = []
     start = time()
 
     for i in tqdm(
@@ -49,28 +49,24 @@ def compute_feature_importance(
         X_batch_flat = X_batch[:, None] * X_batch[:, :, None]
         X_batch_flat = X_batch_flat[:, *model.triu_indices]
 
-        # Define the function to measure attributions
-        def f(x):
-            with torch.no_grad():
-                pred = model.flat_forward(x)
-                return model.spearman(pred, Y_batch)
-
         # Calculate feature importance
-        feature_perm = FeaturePermutation(f)
+        feature_perm = FeaturePermutation(lambda x: model.score(x, Y_batch))
         batch_importances = feature_perm.attribute(
             X_batch_flat, feature_mask=clusters[None]
         ).cpu()
-        importances.append(batch_importances.double().numpy().squeeze())
+        batch_importances = batch_importances.double().numpy().squeeze()
+        if not model.maximize:
+            batch_importances *= -1
+        importances.append(batch_importances)
 
         # Calculate baseline performance
-        pred = model(X_batch)
-        s = model.spearman(pred, Y_batch).item()
-        spearman.append(s)
+        s = model.score(X_batch, Y_batch)
+        score.append(s)
 
         logger.debug(
             f"Batch {i:<3} / {n_perm} - "
             f"Duration: {time() - t:<8.3f}s - "
-            f"Spearman: {s:<8.3g}"
+            f"Score: {s:<8.3g}"
         )
 
     # Compute importances statistics
@@ -96,25 +92,23 @@ def compute_feature_importance(
 
     importances = importances.sort_values("mean", ascending=False)
 
-    # Compute spearman statistics
-    spearman_stats = compute_stats(spearman, alpha=alpha).iloc[0]
+    # Compute score statistics
+    score_stats = compute_stats(score, alpha=alpha).iloc[0]
 
     # Log results
     logger.info(
         f"Feature importance computed in {time() - start:.3g}s. "
-        f"Mean Spearman = {spearman_stats['mean']:.3g} ± {spearman_stats['std']:.3g}"
+        f"Mean score = {score_stats['mean']:.3g} ± {score_stats['std']:.3g}"
     )
 
-    # Warn if there's significant variability on the Spearman correlation
+    # Warn if there's significant variability on the score correlation
     # across batches
     if monitor == "ci_width":
-        variability = spearman_stats["upper_ci"] - spearman_stats["lower_ci"]
-        message = f"the width of the {(1 - alpha)*100:.3g}% confidence interval of the Spearman correlation is {variability:.3g} "
+        variability = score_stats["upper_ci"] - score_stats["lower_ci"]
+        message = f"the width of the {(1 - alpha)*100:.3g}% confidence interval of the score correlation is {variability:.3g} "
     elif monitor == "std":
-        variability = spearman_stats["std"]
-        message = (
-            f"the standard deviation of the Spearman correlation is {variability:.3g} "
-        )
+        variability = score_stats["std"]
+        message = f"the standard deviation of the score correlation is {variability:.3g} "
     if variability > thresh:
         logger.warning(
             f"Significant variability between batches: "
@@ -122,7 +116,7 @@ def compute_feature_importance(
             + f"which is larger than the threshold {thresh:.3g}."
         )
 
-    return importances, spearman_stats.to_frame().T
+    return importances, score_stats.to_frame().T
 
 
 def compute_cv_stats_per_split(df, alpha=0.01):
@@ -190,7 +184,7 @@ class FeatureImportance(BaseModelSharing):
         all_models, all_logs = self.trainer.train()
 
         all_importances = []
-        all_spearman = []
+        all_score = []
         all_weights = []
 
         for i, (model, logs, (train_dl, test_dl)) in enumerate(
@@ -204,7 +198,7 @@ class FeatureImportance(BaseModelSharing):
             weights["n_epochs"] = len(logs)
             all_weights.append(weights)
             for dl, split in [(train_dl, "train"), (test_dl, "test")]:
-                importances, spearman = compute_feature_importance(
+                importances, score = compute_feature_importance(
                     model=model,
                     dataloader=dl,
                     clusters=clusters,
@@ -213,26 +207,26 @@ class FeatureImportance(BaseModelSharing):
                     thresh=self.thresh,
                     alpha=self.alpha,
                 )
-                for e in [importances, spearman]:
+                for e in [importances, score]:
                     e["cv"] = i
                     e["split"] = split
                 all_importances.append(importances)
-                all_spearman.append(spearman)
+                all_score.append(score)
 
         all_importances = pd.concat(all_importances)
-        all_spearman = pd.concat(all_spearman)
+        all_score = pd.concat(all_score)
         all_weights = pd.concat(all_weights)
 
-        return all_importances, all_spearman, all_weights
+        return all_importances, all_score, all_weights
 
     def compute_and_aggregate(self) -> tp.Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        all_importances, all_spearman, all_weights = self.compute()
+        all_importances, all_score, all_weights = self.compute()
 
         if all_importances.cv.nunique() > 1:
             all_importances = compute_cv_stats_per_split(
                 all_importances, alpha=self.alpha
             )
-            all_spearman = compute_cv_stats_per_split(all_spearman, alpha=self.alpha)
+            all_score = compute_cv_stats_per_split(all_score, alpha=self.alpha)
             all_weights = compute_cv_stats_per_split(all_weights, alpha=self.alpha)
 
-        return all_importances, all_spearman, all_weights
+        return all_importances, all_score, all_weights

@@ -57,9 +57,8 @@ class SPDMatrixLearner(nn.Module):
         n_features: int,
         param: str = "cholesky",
         fro_norm: bool = True,
-        init: tp.Optional[str] = None,
-        init_kwargs: dict = {},
         loss: str = "spearman",
+        scoring: str = "spearman",
         spearman_regularization: str = "l2",
         spearman_regularization_strength: float = 1.0,
     ):
@@ -70,9 +69,8 @@ class SPDMatrixLearner(nn.Module):
             n_features: Number of features in the input
             param: Parametrization type ("exp", "cholesky", "diagonal", "sym", "triu", or "none")
             fro_norm: Whether to apply Frobenius norm normalization
-            init: Optional initialization function name (from nn.init)
-            init_kwargs: Keyword arguments for initialization function
-            loss: Loss function to use ("mse" or "spearman")
+            loss: Loss function to use ("spearman" or "mse")
+            scoring: Scoring method to use ("spearman" or "mse")
             spearman_regularization: Type of regularization for Spearman correlation
             spearman_regularization_strength: Strength of the regularization
         """
@@ -87,14 +85,12 @@ class SPDMatrixLearner(nn.Module):
             self.maximize = True
         else:
             raise ValueError(f"Invalid loss function {loss}. Choose 'mse' or 'spearman'.")
+        self.scoring = scoring
 
         # Create weight matrix
-        self.W = nn.Linear(n_features, n_features, bias=False)
+        self.n_features = n_features
+        self.W = nn.Linear(n_features, n_features, bias=False, dtype=torch.float32)
         self.triu_indices = torch.triu_indices(n_features, n_features)
-
-        # Initialize weights if specified
-        if init is not None:
-            getattr(nn.init, init)(self.W.weight, **init_kwargs)
 
         # Add appropriate parametrization
         match param:
@@ -122,11 +118,9 @@ class SPDMatrixLearner(nn.Module):
             parametrize.register_parametrization(self.W, "weight", NormFroParam())
 
     def get_W(self) -> torch.Tensor:
-        """Get the weight matrix"""
-        return self.W.weight
+        return self.W.weight.data
 
     def get_flat_W(self) -> torch.Tensor:
-        """Get flattened weight matrix (upper triangular)"""
         W = self.get_W()
         W += W.tril(diagonal=-1).T
         W = W[*self.triu_indices]
@@ -225,13 +219,24 @@ class SPDMatrixLearner(nn.Module):
     def mse(self, x, y):
         return F.mse_loss(x, y)
 
+    @torch.no_grad()
+    def score(self, x, y):
+        if x.shape[1] == self.n_features:
+            pred = self.forward(x)
+        else:
+            pred = self.flat_forward(x)
+
+        if self.scoring == "spearman":
+            return self.spearman(pred, y).item()
+        elif self.scoring == "mse":
+            return self.mse(pred, y).item()
+
 
 class SPDMatrixLearnerBuilder(BaseModel):
     param: str = "cholesky"
     fro_norm: bool = True
-    init: tp.Optional[str] = None
-    init_kwargs: dict = {}
-    loss: str = "spearman"
+    loss: tp.Literal["spearman", "mse"] = "spearman"
+    scoring: tp.Literal["spearman", "mse"] = "spearman"
     spearman_regularization: str = "l2"
     spearman_regularization_strength: float = 1.0
 
@@ -243,9 +248,8 @@ class SPDMatrixLearnerBuilder(BaseModel):
             n_features=n_features,
             param=self.param,
             fro_norm=self.fro_norm,
-            init=self.init,
-            init_kwargs=self.init_kwargs,
             loss=self.loss,
+            scoring=self.scoring,
             spearman_regularization=self.spearman_regularization,
             spearman_regularization_strength=self.spearman_regularization_strength,
         )

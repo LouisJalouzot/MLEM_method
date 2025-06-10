@@ -58,16 +58,18 @@ def train(
         X_batch, Y_batch = dataloader[i]
         optimizer.zero_grad(set_to_none=True)
         Y_pred = model(X_batch)
-        score = model.loss(Y_pred, Y_batch)
-        score.backward()
+        loss = model.loss(Y_pred, Y_batch)
+        loss.backward()
         grad_norm = model.compute_gradient_norm()
         optimizer.step()
-        rho = model.spearman(Y_pred, Y_batch)
+        spearman = model.spearman(Y_pred, Y_batch)
+        mse = model.mse(Y_pred, Y_batch)
 
         log = {
             "Batch size": len(X_batch),
-            "Score": score.item(),
-            "Spearman": rho.item(),
+            "Loss": loss.item(),
+            "Spearman": spearman.item(),
+            "MSE": mse.item(),
         }
         s = " - ".join([f"{k}: {v:<8.3g}" for k, v in log.items()])
         pbar.set_postfix_str(s)

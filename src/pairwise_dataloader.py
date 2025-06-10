@@ -30,17 +30,18 @@ class PairwiseDataloader(Dataset):
         self.Y = Y
         if X is not None and Y is not None:
             assert len(X) == len(Y)
+            assert X.device == Y.device
         self.n_pairs = n_pairs
         self.gamma = gamma
         if X is not None:
             self.n = len(X)
             self.n_features = X.shape[1]
             self.device = X.device
-        elif Y is not None:
+            self.X = X.float()
+        if Y is not None:
             self.n = len(Y)
             self.device = Y.device
-        else:
-            raise ValueError("Either X or Y must be provided.")
+            self.Y = Y.float()
         self.max_n_pairs = self.n * (self.n - 1) // 2
         self.nan_to_num = nan_to_num
         self.min = torch.inf
