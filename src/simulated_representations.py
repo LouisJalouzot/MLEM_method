@@ -41,6 +41,9 @@ class SimulatedRepresentations(BaseModel):
             interaction = df["Feat. 1"] == df["Feat. 2"]
             repr[:, 0] += self.interaction_strength * (2 * interaction - 1)
 
-        repr += np.random.normal(size=repr.shape, scale=self.scales) * self.noise_level
+        repr += (
+            np.random.normal(size=repr.shape, scale=self.scales[: repr.shape[1]])
+            * self.noise_level
+        )
 
         return torch.from_numpy(repr)
