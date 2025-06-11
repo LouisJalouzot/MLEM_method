@@ -1,17 +1,16 @@
 import random
 import subprocess
+import sys
 import typing as tp
 
 import numpy as np
 import pandas as pd
 import torch
+from loguru import logger
 from pydantic import BaseModel as _BaseModel
 from pydantic import model_validator
 from sklearn.preprocessing import MinMaxScaler
 from statsmodels.stats.descriptivestats import describe
-
-from loguru import logger
-import sys
 
 logger.remove()
 logger.add(sink=sys.stdout, level="DEBUG")
