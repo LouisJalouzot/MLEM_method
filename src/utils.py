@@ -10,6 +10,12 @@ from pydantic import model_validator
 from sklearn.preprocessing import MinMaxScaler
 from statsmodels.stats.descriptivestats import describe
 
+from loguru import logger
+import sys
+
+logger.remove()
+logger.add(sink=sys.stdout, level="DEBUG")
+
 np.random.seed(0)
 torch.manual_seed(0)
 
