@@ -240,7 +240,7 @@ class SPDMatrixLearner(nn.Module):
 
 
 class SPDMatrixLearnerBuilder(BaseModel):
-    param: str = "cholesky"
+    param: tp.Literal["none", "diagonal", "sym", "triu", "exp", "cholesky"] = "cholesky"
     fro_norm: bool = True
     loss: tp.Literal["spearman", "mse"] = "spearman"
     scoring: tp.Literal["spearman", "mse"] = "spearman"
