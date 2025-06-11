@@ -27,12 +27,15 @@ torch.set_float32_matmul_precision("medium")
 
 def train(
     model: nn.Module,
-    dataloader: PairwiseDataloader,
+    train_dataloader: PairwiseDataloader,
+    test_dataloader: PairwiseDataloader,
     lr: float = 0.1,
     weight_decay: float = 0,
     max_epochs: int = 500,
     eps: float = 1e-2,
     device: str = "cpu",
+    monitor: str = "score",
+    patience: int = 20,
 ) -> tp.Tuple[nn.Module, pd.DataFrame]:
     model.train()
     optimizer = torch.optim.AdamW(
@@ -52,10 +55,15 @@ def train(
         miniters=1,
         disable=True,
     )
+
+    best_test_score = -torch.inf if model.maximize else torch.inf
+    epochs_without_improvement = 0
+    best_model_state_dict = None
+
     for i in pbar:
         t = time()
 
-        X_batch, Y_batch = dataloader[i]
+        X_batch, Y_batch = train_dataloader[i]
         optimizer.zero_grad(set_to_none=True)
         Y_pred = model(X_batch)
         loss = model.loss(Y_pred, Y_batch)
@@ -64,13 +72,18 @@ def train(
         optimizer.step()
         spearman = model.spearman(Y_pred, Y_batch)
         mse = model.mse(Y_pred, Y_batch)
+        X_batch_test, Y_batch_test = test_dataloader[i]
+        with torch.no_grad():
+            test_score = model.score(X_batch_test, Y_batch_test)
 
         log = {
             "Batch size": len(X_batch),
             "Loss": loss.item(),
             "Spearman": spearman.item(),
             "MSE": mse.item(),
+            "Test score": test_score,
         }
+
         s = " - ".join([f"{k}: {v:<8.3g}" for k, v in log.items()])
         pbar.set_postfix_str(s)
         W = model.get_W()
@@ -85,7 +98,7 @@ def train(
             f"Step {i:<3}/{max_epochs} - "
             + " - ".join([f"{k}: {v:<7.2g}" for k, v in log.items()])
         )
-        if grad_norm < eps:
+        if monitor == "diff" and grad_norm < eps:
             logger.info(
                 f"Convergence reached at step {i}/{max_epochs} "
                 f"with grad norm={grad_norm:.3g} < eps={eps:.3g} "
@@ -93,7 +106,7 @@ def train(
             )
             converged = True
             break
-        if diff_norm < eps:
+        if monitor == "diff" and diff_norm < eps:
             logger.info(
                 f"Convergence reached at step {i}/{max_epochs} "
                 f"with diff norm={diff_norm:.3g} < eps={eps:.3g} "
@@ -101,8 +114,32 @@ def train(
             )
             converged = True
             break
+        if monitor == "score":
+            if model.maximize and test_score > best_test_score:
+                best_test_score = test_score
+                epochs_without_improvement = 0
+                best_model_state_dict = model.state_dict().copy()
+            elif not model.maximize and test_score < best_test_score:
+                best_test_score = test_score
+                epochs_without_improvement = 0
+                best_model_state_dict = model.state_dict().copy()
+            else:
+                epochs_without_improvement += 1
+
+            if epochs_without_improvement >= patience:
+                logger.info(
+                    f"Early stopping at step {i}/{max_epochs} "
+                    f"after {time() - start:.2g}s, "
+                    f"best test score={best_test_score:.3g} "
+                    f"did not improve for {patience} epochs"
+                )
+                converged = True
+                if best_model_state_dict is not None:
+                    model.load_state_dict(best_model_state_dict)
+                break
+
         prev_w = model.get_W().clone()
-        if i >= max_epochs:  # Check if max_epochs is reached
+        if i >= max_epochs:
             logger.error(
                 f"Maximum number of epochs reached without convergence: "
                 f"grad norm {grad_norm:.3g} > eps {eps:.3g} and "
@@ -139,7 +176,7 @@ class Trainer(BaseModelSharing):
     lr: float = 0.1
     weight_decay: float = 0
     max_epochs: int = 500
-    eps: float = 1e-2
+    eps: float = 1e-3
     device: str | None = None
     infra: TaskInfra = TaskInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
@@ -147,6 +184,8 @@ class Trainer(BaseModelSharing):
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
         "dataset": ["estimate_correlations", "representations"],
     }
+    monitor: tp.Literal["diff", "score"] = "diff"
+    patience: int = 100
 
     def model_post_init(self, __context: tp.Any) -> None:
         assert self.dataset.level == self.representations.level, (
@@ -181,15 +220,18 @@ class Trainer(BaseModelSharing):
         all_state_dicts = []
         all_logs = []
 
-        for i, (train_dl, _) in enumerate(self.get_folds()):
+        for i, (train_dl, test_dl) in enumerate(self.get_folds()):
             model, logs = train(
                 model=self.get_model(),
-                dataloader=train_dl,
+                train_dataloader=train_dl,
+                test_dataloader=test_dl,
                 lr=self.lr,
                 weight_decay=self.weight_decay,
                 max_epochs=self.max_epochs,
                 eps=self.eps,
                 device=self.device,
+                monitor=self.monitor,
+                patience=self.patience,
             )
             logs["cv"] = i
             all_state_dicts.append(model.state_dict())
