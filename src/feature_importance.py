@@ -22,7 +22,7 @@ def compute_feature_importance(
     model: nn.Module,
     dataloader: PairwiseDataloader,
     clusters: pd.DataFrame,
-    n_perm: int,
+    n_perm: int = 5,
     monitor: tp.Literal["std", "ci_width"] = "std",
     thresh: float = 0.01,
     alpha: float = 0.01,
@@ -152,7 +152,7 @@ class FeatureImportance(BaseModelSharing):
     )
     trainer: Trainer = Field(default_factory=lambda: Trainer())
 
-    n_perm: int = 10
+    n_perm: int = 5
     monitor: tp.Literal["std", "ci_width"] = "std"
     thresh: float = 0.01
     alpha: float = 0.01
