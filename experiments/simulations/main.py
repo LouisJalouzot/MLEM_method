@@ -28,6 +28,7 @@ def get_cfg(method, max_epochs, noise_level):
         max_epochs: {max_epochs}
         representations:
             level: simulated
+            noise_level: {noise_level}
         eps: 1e-5
     """
     cfg = yaml.safe_load(cfg)
@@ -72,7 +73,7 @@ def launch():
 def fetch():
     importances, spearman, weights = [], [], []
     with tqdm(
-        total=len(methods) * len(max_epochs) * len(noise_levels), desc="Creating tasks"
+        total=len(methods) * len(max_epochs) * len(noise_levels), desc="Fetching results"
     ) as pbar:
         for param, method in methods:
             for k in max_epochs:
@@ -84,6 +85,7 @@ def fetch():
                     for e in [i, s, w]:
                         e["Method"] = method
                         e["max_epochs"] = k
+                        e["noise_level"] = noise_level
                     importances.append(i)
                     spearman.append(s)
                     weights.append(w)

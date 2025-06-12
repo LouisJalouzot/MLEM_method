@@ -66,7 +66,7 @@ def launch():
 
 def fetch():
     importances, spearman, weights = [], [], []
-    with tqdm(total=len(methods) * len(max_epochs), desc="Creating tasks") as pbar:
+    with tqdm(total=len(methods) * len(max_epochs), desc="Fetching results") as pbar:
         for param, method in methods:
             for k in max_epochs:
                 cfg = get_cfg(param, k)
