@@ -49,18 +49,13 @@ def train(
     start = time()
     logs = []
     converged = False
-    pbar = tqdm(
-        range(1, max_epochs + 1),
-        desc=f"Training on device {device}",
-        miniters=1,
-        disable=True,
-    )
+    logger.debug(f"Training on device {device}.")
 
     best_test_score = -torch.inf if model.maximize else torch.inf
     epochs_without_improvement = 0
     best_model_state_dict = None
 
-    for i in pbar:
+    for i in range(1, max_epochs + 1):
         t = time()
 
         X_batch, Y_batch = train_dataloader[i]
@@ -84,8 +79,6 @@ def train(
             "Test score": test_score,
         }
 
-        s = " - ".join([f"{k}: {v:<8.3g}" for k, v in log.items()])
-        pbar.set_postfix_str(s)
         W = model.get_W()
         diff_norm = (W - prev_w).norm(p=torch.inf).item()
         log |= {

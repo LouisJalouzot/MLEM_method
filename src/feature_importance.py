@@ -178,7 +178,7 @@ class FeatureImportance(BaseModelSharing):
         clusters = EstimateCorrelations(**ec_params).cluster_features()
         logger.info(
             f"Computing permutation feature importance with {self.n_perm} permutations "
-            f"for {clusters.Cluster.max() + 1} clusters of feature pairs."
+            f"for {clusters.Cluster.max() + 1} clusters of feature pairs on device {self.device}."
         )
 
         all_models, all_logs = self.trainer.train()
