@@ -37,7 +37,7 @@ def get_cfg(method, max_epochs):
 
 
 methods = [
-    ("triu", "FR-RSA"),
+    ("triu", "FR-RSA + interactions"),
     ("cholesky", "MLEM cholesky"),
     ("exp", "MLEM exp"),
 ]
@@ -65,16 +65,6 @@ def launch():
 
 
 def fetch():
-    cfg = get_cfg(methods[0][0], max_epochs[0])
-    results = []
-    for param, method in methods:
-        for k in max_epochs:
-            fi = FeatureImportance(**cfg)
-            task_to_compute = fi.infra.clone_obj(
-                {"trainer": {"max_epochs": k, "model_builder": {"param": param}}}
-            )
-            results.append([param, k, task_to_compute])
-
     importances, spearman, weights = [], [], []
     with tqdm(total=len(methods) * len(max_epochs), desc="Creating tasks") as pbar:
         for param, method in methods:
