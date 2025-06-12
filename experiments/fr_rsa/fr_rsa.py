@@ -1,10 +1,13 @@
 import argparse
 import sys
+from pathlib import Path
 
 import pandas as pd
 import yaml
 from loguru import logger
 from tqdm.auto import tqdm
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.feature_importance import FeatureImportance
 from src.utils import infra_cpu, infra_gpu
