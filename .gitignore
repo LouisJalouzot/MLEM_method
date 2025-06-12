@@ -17,4 +17,5 @@ wheels/
 *.db
 *.ipynb
 *.conllu
+*.parquet
 !experiments/simulations/simulation.ipynb

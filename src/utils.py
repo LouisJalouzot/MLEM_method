@@ -6,6 +6,7 @@ import typing as tp
 import numpy as np
 import pandas as pd
 import torch
+import yaml
 from loguru import logger
 from pydantic import BaseModel as _BaseModel
 from pydantic import model_validator
@@ -175,3 +176,31 @@ def compute_stats(data, alpha=0.01):
     return describe(
         data, stats=["mean", "std", "std_err", "ci"], use_t=True, alpha=alpha
     ).T
+
+
+infra_gpu = """
+folder: .cache
+cluster: auto
+mode: retry
+cpus_per_task: 24
+gpus_per_node: 1
+timeout_min: 120
+slurm_qos: qos_gpu_h100-dev
+slurm_constraint: h100
+slurm_account: ioj@h100
+slurm_additional_parameters:
+    hint: nomultithread
+"""
+infra_gpu = yaml.safe_load(infra_gpu)
+
+infra_cpu = """
+folder: .cache
+mode: retry
+cluster: auto
+cpus_per_task: 8
+timeout_min: 120
+slurm_account: ioj@cpu
+slurm_additional_parameters:
+    hint: nomultithread
+"""
+infra_cpu = yaml.safe_load(infra_cpu)
