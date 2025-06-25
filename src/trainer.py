@@ -7,7 +7,6 @@ from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
 from torch import nn
-from tqdm.auto import tqdm
 
 from src.dataset import Dataset
 from src.estimate_correlations import EstimateCorrelations
@@ -34,7 +33,7 @@ def train(
     max_epochs: int = 500,
     eps: float = 1e-2,
     device: str = "cpu",
-    monitor: str = "score",
+    monitor: str = "test_score",
     patience: int = 20,
 ) -> tp.Tuple[nn.Module, pd.DataFrame]:
     model.train()
@@ -51,7 +50,7 @@ def train(
     converged = False
     logger.debug(f"Training on device {device}.")
 
-    best_test_score = -torch.inf if model.maximize else torch.inf
+    best_score = -torch.inf if model.maximize else torch.inf
     epochs_without_improvement = 0
     best_model_state_dict = None
 
@@ -65,23 +64,18 @@ def train(
         loss.backward()
         grad_norm = model.compute_gradient_norm()
         optimizer.step()
-        spearman = model.spearman(Y_pred, Y_batch)
-        mse = model.mse(Y_pred, Y_batch)
         X_batch_test, Y_batch_test = test_dataloader[i]
         with torch.no_grad():
+            train_score = model.score(X_batch, Y_batch)
             test_score = model.score(X_batch_test, Y_batch_test)
-
-        log = {
-            "Batch size": len(X_batch),
-            "Loss": loss.item(),
-            "Spearman": spearman.item(),
-            "MSE": mse.item(),
-            "Test score": test_score,
-        }
 
         W = model.get_W()
         diff_norm = (W - prev_w).norm(p=torch.inf).item()
-        log |= {
+        log = {
+            "Batch size": len(X_batch),
+            "Loss": loss.item(),
+            "Train score": train_score,
+            "Test score": test_score,
             "Step Duration": time() - t,
             "Grad norm": grad_norm,
             "Diff norm": diff_norm,
@@ -91,7 +85,7 @@ def train(
             f"Step {i:<3}/{max_epochs} - "
             + " - ".join([f"{k}: {v:<7.2g}" for k, v in log.items()])
         )
-        if monitor == "diff" and grad_norm < eps:
+        if monitor == "grad_norm" and grad_norm < eps:
             logger.info(
                 f"Convergence reached at step {i}/{max_epochs} "
                 f"with grad norm={grad_norm:.3g} < eps={eps:.3g} "
@@ -99,7 +93,7 @@ def train(
             )
             converged = True
             break
-        if monitor == "diff" and diff_norm < eps:
+        if monitor == "diff_norm" and diff_norm < eps:
             logger.info(
                 f"Convergence reached at step {i}/{max_epochs} "
                 f"with diff norm={diff_norm:.3g} < eps={eps:.3g} "
@@ -107,13 +101,14 @@ def train(
             )
             converged = True
             break
-        if monitor == "score":
-            if model.maximize and test_score > best_test_score:
-                best_test_score = test_score
-                epochs_without_improvement = 0
-                best_model_state_dict = model.state_dict().copy()
-            elif not model.maximize and test_score < best_test_score:
-                best_test_score = test_score
+        if monitor in ["train_score", "test_score"]:
+            current_score = train_score if monitor == "train_score" else test_score
+            improved = (model.maximize and current_score > best_score) or (
+                not model.maximize and current_score < best_score
+            )
+
+            if improved:
+                best_score = current_score
                 epochs_without_improvement = 0
                 best_model_state_dict = model.state_dict().copy()
             else:
@@ -123,7 +118,7 @@ def train(
                 logger.info(
                     f"Early stopping at step {i}/{max_epochs} "
                     f"after {time() - start:.2g}s, "
-                    f"best test score={best_test_score:.3g} "
+                    f"best {monitor}={best_score:.3g} "
                     f"did not improve for {patience} epochs"
                 )
                 converged = True
@@ -177,7 +172,9 @@ class Trainer(BaseModelSharing):
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
         "dataset": ["estimate_correlations", "representations"],
     }
-    monitor: tp.Literal["diff", "score"] = "diff"
+    monitor: tp.Literal["grad_norm", "diff_norm", "train_score", "test_score"] = (
+        "test_score"
+    )
     patience: int = 100
 
     def model_post_init(self, __context: tp.Any) -> None:
