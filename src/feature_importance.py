@@ -158,7 +158,7 @@ class FeatureImportance(BaseModelSharing):
     alpha: float = 0.01
 
     device: str | None = None
-    infra: TaskInfra = TaskInfra(folder=".cache")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
         "dataset": ["trainer", "estimate_correlations"],

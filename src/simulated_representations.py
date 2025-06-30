@@ -17,10 +17,27 @@ class SimulatedRepresentations(BaseModel):
     level: tp.Literal["simulated"] = "simulated"
     type: tp.Literal["ground-truth", "interaction"] = "ground-truth"
     noise_level: float = 0.1
-    scales: tp.List[float] = [0.5, 1, 2]
     interaction_strength: int = 3
+    _gt_weights: pd.DataFrame = None
+
     model_config: ConfigDict = ConfigDict(extra="forbid")
-    infra: TaskInfra = TaskInfra(folder=".cache")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
+
+    def model_post_init(self, context):
+        self._gt_weights = pd.DataFrame(
+            {
+                "Feature": [
+                    "Feat. 1",
+                    "Feat. 2",
+                    "(Feat. 1 x Feat. 2)",
+                ],
+                "GTWeight": [
+                    0.6324,
+                    0.6324,
+                    -0.6324,
+                ],
+            }
+        )
 
     def __call__(self):
         df = self.dataset.df_features
@@ -41,9 +58,6 @@ class SimulatedRepresentations(BaseModel):
             interaction = df["Feat. 1"] == df["Feat. 2"]
             repr[:, 0] += self.interaction_strength * (2 * interaction - 1)
 
-        repr += (
-            np.random.normal(size=repr.shape, scale=self.scales[: repr.shape[1]])
-            * self.noise_level
-        )
+        repr += np.random.normal(size=repr.shape) * self.noise_level
 
         return torch.from_numpy(repr)

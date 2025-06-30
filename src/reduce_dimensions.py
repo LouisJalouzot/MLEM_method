@@ -42,7 +42,7 @@ class ReduceDimensions(BaseModelSharing):
 
     n_jobs: int = -1
     verbose: bool = False
-    infra: TaskInfra = TaskInfra(folder=".cache")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
         "dataset": ["representations"]

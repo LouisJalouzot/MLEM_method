@@ -167,7 +167,7 @@ class EstimateCorrelations(BaseModel):
     clustering_threshold: float = 0
 
     device: str = None
-    infra: TaskInfra = TaskInfra(folder=".cache")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
 

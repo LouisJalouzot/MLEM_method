@@ -136,7 +136,7 @@ class WordRepresentations(BaseModel):
 
     device: tp.Optional[str] = None
     batch_size: int = 32
-    infra: TaskInfra = TaskInfra(folder=".cache")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
         "device",

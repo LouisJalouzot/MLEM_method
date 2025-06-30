@@ -188,8 +188,8 @@ infra_gpu = yaml.safe_load(infra_gpu)
 
 infra_cpu = """
 folder: .cache
-mode: retry
 cluster: auto
+mode: retry
 cpus_per_task: 8
 timeout_min: 120
 slurm_account: ioj@cpu

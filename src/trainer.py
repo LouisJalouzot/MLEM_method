@@ -167,7 +167,7 @@ class Trainer(BaseModelSharing):
     max_epochs: int = 500
     eps: float = 1e-2
     device: str | None = None
-    infra: TaskInfra = TaskInfra(folder=".cache")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
