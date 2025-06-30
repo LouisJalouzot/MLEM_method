@@ -212,10 +212,9 @@ class Trainer(BaseModelSharing):
 
         device = self.device or get_device()
 
-        model = self.get_model(device=device)
         for i, (train_dl, test_dl) in enumerate(self.get_folds(device=device)):
             model, logs = train(
-                model=model,
+                model=self.get_model(device=device),
                 train_dataloader=train_dl,
                 test_dataloader=test_dl,
                 lr=self.lr,
