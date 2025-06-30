@@ -33,7 +33,7 @@ def train(
     max_epochs: int = 500,
     eps: float = 1e-2,
     device: str = "cpu",
-    monitor: str = "test_score",
+    monitor: str = "diff_norm",
     patience: int = 20,
 ) -> tp.Tuple[nn.Module, pd.DataFrame]:
     model.train()
@@ -158,13 +158,14 @@ class Trainer(BaseModelSharing):
     dataloader_builder: PairwiseDataloaderBuilder = Field(
         default_factory=lambda: PairwiseDataloaderBuilder()
     )
+    gamma: float = 1
     model_builder: SPDMatrixLearnerBuilder = Field(
         default_factory=lambda: SPDMatrixLearnerBuilder()
     )
     lr: float = 0.1
     weight_decay: float = 0
     max_epochs: int = 500
-    eps: float = 1e-3
+    eps: float = 1e-2
     device: str | None = None
     infra: TaskInfra = TaskInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
@@ -173,7 +174,7 @@ class Trainer(BaseModelSharing):
         "dataset": ["estimate_correlations", "representations"],
     }
     monitor: tp.Literal["grad_norm", "diff_norm", "train_score", "test_score"] = (
-        "test_score"
+        "diff_norm"
     )
     patience: int = 100
 
@@ -202,7 +203,7 @@ class Trainer(BaseModelSharing):
         X = self.dataset.encode().to(self.device)
         Y = self.representations().to(self.device)
 
-        return self.dataloader_builder.build(X=X, Y=Y, n_pairs=n_pairs)
+        return self.dataloader_builder.build(X=X, Y=Y, gamma=self.gamma, n_pairs=n_pairs)
 
     @infra.apply(exclude_from_cache_uid=["device"])
     def _train_cached(self) -> tp.Tuple[tp.List[torch.Tensor], pd.DataFrame]:

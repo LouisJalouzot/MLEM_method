@@ -18,4 +18,4 @@ wheels/
 *.ipynb
 *.conllu
 *.parquet
-!experiments/simulations/simulation.ipynb
+paper
