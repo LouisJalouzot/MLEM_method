@@ -20,8 +20,35 @@ def yield_grid_search(grid_config):
     keys = grid_config.keys()
     values = grid_config.values()
     for v in product(*values):
-        config = dict(zip(keys, v))
-        yield config, unflatten(config)
+        flat_config = dict(zip(keys, v))
+        yield flat_config, unflatten(flat_config)
+
+
+def run_grid_search(base_class, grid_search):
+    flat_configs = []
+    n_configs = math.prod(len(v) for v in grid_search.values())
+    with base_class.infra.job_array() as array:
+        with tqdm(total=n_configs, desc="Creating tasks") as pbar:
+            for flat_config, task in Parallel(
+                n_jobs=-2, return_as="generator", prefer="threads"
+            )(
+                delayed(
+                    lambda flat_config, config: (
+                        flat_config,
+                        base_class.infra.clone_obj(config),
+                    )
+                )(flat_config, config)
+                for flat_config, config in yield_grid_search(grid_search)
+            ):
+                flat_configs.append(flat_config)
+                array.append(task)
+                pbar.update(1)
+
+    results = []
+    for task in tqdm(array, desc="Waiting for completion and fetching results"):
+        results.append(task.infra.job().result())
+
+    return flat_configs, results
 
 
 def main(config: dict = {}):
@@ -31,40 +58,17 @@ def main(config: dict = {}):
     module = importlib.import_module(module_name)
     TargetClass = getattr(module, class_name)
     base_config = config.get("base_config", {})
-    base_config.update({"infra": infra_gpu})
 
-    grid_search = config.get("grid_search", {})
-    if not grid_search:
-        n_configs = 1
-    else:
-        n_configs = math.prod(len(v) for v in grid_search.values())
-    grid_search = yield_grid_search(grid_search)
-
-    flat_configs = []
-
-    print("Running first config on GPU")
-    flat_first_config, first_config = next(grid_search)
-    flat_configs.append(flat_first_config)
-    first_config.update(base_config)
-    first_config.update({"infra": infra_gpu})
-    results = [TargetClass(**first_config).infra.job().result()]
-
-    def aux(flat_config, config):
-        return flat_config, base_class.infra.clone_obj(config)
+    if "grid_search_prepare" in config:
+        base_config.update({"infra": infra_gpu})
+        base_class = TargetClass(**base_config)
+        print("Running grid search prepare on GPU")
+        run_grid_search(base_class, config["grid_search_prepare"])
 
     base_config.update({"infra": infra_cpu})
     base_class = TargetClass(**base_config)
-    with base_class.infra.job_array() as array:
-        with tqdm(total=n_configs - 1, desc="Creating tasks") as pbar:
-            for flat_config, task in Parallel(
-                n_jobs=-2, return_as="generator", prefer="threads"
-            )(delayed(aux)(flat_config, config) for flat_config, config in grid_search):
-                flat_configs.append(flat_config)
-                array.append(task)
-                pbar.update(1)
-
-    for task in tqdm(array, desc="Waiting for completion and fetching results"):
-        results.append(task.infra.job().result())
+    print("Running grid search on CPU")
+    flat_configs, results = run_grid_search(base_class, config["grid_search"])
 
     all_dfs = []
     for flat_config, dfs in zip(flat_configs, results):
