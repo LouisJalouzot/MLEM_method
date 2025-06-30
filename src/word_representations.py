@@ -133,6 +133,7 @@ class WordRepresentations(BaseModel):
 
     layer: int = 5
     units: tp.List[int] = None
+    noise_level: float = 0.0
 
     device: tp.Optional[str] = None
     batch_size: int = 32
@@ -158,9 +159,12 @@ class WordRepresentations(BaseModel):
             )
             word_representations[na_words] = 0
 
+        # Add artificial noise
+        word_representations += torch.randn_like(word_representations) * self.noise_level
+
         return word_representations
 
-    @infra.apply(exclude_from_cache_uid=["layer", "units"])
+    @infra.apply(exclude_from_cache_uid=["layer", "units", "noise_level"])
     def forward(self) -> torch.Tensor:
         # (n_words, n_layers+1, hidden_size)
         return compute_word_representations(

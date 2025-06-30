@@ -40,6 +40,7 @@ class SentenceRepresentations(BaseModel):
 
     layer: int = 5
     units: tp.List[int] = None
+    noise_level: float = 0.0
 
     device: tp.Optional[str] = None
     batch_size: int = 32
@@ -57,9 +58,16 @@ class SentenceRepresentations(BaseModel):
             sentence_representations = sentence_representations[:, :, self.units]
 
         # (n_sentences, hidden_size)
-        return sentence_representations[:, self.layer]
+        sentence_representations = sentence_representations[:, self.layer]
 
-    @infra.apply(exclude_from_cache_uid=["layer", "units"])
+        # Add artificial noise
+        sentence_representations += (
+            torch.randn_like(sentence_representations) * self.noise_level
+        )
+
+        return sentence_representations
+
+    @infra.apply(exclude_from_cache_uid=["layer", "units", "noise_level"])
     def forward(self) -> torch.Tensor:
         # (n_sentences, n_layers+1, hidden_size)
         return compute_sentence_representations(
