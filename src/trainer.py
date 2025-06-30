@@ -58,6 +58,7 @@ def train(
         t = time()
 
         X_batch, Y_batch = train_dataloader[i]
+        X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
         optimizer.zero_grad(set_to_none=True)
         Y_pred = model(X_batch)
         loss = model.loss(Y_pred, Y_batch)
@@ -65,6 +66,7 @@ def train(
         grad_norm = model.compute_gradient_norm()
         optimizer.step()
         X_batch_test, Y_batch_test = test_dataloader[i]
+        X_batch_test, Y_batch_test = X_batch_test.to(device), Y_batch_test.to(device)
         with torch.no_grad():
             train_score = model.score(X_batch, Y_batch)
             test_score = model.score(X_batch_test, Y_batch_test)
@@ -183,25 +185,22 @@ class Trainer(BaseModelSharing):
             f"Dataset level {self.dataset.level} does not match "
             f"representations level {self.representations.level}"
         )
-        if self.device is None:
-            self.device = get_device()
 
     def get_model(self, state_dict=None, device=None) -> SPDMatrixLearner:
-        if device is None:
-            device = self.device
-
         model = self.model_builder.build(n_features=self.dataset.n_features)
         if state_dict is not None:
             model.load_state_dict(state_dict=state_dict)
 
-        return model.to(self.device)
+        return model.to(device or self.device or get_device())
 
-    def get_folds(self) -> PairwiseDataLoaderGenerator:
+    def get_folds(self, device=None) -> PairwiseDataLoaderGenerator:
+        device = device or self.device or get_device()
+
         # Estimate number of pairs for acceptable variability
         _, n_pairs = self.estimate_correlations.estimate_correlations()
 
-        X = self.dataset.encode().to(self.device)
-        Y = self.representations().to(self.device)
+        X = self.dataset.encode().to(device)
+        Y = self.representations().to(device)
 
         return self.dataloader_builder.build(X=X, Y=Y, gamma=self.gamma, n_pairs=n_pairs)
 
@@ -211,16 +210,19 @@ class Trainer(BaseModelSharing):
         all_state_dicts = []
         all_logs = []
 
-        for i, (train_dl, test_dl) in enumerate(self.get_folds()):
+        device = self.device or get_device()
+
+        model = self.get_model(device=device)
+        for i, (train_dl, test_dl) in enumerate(self.get_folds(device=device)):
             model, logs = train(
-                model=self.get_model(),
+                model=model,
                 train_dataloader=train_dl,
                 test_dataloader=test_dl,
                 lr=self.lr,
                 weight_decay=self.weight_decay,
                 max_epochs=self.max_epochs,
                 eps=self.eps,
-                device=self.device,
+                device=device,
                 monitor=self.monitor,
                 patience=self.patience,
             )
@@ -233,8 +235,6 @@ class Trainer(BaseModelSharing):
     def train(self) -> tp.Tuple[tp.List[SPDMatrixLearner], pd.DataFrame]:
         all_state_dicts, all_logs = self._train_cached()
 
-        all_models = [
-            self.get_model(state_dict=sd, device=self.device) for sd in all_state_dicts
-        ]
+        all_models = [self.get_model(state_dict=sd) for sd in all_state_dicts]
 
         return all_models, all_logs

@@ -15,7 +15,7 @@ from src.dataset import Dataset
 from src.estimate_correlations import EstimateCorrelations
 from src.pairwise_dataloader import PairwiseDataloader
 from src.trainer import Trainer
-from src.utils import BaseModelSharing, compute_stats, get_device
+from src.utils import BaseModelSharing, compute_stats
 
 
 def compute_feature_importance(
@@ -157,18 +157,12 @@ class FeatureImportance(BaseModelSharing):
     thresh: float = 0.01
     alpha: float = 0.01
 
-    device: str | None = None
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
         "dataset": ["trainer", "estimate_correlations"],
         "estimate_correlations": ["trainer"],
     }
-    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
-
-    def model_post_init(self, __context: tp.Any) -> None:
-        if self.device is None:
-            self.device = get_device()
 
     @infra.apply
     def compute(self) -> tp.Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -181,7 +175,7 @@ class FeatureImportance(BaseModelSharing):
 
         logger.info(
             f"Computing permutation feature importance with {self.n_perm} permutations "
-            f"for {clusters.Cluster.max() + 1} clusters of feature pairs on device {self.device}."
+            f"for {clusters.Cluster.max() + 1} clusters of feature pairs."
         )
 
         all_importances = []

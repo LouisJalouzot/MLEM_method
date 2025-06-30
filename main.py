@@ -47,7 +47,7 @@ def main(config: dict = {}):
     flat_configs.append(flat_first_config)
     first_config.update(base_config)
     first_config.update({"infra": infra_gpu})
-    results = [TargetClass(**first_config)]
+    results = [TargetClass(**first_config).infra.job().result()]
 
     def aux(flat_config, config):
         return flat_config, base_class.infra.clone_obj(config)
@@ -88,6 +88,6 @@ if __name__ == "__main__":
             with open(config_file, "r") as f:
                 config = yaml.safe_load(f)
             for i, df in enumerate(main(config)):
-                df.to_parquet(config_file.parent / f"results_{i}.parquet")
+                df.to_parquet(config_file.parent / f"{i}.parquet")
     else:
         main()

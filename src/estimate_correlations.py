@@ -166,18 +166,14 @@ class EstimateCorrelations(BaseModel):
     clustering_linkage: tp.Literal["single", "complete", "average", "ward"] = "single"
     clustering_threshold: float = 0
 
-    device: str = None
+    device: tp.Optional[str] = None
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
 
-    def model_post_init(self, __context: tp.Any) -> None:
-        if self.device is None:
-            self.device = get_device()
-
     @infra.apply
     def estimate_correlations(self) -> tp.Tuple[torch.Tensor, int]:
-        X = self.dataset.encode().to(self.device)
+        X = self.dataset.encode().to(self.device or get_device())
         dataloader = self.dataloader_builder.build_for_estimation(X)
 
         correlations, n_pairs = estimate_correlations(
