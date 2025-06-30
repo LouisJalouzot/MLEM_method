@@ -188,8 +188,10 @@ class FeatureImportance(BaseModelSharing):
             weights = model.get_flat_forwatted_W(pfeatures=self.dataset.pfeatures)
             weights["cv"] = i
             weights["split"] = "train"
-            weights["converged"] = logs.converged.iloc[0]
-            weights["training_duration"] = logs["Step Duration"].sum()
+            weights["converged"] = False if logs.empty else logs.converged.iloc[0]
+            weights["training_duration"] = (
+                0 if logs.empty else logs["Step Duration"].sum()
+            )
             weights["n_epochs"] = len(logs)
             all_weights.append(weights)
             for dl, split in [(train_dl, "train"), (test_dl, "test")]:
