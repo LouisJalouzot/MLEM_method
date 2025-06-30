@@ -4,6 +4,8 @@ base_config:
   dataset:
     path: datasets/simulated.csv
   trainer:
+    dataloader_builder:
+      cv: 5
     eps: 1e-9
     representations:
       level: simulated

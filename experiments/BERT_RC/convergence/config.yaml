@@ -4,9 +4,12 @@ base_config:
   dataset:
     path: datasets/relative_clause.csv
   trainer:
+    dataloader_builder:
+      cv: 5
     eps: 1e-9
     representations:
       model_name: bert-base-uncased
+      layer: 7
       level: sentence
 
 grid_search_prepare:
@@ -18,31 +21,32 @@ grid_search:
     - triu
     - diagonal
     - cholesky
-  trainer.representations.layer:
-    - 1
-    - 2
-    - 3
-    - 4
-    - 5
-    - 6
-    - 7
-    - 8
-    - 9
-    - 10
-    - 11
-    - 12
-  trainer.representations.noise_level:
-    - 0
-    - 0.1
-    - 0.2
-    - 0.3
-    - 0.4
-    - 0.5
-    - 0.6
-    - 0.7
-    - 0.8
-    - 0.9
-    - 1.0
+    - exp
+  # trainer.representations.layer:
+  #   - 1
+  #   - 2
+  #   - 3
+  #   - 4
+  #   - 5
+  #   - 6
+  #   - 7
+  #   - 8
+  #   - 9
+  #   - 10
+  #   - 11
+  #   - 12
+  # trainer.representations.noise_level:
+  #   - 0
+  #   - 0.1
+  #   - 0.2
+  #   - 0.3
+  #   - 0.4
+  #   - 0.5
+  #   - 0.6
+  #   - 0.7
+  #   - 0.8
+  #   - 0.9
+  #   - 1.0
   trainer.max_epochs:
     - 0
     - 1

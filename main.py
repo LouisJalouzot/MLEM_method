@@ -77,7 +77,7 @@ def main(config: dict = {}):
                 df[k] = v
         all_dfs.append(dfs)
 
-    for i, dfs in enumerate(zip(*all_dfs)):
+    for dfs in zip(*all_dfs):
         yield pd.concat(dfs, ignore_index=True)
 
 
