@@ -47,6 +47,7 @@ class PairwiseDataloader(Dataset):
         self.min = torch.inf
         self.max = -torch.inf
         self.min_max_scale = min_max_scale
+        self.logged_debug = False
 
         if distance == "cosine":
             self.distance = lambda x, y: 1 - F.cosine_similarity(x, y, dim=-1)
@@ -66,10 +67,11 @@ class PairwiseDataloader(Dataset):
             raise ValueError("Y is not provided.")
 
     def sample(self, n_pairs=4096, n_trials=1, get_idx=False, only_valid=False):
-        if n_pairs > self.max_n_pairs:
+        if n_pairs > self.max_n_pairs and not self.logged_debug:
             logger.debug(
                 f"Number of pairs requested ({n_pairs}) is greater than the total number of pairs in the data ({self.max_n_pairs})."
             )
+            self.logged_debug = True
 
         n_pairs *= n_trials
 
