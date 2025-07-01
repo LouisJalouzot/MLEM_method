@@ -31,7 +31,7 @@ def train(
     lr: float = 0.1,
     weight_decay: float = 0,
     max_epochs: int = 500,
-    eps: float = 1e-2,
+    eps: float = 1e-3,
     device: str = "cpu",
     monitor: str = "diff_norm",
     patience: int = 20,
@@ -167,7 +167,7 @@ class Trainer(BaseModelSharing):
     lr: float = 0.1
     weight_decay: float = 0
     max_epochs: int = 500
-    eps: float = 1e-2
+    eps: float = 1e-3
     device: str | None = None
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
