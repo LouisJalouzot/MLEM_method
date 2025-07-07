@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from loguru import logger
 from pydantic import ConfigDict
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, train_test_split
 from torch.utils.data import Dataset
 
 from src.utils import BaseModel
@@ -120,12 +120,18 @@ PairwiseDataLoaderGenerator = tp.Generator[
 
 
 class PairwiseDataloaderBuilder(BaseModel):
-    cv: int | None = None
+    cv: int | float | None = None
     distance: str | float | int = 2
     nan_to_num: float = 0
     min_max_scale: bool = True
 
     model_config: ConfigDict = ConfigDict(extra="forbid")
+
+    def model_post_init(self, context):
+        if isinstance(self.cv, int):
+            assert self.cv > 1, "if cv is an int, it needs to be greater than 1"
+        elif isinstance(self.cv, float):
+            assert 0 < self.cv < 1, "if cv is a float, it needs to be between 0 and 1"
 
     def build_for_estimation(self, X) -> PairwiseDataloader:
         return PairwiseDataloader(
@@ -151,12 +157,19 @@ class PairwiseDataloaderBuilder(BaseModel):
             nan_to_num=self.nan_to_num,
             min_max_scale=self.min_max_scale,
         )
-        if self.cv:
+        assert X is not None or Y is not None, "X or Y must be provided"
+        if self.cv is None:
+            yield build_dl(X, Y), build_dl(X, Y)
+        if isinstance(self.cv, int):
             kf = KFold(n_splits=self.cv, shuffle=True, random_state=0)
             for i, (train_index, test_index) in enumerate(kf.split(X), start=1):
                 train_dl = build_dl(X[train_index], Y[train_index])
                 test_dl = build_dl(X[test_index], Y[test_index])
                 logger.info(f"Split {i} of {self.cv}")
                 yield train_dl, test_dl
-        else:
-            yield build_dl(X, Y), build_dl(X, Y)
+        elif isinstance(self.cv, float):
+            X_train, X_test, Y_train, Y_test = train_test_split(
+                X, Y, test_size=self.cv, random_state=0
+            )
+
+            yield build_dl(X_train, Y_train), build_dl(X_test, Y_test)
