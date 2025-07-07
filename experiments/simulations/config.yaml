@@ -5,10 +5,12 @@ base_config:
     path: datasets/simulated.csv
   trainer:
     dataloader_builder:
-      cv: 5
+      cv: 0.8
     eps: 1e-9
     representations:
       level: simulated
+
+seed: trainer.representations.seed
 
 grid_search:
   trainer.model_builder.param:

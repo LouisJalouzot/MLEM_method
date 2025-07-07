@@ -141,6 +141,7 @@ class WordRepresentations(BaseModel):
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
+        "seed",
         "device",
         "batch_size",
     )
@@ -164,7 +165,9 @@ class WordRepresentations(BaseModel):
             word_representations[na_words] = 0
 
         # Add artificial noise
-        word_representations += torch.randn_like(word_representations) * self.noise_level
+        noise = np.random.normal(size=word_representations.shape) * self.noise_level
+        noise = torch.from_numpy(noise).float().to(word_representations.device)
+        word_representations += noise
 
         return word_representations
 

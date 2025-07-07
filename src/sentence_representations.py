@@ -49,6 +49,7 @@ class SentenceRepresentations(BaseModel):
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
+        "seed",
         "batch_size",
         "device",
     )
@@ -66,9 +67,9 @@ class SentenceRepresentations(BaseModel):
         sentence_representations = sentence_representations[:, self.layer]
 
         # Add artificial noise
-        sentence_representations += (
-            torch.randn_like(sentence_representations) * self.noise_level
-        )
+        noise = np.random.normal(size=sentence_representations.shape) * self.noise_level
+        noise = torch.from_numpy(noise).float().to(sentence_representations.device)
+        sentence_representations += noise
 
         return sentence_representations
 
