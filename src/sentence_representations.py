@@ -1,5 +1,6 @@
 import typing as tp
 
+import numpy as np
 import torch
 from exca import TaskInfra
 from loguru import logger
@@ -41,6 +42,7 @@ class SentenceRepresentations(BaseModel):
     layer: int = 5
     units: tp.List[int] = None
     noise_level: float = 0.0
+    seed: int = 0
 
     device: tp.Optional[str] = None
     batch_size: int = 32
@@ -50,6 +52,9 @@ class SentenceRepresentations(BaseModel):
         "batch_size",
         "device",
     )
+
+    def model_post_init(self, context):
+        np.random.seed(self.seed)
 
     def __call__(self):
         # (n_sentences, n_layers+1, hidden_size)

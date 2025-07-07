@@ -18,12 +18,14 @@ class SimulatedRepresentations(BaseModel):
     type: tp.Literal["ground-truth", "interaction"] = "ground-truth"
     noise_level: float = 0.1
     interaction_strength: int = 3
+    seed: int = 0
     _gt_weights: pd.DataFrame = None
 
     model_config: ConfigDict = ConfigDict(extra="forbid")
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
 
     def model_post_init(self, context):
+        np.random.seed(self.seed)
         self._gt_weights = pd.DataFrame(
             {
                 "Feature": [

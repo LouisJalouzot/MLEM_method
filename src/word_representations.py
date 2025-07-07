@@ -1,13 +1,13 @@
 import string
 import typing as tp
 
+import numpy as np
 import pandas as pd
 import torch
 from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
 from torch.masked import masked_tensor
-from torch.nn.utils.rnn import pad_sequence
 from transformers import AutoConfig
 
 from src.dataset import Dataset
@@ -134,6 +134,7 @@ class WordRepresentations(BaseModel):
     layer: int = 5
     units: tp.List[int] = None
     noise_level: float = 0.0
+    seed: int = 0
 
     device: tp.Optional[str] = None
     batch_size: int = 32
@@ -143,6 +144,9 @@ class WordRepresentations(BaseModel):
         "device",
         "batch_size",
     )
+
+    def model_post_init(self, context):
+        np.random.seed(self.seed)
 
     def __call__(self):
         # (n_words, n_layers+1, hidden_size)
