@@ -10,7 +10,8 @@ base_config:
     representations:
       level: simulated
 
-seed: trainer.representations.seed
+seed_target: trainer.representations.seed
+n_seeds: 5
 
 grid_search:
   trainer.model_builder.param:
