@@ -10,9 +10,6 @@ base_config:
     representations:
       level: simulated
 
-seed_target: trainer.representations.seed
-n_seeds: 5
-
 grid_search:
   dataset.seed:
     - 0
