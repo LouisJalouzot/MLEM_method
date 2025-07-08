@@ -2,7 +2,7 @@ target: src.feature_importance.FeatureImportance
 
 base_config:
   dataset:
-    path: datasets/simulated.csv
+    path: simulated
   trainer:
     dataloader_builder:
       cv: 0.2
