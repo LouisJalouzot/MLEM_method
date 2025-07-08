@@ -1,3 +1,5 @@
+import hashlib
+import json
 import random
 import subprocess
 import sys
@@ -16,6 +18,7 @@ from statsmodels.stats.descriptivestats import describe
 logger.remove()
 logger.add(sink=sys.stdout, level="DEBUG")
 
+np.random.seed(0)
 torch.manual_seed(0)
 
 
@@ -170,18 +173,19 @@ def compute_stats(data, alpha=0.01):
     ).T
 
 
+def seed_from_basemodel(model: BaseModel):
+    config_dict = model.model_dump()
+    config_dict.pop("infra", None)
+    config_str = json.dumps(config_dict, sort_keys=True, default=str)
+    config_hash = hashlib.sha256(config_str.encode()).hexdigest()
+
+    return int(config_hash, 16) % (2**32)
+
+
 infra_gpu = """
 folder: .cache
 cluster: auto
 mode: retry
-cpus_per_task: 24
-gpus_per_node: 1
-timeout_min: 120
-slurm_qos: qos_gpu_h100-dev
-slurm_constraint: h100
-slurm_account: ioj@h100
-slurm_additional_parameters:
-    hint: nomultithread
 """
 infra_gpu = yaml.safe_load(infra_gpu)
 
@@ -189,10 +193,5 @@ infra_cpu = """
 folder: .cache
 cluster: auto
 mode: retry
-cpus_per_task: 8
-timeout_min: 120
-slurm_account: ioj@cpu
-slurm_additional_parameters:
-    hint: nomultithread
 """
 infra_cpu = yaml.safe_load(infra_cpu)

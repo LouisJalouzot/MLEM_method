@@ -193,6 +193,9 @@ class FeatureImportance(BaseModelSharing):
                 0 if logs.empty else logs["Step Duration"].sum()
             )
             weights["n_epochs"] = len(logs)
+            if hasattr(self.trainer.representations, "gt_weights"):
+                weights = weights.merge(self.trainer.representations.gt_weights)
+                weights["L2"] = np.linalg.norm(weights.GTWeight - weights.Weight)
             all_weights.append(weights)
             for dl, split in [(train_dl, "train"), (test_dl, "test")]:
                 importances, score = compute_feature_importance(

@@ -13,6 +13,9 @@ from src.utils import BaseModel, encode_df
 
 class Dataset(BaseModel):
     path: str = "datasets/short_sentence.csv"
+    seed: int = 0
+    n_features_simu: int = 16
+    n_samples_simu: int = 256
     _features: tp.List[str] = None
     _triu_indices: tp.Tuple[np.ndarray, np.ndarray] = None
     _pfeatures: tp.List[str] = None
@@ -27,10 +30,22 @@ class Dataset(BaseModel):
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def model_post_init(self, __context):
+        np.random.seed(self.seed)
         self.features
 
     def read(self, only_columns=False) -> pd.DataFrame:
-        if self.path.endswith(".csv"):
+        if self.path == "simulated":
+            features = np.array([f"Feat. {i+1}" for i in range(self.n_features_simu)])
+            if only_columns:
+                return features
+            else:
+                return pd.DataFrame(
+                    {
+                        f: np.random.choice(["A", "B"], self.n_samples_simu)
+                        for f in features
+                    }
+                )
+        elif self.path.endswith(".csv"):
             data = pd.read_csv(self.path, nrows=0 if only_columns else None)
             if only_columns:
                 return data.columns.values
@@ -46,7 +61,6 @@ class Dataset(BaseModel):
         if self._features is not None:
             return self._features
         else:
-            assert Path(self.path).exists(), f"File {self.path} does not exist"
             features = self.read(only_columns=True)
             if "word" in features:
                 features = features[
