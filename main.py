@@ -26,6 +26,8 @@ def yield_grid_search(grid_config, seed_target=None, n_seeds=1):
             for j in range(n_seeds):
                 flat_config[seed_target] = i * n_seeds + j
                 yield flat_config, unflatten(flat_config)
+        else:
+            yield flat_config, unflatten(flat_config)
 
 
 def run_grid_search(base_class, grid_search, seed_target=None, n_seeds=1):

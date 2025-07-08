@@ -8,7 +8,7 @@ from exca import TaskInfra
 from pyarrow import parquet
 from pydantic import ConfigDict
 
-from src.utils import BaseModel, encode_df
+from src.utils import BaseModel, encode_df, seed_from_basemodel
 
 
 class Dataset(BaseModel):
@@ -25,13 +25,20 @@ class Dataset(BaseModel):
     _sentences: tp.List[str] = None
     _words: tp.List[str] = None
     _sentence_id: tp.List[tp.Any] = None
+    _rng: np.random.Generator = None
 
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def model_post_init(self, __context):
-        np.random.seed(self.seed)
         self.features
+
+    @property
+    def rng(self):
+        if self._rng is None:
+            self._rng = np.random.default_rng(self.seed)
+
+        return self._rng
 
     def read(self, only_columns=False) -> pd.DataFrame:
         if self.path == "simulated":
@@ -41,7 +48,7 @@ class Dataset(BaseModel):
             else:
                 return pd.DataFrame(
                     {
-                        f: np.random.choice(["A", "B"], self.n_samples_simu)
+                        f: self.rng.choice(["A", "B"], self.n_samples_simu)
                         for f in features
                     }
                 )
