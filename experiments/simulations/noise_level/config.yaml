@@ -17,11 +17,14 @@ grid_search:
     - 0
     - 1
     - 2
+    - 3
+    - 4
   trainer.representations.noise_level:
-    - 0.1
-    - 0.3
-    - 0.6
-    - 0.9
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
   trainer.model_builder.param:
     - triu
     - cholesky
