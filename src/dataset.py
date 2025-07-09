@@ -8,14 +8,11 @@ from exca import TaskInfra
 from pyarrow import parquet
 from pydantic import ConfigDict
 
-from src.utils import BaseModel, encode_df, seed_from_basemodel
+from src.utils import BaseModel, encode_df
 
 
 class Dataset(BaseModel):
     path: str = "datasets/short_sentence.csv"
-    seed: int = 0
-    n_features_simu: int = 16
-    n_samples_simu: int = 256
     _features: tp.List[str] = None
     _triu_indices: tp.Tuple[np.ndarray, np.ndarray] = None
     _pfeatures: tp.List[str] = None
@@ -34,17 +31,7 @@ class Dataset(BaseModel):
 
     def read(self, only_columns=False) -> pd.DataFrame:
         if self.path == "simulated":
-            features = np.array([f"Feat. {i+1}" for i in range(self.n_features_simu)])
-            if only_columns:
-                return features
-            else:
-                rng = np.random.default_rng(seed_from_basemodel(self))
-                df = pd.DataFrame(
-                    rng.choice(["A", "B"], size=(self.n_samples_simu, len(features))),
-                    columns=features,
-                )
-
-                return df
+            raise ValueError("Do not call read for simulated dataset.")
         elif self.path.endswith(".csv"):
             data = pd.read_csv(self.path, nrows=0 if only_columns else None)
             if only_columns:
@@ -58,7 +45,9 @@ class Dataset(BaseModel):
 
     @property
     def features(self) -> np.ndarray:
-        if self._features is not None:
+        if self.path == "simulated":
+            self._level = "simulated"
+        elif self._features is not None:
             return self._features
         else:
             features = self.read(only_columns=True)
@@ -70,8 +59,6 @@ class Dataset(BaseModel):
             elif "sentence" in features:
                 self._level = "sentence"
                 features = features[features != "sentence"]
-            elif "simulated" in self.path:
-                self._level = "simulated"
             self._features = np.array(features, dtype=str)
             self._triu_indices = np.triu_indices(len(features))
             self._pfeatures = np.array(
@@ -135,4 +122,6 @@ class Dataset(BaseModel):
 
     @infra.apply
     def encode(self) -> torch.Tensor:
+        if self.path == "simulated":
+            raise ValueError("Do not call encode for simulated dataset.")
         return encode_df(self.df_features)

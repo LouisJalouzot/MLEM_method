@@ -10,7 +10,7 @@ from sklearn.manifold import MDS
 from sklearn.preprocessing import StandardScaler
 
 from src.dataset import Dataset
-from src.utils import BaseModel, seed_from_basemodel
+from src.utils import BaseModel, encode_df, seed_from_basemodel
 
 
 class SimulatedRepresentations(BaseModel):
@@ -18,6 +18,9 @@ class SimulatedRepresentations(BaseModel):
     level: tp.Literal["simulated"] = "simulated"
     noise_level: float = 0.1
     n_components: int = 768
+    n_features: int = 16
+    n_samples: int = 256
+    seed: int = 0
     _W: np.ndarray = None
     _gt_weights: pd.DataFrame = None
 
@@ -39,19 +42,31 @@ class SimulatedRepresentations(BaseModel):
         return self._gt_weights
 
     def init_weights(self):
-        features = self.dataset.features
-        n_features = len(features)
-        W = make_spd_matrix(n_features, random_state=seed_from_basemodel(self))
+        W = make_spd_matrix(self.n_features, random_state=seed_from_basemodel(self))
         W /= np.linalg.norm(W, ord="fro")
         self._W = W
-        W_triu = W[*self.dataset.triu_indices]
-        self._gt_weights = pd.DataFrame(
-            {"Feature": self.dataset.pfeatures, "GTWeight": W_triu}
+        features = np.array([f"Feat. {i+1}" for i in range(self.n_features)], dtype=str)
+        triu_indices = np.triu_indices(self.n_features)
+        pfeatures = np.array(
+            [
+                f"({features[i]} x {features[j]})" if i != j else features[i]
+                for i, j in zip(*triu_indices)
+            ],
+            dtype=str,
         )
+        W_triu = W[*triu_indices]
+        self._gt_weights = pd.DataFrame({"Feature": pfeatures, "GTWeight": W_triu})
 
-    @infra.apply(exclude_from_cache_uid=["noise_level"])
+    @infra.apply
     def forward(self):
-        X = self.dataset.encode()
+        rng = np.random.default_rng(seed_from_basemodel(self))
+        df = pd.DataFrame(
+            rng.choice(
+                ["A", "B"],
+                size=(self.n_samples, self.n_features),
+            ),
+        )
+        X = encode_df(df)
 
         pX = (X[:, None] - X).abs().clip(0, 1)
         gt_dist = (pX @ self.W * pX).sum(dim=2)
