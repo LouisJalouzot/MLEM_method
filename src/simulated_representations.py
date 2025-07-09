@@ -49,7 +49,7 @@ class SimulatedRepresentations(BaseModel):
             {"Feature": self.dataset.pfeatures, "GTWeight": W_triu}
         )
 
-    def forward(self):
+    def __call__(self):
         if self._repr is None:
             X = self.dataset.encode()
 
@@ -60,11 +60,8 @@ class SimulatedRepresentations(BaseModel):
                 dissimilarity="precomputed",
             )
             repr = mds.fit_transform(gt_dist)
-            self._repr = StandardScaler().fit_transform(repr)
+            scale = repr.std(axis=0)
+            noise = np.random.normal(scale=scale, size=repr.shape) * self.noise_level
+            self._repr = torch.from_numpy(repr + noise)
 
         return self._repr
-
-    def __call__(self):
-        noise = np.random.normal(size=self.forward().shape) * self.noise_level
-
-        return torch.from_numpy(self.forward() + noise)
