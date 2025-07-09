@@ -13,28 +13,23 @@ from unflatten import unflatten
 from src.utils import infra_cpu, infra_gpu
 
 
-def yield_grid_search(grid_config, seed_target=None, n_seeds=1):
+def yield_grid_search(grid_config):
     if not grid_config:
         yield {}
         return
 
     keys = grid_config.keys()
     values = grid_config.values()
-    for i, v in enumerate(product(*values)):
+    for v in product(*values):
         flat_config = dict(zip(keys, v))
-        if seed_target:
-            for j in range(n_seeds):
-                flat_config[seed_target] = i * n_seeds + j
-                yield flat_config, unflatten(flat_config)
-        else:
-            yield flat_config, unflatten(flat_config)
+        yield flat_config, unflatten(flat_config)
 
 
-def run_grid_search(base_class, grid_search, seed_target=None, n_seeds=1):
+def run_grid_search(base_class, grid_search, method=None):
     flat_configs = []
     n_configs = math.prod(len(v) for v in grid_search.values())
     with base_class.infra.job_array() as array:
-        with tqdm(total=n_configs * n_seeds, desc="Creating tasks") as pbar:
+        with tqdm(total=n_configs, desc="Creating tasks") as pbar:
             for flat_config, task in Parallel(
                 n_jobs=-2, return_as="generator", prefer="threads"
             )(
@@ -44,9 +39,7 @@ def run_grid_search(base_class, grid_search, seed_target=None, n_seeds=1):
                         base_class.infra.clone_obj(config),
                     )
                 )(flat_config, config)
-                for flat_config, config in yield_grid_search(
-                    grid_search, seed_target, n_seeds
-                )
+                for flat_config, config in yield_grid_search(grid_search)
             ):
                 flat_configs.append(flat_config)
                 array.append(task)
@@ -54,7 +47,10 @@ def run_grid_search(base_class, grid_search, seed_target=None, n_seeds=1):
 
     results = []
     for task in tqdm(array, desc="Waiting for completion and fetching results"):
-        results.append(task.infra.job().result())
+        if method is not None:
+            results.append(getattr(task.infra.job(), method)())
+        else:
+            results.append(task.infra.job().result())
 
     return flat_configs, results
 
@@ -66,8 +62,7 @@ def main(config: dict = {}):
     module = importlib.import_module(module_name)
     TargetClass = getattr(module, class_name)
     base_config = config.get("base_config", {})
-    seed_target = config.get("seed_target", None)
-    n_seeds = config.get("n_seeds", 1)
+    method = config.get("method", None)
 
     if "grid_search_prepare" in config:
         base_config.update({"infra": infra_gpu})
@@ -76,15 +71,16 @@ def main(config: dict = {}):
         run_grid_search(
             base_class,
             config["grid_search_prepare"],
-            seed_target=seed_target,
-            n_seeds=1,
+            method=method,
         )
 
     base_config.update({"infra": infra_cpu})
     base_class = TargetClass(**base_config)
     print("Running grid search on CPU")
     flat_configs, results = run_grid_search(
-        base_class, config["grid_search"], seed_target=seed_target, n_seeds=n_seeds
+        base_class,
+        config["grid_search"],
+        method=method,
     )
 
     all_dfs = []

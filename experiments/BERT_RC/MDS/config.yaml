@@ -1,4 +1,5 @@
 target: src.reduce_dimensions.ReduceDimensions
+method: transform
 
 base_config:
   dataset:
