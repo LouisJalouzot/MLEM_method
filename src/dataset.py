@@ -1,5 +1,4 @@
 import typing as tp
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -8,7 +7,7 @@ from exca import TaskInfra
 from pyarrow import parquet
 from pydantic import ConfigDict
 
-from src.utils import BaseModel, encode_df, seed_from_basemodel
+from src.utils import BaseModel, encode_df
 
 
 class Dataset(BaseModel):
@@ -38,9 +37,10 @@ class Dataset(BaseModel):
             if only_columns:
                 return features
             else:
-                rng = np.random.default_rng(seed_from_basemodel(self))
                 df = pd.DataFrame(
-                    rng.choice(["A", "B"], size=(self.n_samples_simu, len(features))),
+                    np.random.choice(
+                        ["A", "B"], size=(self.n_samples_simu, len(features))
+                    ),
                     columns=features,
                 )
 

@@ -3,14 +3,13 @@ import typing as tp
 import numpy as np
 import pandas as pd
 import torch
-from exca import TaskInfra
 from pydantic import ConfigDict, Field
 from sklearn.datasets import make_spd_matrix
 from sklearn.manifold import MDS
 from sklearn.preprocessing import StandardScaler
 
 from src.dataset import Dataset
-from src.utils import BaseModel, seed_from_basemodel
+from src.utils import BaseModel
 
 
 class SimulatedRepresentations(BaseModel):
@@ -18,11 +17,12 @@ class SimulatedRepresentations(BaseModel):
     level: tp.Literal["simulated"] = "simulated"
     noise_level: float = 0.1
     n_components: int = 768
+    seed: int = 0
     _W: np.ndarray = None
     _gt_weights: pd.DataFrame = None
+    _repr: np.ndarray = None
 
     model_config: ConfigDict = ConfigDict(extra="forbid")
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
 
     @property
     def W(self):
@@ -41,7 +41,7 @@ class SimulatedRepresentations(BaseModel):
     def init_weights(self):
         features = self.dataset.features
         n_features = len(features)
-        W = make_spd_matrix(n_features, random_state=seed_from_basemodel(self))
+        W = make_spd_matrix(n_features)
         W /= np.linalg.norm(W, ord="fro")
         self._W = W
         W_triu = W[*self.dataset.triu_indices]
@@ -49,24 +49,22 @@ class SimulatedRepresentations(BaseModel):
             {"Feature": self.dataset.pfeatures, "GTWeight": W_triu}
         )
 
-    @infra.apply(exclude_from_cache_uid=["noise_level"])
     def forward(self):
-        X = self.dataset.encode()
+        if self._repr is None:
+            X = self.dataset.encode()
 
-        pX = (X[:, None] - X).abs().clip(0, 1)
-        gt_dist = (pX @ self.W * pX).sum(dim=2)
-        mds = MDS(
-            n_components=self.n_components,
-            dissimilarity="precomputed",
-            random_state=0,
-        )
-        repr = mds.fit_transform(gt_dist)
-        repr = StandardScaler().fit_transform(repr)
+            pX = (X[:, None] - X).abs().clip(0, 1)
+            gt_dist = (pX @ self.W * pX).sum(dim=2)
+            mds = MDS(
+                n_components=self.n_components,
+                dissimilarity="precomputed",
+            )
+            repr = mds.fit_transform(gt_dist)
+            self._repr = StandardScaler().fit_transform(repr)
 
-        return repr
+        return self._repr
 
     def __call__(self):
-        rng = np.random.default_rng(seed_from_basemodel(self))
-        noise = rng.normal(size=self.forward().shape) * self.noise_level
+        noise = np.random.normal(size=self.forward().shape) * self.noise_level
 
         return torch.from_numpy(self.forward() + noise)

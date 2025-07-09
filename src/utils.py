@@ -18,7 +18,6 @@ from statsmodels.stats.descriptivestats import describe
 logger.remove()
 logger.add(sink=sys.stdout, level="DEBUG")
 
-np.random.seed(0)
 torch.manual_seed(0)
 
 

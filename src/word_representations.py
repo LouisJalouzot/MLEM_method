@@ -12,7 +12,7 @@ from transformers import AutoConfig
 
 from src.dataset import Dataset
 from src.hidden_states import aggregate_masked_tensor, compute_hidden_states
-from src.utils import BaseModel, get_device, seed_from_basemodel
+from src.utils import BaseModel, get_device
 
 
 def cum_join_index(words):
@@ -134,6 +134,7 @@ class WordRepresentations(BaseModel):
     layer: int = 5
     units: tp.List[int] = None
     noise_level: float = 0.0
+    seed: int = 0
 
     device: tp.Optional[str] = None
     batch_size: int = 32
@@ -171,7 +172,6 @@ class WordRepresentations(BaseModel):
             )
             word_representations[na_words] = 0
 
-        rng = np.random.default_rng(seed_from_basemodel(self))
-        noise = rng.normal(size=word_representations.shape) * self.noise_level
+        noise = np.random.normal(size=word_representations.shape) * self.noise_level
 
         return word_representations + torch.from_numpy(noise)
