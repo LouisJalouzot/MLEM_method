@@ -101,8 +101,15 @@ def train(
             )
             converged = True
             break
-        if monitor in ["train_score", "test_score"]:
-            current_score = train_score if monitor == "train_score" else test_score
+        if monitor in ["train_score", "test_score", "loss"]:
+            case monitor:
+                case "train_score":
+                    current_score = train_score
+                case "test_score":
+                    current_score = test_score
+                case "loss":
+                    current_score = loss.item()
+                
             improved = (model.maximize and current_score > best_score) or (
                 not model.maximize and current_score < best_score
             )
@@ -173,7 +180,7 @@ class Trainer(BaseModelSharing):
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
         "dataset": ["estimate_correlations", "representations"],
     }
-    monitor: tp.Literal["grad_norm", "diff_norm", "train_score", "test_score"] = (
+    monitor: tp.Literal["grad_norm", "diff_norm", "train_score", "test_score", "loss"] = (
         "diff_norm"
     )
     patience: int = 100
