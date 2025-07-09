@@ -234,7 +234,8 @@ class Trainer(BaseModelSharing):
 
         all_models = [self.get_model(state_dict=sd) for sd in all_state_dicts]
 
-        if len(all_models) == 1:
-            return all_models[0], all_logs[0]
-        else:
-            return all_models, all_logs
+        return all_models, all_logs
+
+    def one_log(self) -> pd.DataFrame:
+        _, all_logs = self._train_cached()
+        return all_logs[0]
