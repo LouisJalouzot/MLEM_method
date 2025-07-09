@@ -102,14 +102,14 @@ def train(
             converged = True
             break
         if monitor in ["train_score", "test_score", "loss"]:
-            case monitor:
+            match monitor:
                 case "train_score":
                     current_score = train_score
                 case "test_score":
                     current_score = test_score
                 case "loss":
                     current_score = loss.item()
-                
+
             improved = (model.maximize and current_score > best_score) or (
                 not model.maximize and current_score < best_score
             )
