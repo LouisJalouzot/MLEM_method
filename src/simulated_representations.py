@@ -7,6 +7,7 @@ from exca import TaskInfra
 from pydantic import ConfigDict, Field
 from sklearn.datasets import make_spd_matrix
 from sklearn.manifold import MDS
+from sklearn.preprocessing import StandardScaler
 
 from src.dataset import Dataset
 from src.utils import BaseModel, seed_from_basemodel
@@ -75,6 +76,7 @@ class SimulatedRepresentations(BaseModel):
         )
 
         repr = mds.fit_transform(gt_dist)
+        repr = StandardScaler().fit_transform(repr)
         noise = self.rng.normal(size=repr.shape) * self.noise_level
 
         return repr + noise
