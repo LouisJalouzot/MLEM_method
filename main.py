@@ -47,10 +47,11 @@ def run_grid_search(base_class, grid_search, method=None):
 
     results = []
     for task in tqdm(array, desc="Waiting for completion and fetching results"):
+        # Wait for computation to finish and retrieve result
+        result = task.infra.job().result()
         if method is not None:
-            results.append(getattr(task.infra.job(), method)())
-        else:
-            results.append(task.infra.job().result())
+            result = getattr(task, method)()
+        results.append(result)
 
     return flat_configs, results
 
@@ -85,6 +86,8 @@ def main(config: dict = {}):
 
     all_dfs = []
     for flat_config, dfs in zip(flat_configs, results):
+        if not isinstance(dfs, list):
+            dfs = [dfs]
         for df in dfs:
             for k, v in flat_config.items():
                 df[k] = v
