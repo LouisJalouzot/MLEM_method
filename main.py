@@ -88,6 +88,7 @@ def main(config: dict = {}):
     for flat_config, dfs in zip(flat_configs, results):
         if not isinstance(dfs, (list, tuple)):
             dfs = [dfs]
+        dfs = [df for df in dfs if isinstance(df, pd.DataFrame)]
         for df in dfs:
             for k, v in flat_config.items():
                 try:
