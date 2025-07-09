@@ -74,6 +74,7 @@ def train(
         W = model.get_W()
         diff_norm = (W - prev_w).norm(p=torch.inf).item()
         log = {
+            "Step": i,
             "Batch size": len(X_batch),
             "Loss": loss.item(),
             "Train score": train_score,
@@ -83,10 +84,7 @@ def train(
             "Diff norm": diff_norm,
         }
         logs.append(log)
-        logger.debug(
-            f"Step {i:<3}/{max_epochs} - "
-            + " - ".join([f"{k}: {v:<7.2g}" for k, v in log.items()])
-        )
+        logger.debug(" - ".join([f"{k}: {v:<7.2g}" for k, v in log.items()]))
         if monitor == "grad_norm" and grad_norm < eps:
             logger.info(
                 f"Convergence reached at step {i}/{max_epochs} "
@@ -236,4 +234,7 @@ class Trainer(BaseModelSharing):
 
         all_models = [self.get_model(state_dict=sd) for sd in all_state_dicts]
 
-        return all_models, all_logs
+        if len(all_models) == 1:
+            return all_models[0], all_logs[0]
+        else:
+            return all_models, all_logs
