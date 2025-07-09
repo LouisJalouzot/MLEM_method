@@ -18,8 +18,6 @@ class SimulatedRepresentations(BaseModel):
     level: tp.Literal["simulated"] = "simulated"
     noise_level: float = 0.1
     n_components: int = 768
-    _seed: int = None
-    _rng: np.random.Generator = None
     _W: np.ndarray = None
     _gt_weights: pd.DataFrame = None
 
@@ -27,35 +25,23 @@ class SimulatedRepresentations(BaseModel):
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
 
     @property
-    def seed(self):
-        if self._seed is None:
-            self._seed = seed_from_basemodel(self)
-
-        return self._seed
-
-    @property
-    def rng(self):
-        if self._rng is None:
-            self._rng = np.random.default_rng(self.seed)
-
-        return self._rng
-
-    @property
     def W(self):
         if self._W is None:
             self.init_weights()
+
         return self._W
 
     @property
     def gt_weights(self):
         if self._gt_weights is None:
             self.init_weights()
+
         return self._gt_weights
 
     def init_weights(self):
         features = self.dataset.features
         n_features = len(features)
-        W = make_spd_matrix(n_features, random_state=self.seed)
+        W = make_spd_matrix(n_features, random_state=seed_from_basemodel(self))
         W /= np.linalg.norm(W, ord="fro")
         self._W = W
         W_triu = W[*self.dataset.triu_indices]
@@ -63,7 +49,7 @@ class SimulatedRepresentations(BaseModel):
             {"Feature": self.dataset.pfeatures, "GTWeight": W_triu}
         )
 
-    @infra.apply
+    @infra.apply(exclude_from_cache_uid=["noise_level"])
     def forward(self):
         X = self.dataset.encode()
 
@@ -74,12 +60,13 @@ class SimulatedRepresentations(BaseModel):
             dissimilarity="precomputed",
             random_state=0,
         )
-
         repr = mds.fit_transform(gt_dist)
         repr = StandardScaler().fit_transform(repr)
-        noise = self.rng.normal(size=repr.shape) * self.noise_level
 
-        return repr + noise
+        return repr
 
     def __call__(self):
-        return torch.from_numpy(self.forward())
+        rng = np.random.default_rng(seed_from_basemodel(self))
+        noise = rng.normal(size=self.forward().shape) * self.noise_level
+
+        return torch.from_numpy(self.forward() + noise)

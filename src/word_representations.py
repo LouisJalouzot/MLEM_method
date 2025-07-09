@@ -12,7 +12,7 @@ from transformers import AutoConfig
 
 from src.dataset import Dataset
 from src.hidden_states import aggregate_masked_tensor, compute_hidden_states
-from src.utils import BaseModel, get_device
+from src.utils import BaseModel, get_device, seed_from_basemodel
 
 
 def cum_join_index(words):
@@ -134,20 +134,27 @@ class WordRepresentations(BaseModel):
     layer: int = 5
     units: tp.List[int] = None
     noise_level: float = 0.0
-    seed: int = 0
 
     device: tp.Optional[str] = None
     batch_size: int = 32
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
-        "seed",
         "device",
         "batch_size",
     )
 
-    def model_post_init(self, context):
-        np.random.seed(self.seed)
+    @infra.apply(exclude_from_cache_uid=["layer", "units", "noise_level"])
+    def forward(self) -> torch.Tensor:
+        # (n_words, n_layers+1, hidden_size)
+        return compute_word_representations(
+            words=self.dataset.words_df,
+            model_name=self.model_name,
+            batch_size=self.batch_size,
+            device=self.device or get_device(),
+            add_special_tokens=self.add_special_tokens,
+            token_aggregation=self.token_aggregation,
+        )
 
     def __call__(self):
         # (n_words, n_layers+1, hidden_size)
@@ -164,21 +171,7 @@ class WordRepresentations(BaseModel):
             )
             word_representations[na_words] = 0
 
-        # Add artificial noise
-        noise = np.random.normal(size=word_representations.shape) * self.noise_level
-        noise = torch.from_numpy(noise).float().to(word_representations.device)
-        word_representations += noise
+        rng = np.random.default_rng(seed_from_basemodel(self))
+        noise = rng.normal(size=word_representations.shape) * self.noise_level
 
-        return word_representations
-
-    @infra.apply(exclude_from_cache_uid=["layer", "units", "noise_level"])
-    def forward(self) -> torch.Tensor:
-        # (n_words, n_layers+1, hidden_size)
-        return compute_word_representations(
-            words=self.dataset.words_df,
-            model_name=self.model_name,
-            batch_size=self.batch_size,
-            device=self.device or get_device(),
-            add_special_tokens=self.add_special_tokens,
-            token_aggregation=self.token_aggregation,
-        )
+        return word_representations + torch.from_numpy(noise)

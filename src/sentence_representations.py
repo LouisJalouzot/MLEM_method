@@ -9,7 +9,7 @@ from transformers import AutoConfig
 
 from src.dataset import Dataset
 from src.hidden_states import aggregate_masked_tensor, compute_hidden_states
-from src.utils import BaseModel, get_device
+from src.utils import BaseModel, get_device, seed_from_basemodel
 
 
 def compute_sentence_representations(
@@ -42,20 +42,15 @@ class SentenceRepresentations(BaseModel):
     layer: int = 5
     units: tp.List[int] = None
     noise_level: float = 0.0
-    seed: int = 0
 
     device: tp.Optional[str] = None
     batch_size: int = 32
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
-        "seed",
         "batch_size",
         "device",
     )
-
-    def model_post_init(self, context):
-        np.random.seed(self.seed)
 
     def __call__(self):
         # (n_sentences, n_layers+1, hidden_size)
@@ -66,12 +61,10 @@ class SentenceRepresentations(BaseModel):
         # (n_sentences, hidden_size)
         sentence_representations = sentence_representations[:, self.layer]
 
-        # Add artificial noise
-        noise = np.random.normal(size=sentence_representations.shape) * self.noise_level
-        noise = torch.from_numpy(noise).float().to(sentence_representations.device)
-        sentence_representations += noise
+        rng = np.random.default_rng(seed_from_basemodel(self))
+        noise = rng.normal(size=sentence_representations.shape) * self.noise_level
 
-        return sentence_representations
+        return sentence_representations + torch.from_numpy(noise)
 
     @infra.apply(exclude_from_cache_uid=["layer", "units", "noise_level"])
     def forward(self) -> torch.Tensor:

@@ -25,7 +25,6 @@ class Dataset(BaseModel):
     _sentences: tp.List[str] = None
     _words: tp.List[str] = None
     _sentence_id: tp.List[tp.Any] = None
-    _rng: np.random.Generator = None
 
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
@@ -33,25 +32,19 @@ class Dataset(BaseModel):
     def model_post_init(self, __context):
         self.features
 
-    @property
-    def rng(self):
-        if self._rng is None:
-            self._rng = np.random.default_rng(self.seed)
-
-        return self._rng
-
     def read(self, only_columns=False) -> pd.DataFrame:
         if self.path == "simulated":
             features = np.array([f"Feat. {i+1}" for i in range(self.n_features_simu)])
             if only_columns:
                 return features
             else:
-                return pd.DataFrame(
-                    {
-                        f: self.rng.choice(["A", "B"], self.n_samples_simu)
-                        for f in features
-                    }
+                rng = np.random.default_rng(seed_from_basemodel(self))
+                df = pd.DataFrame(
+                    rng.choice(["A", "B"], size=(self.n_samples_simu, len(features))),
+                    columns=features,
                 )
+
+                return df
         elif self.path.endswith(".csv"):
             data = pd.read_csv(self.path, nrows=0 if only_columns else None)
             if only_columns:
