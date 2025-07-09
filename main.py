@@ -86,11 +86,15 @@ def main(config: dict = {}):
 
     all_dfs = []
     for flat_config, dfs in zip(flat_configs, results):
-        if not isinstance(dfs, list):
+        if not isinstance(dfs, (list, tuple)):
             dfs = [dfs]
         for df in dfs:
             for k, v in flat_config.items():
-                df[k] = v
+                try:
+                    df[k] = v
+                except Exception as e:
+                    print(f"Error adding config {k}: {v} to DataFrame: {e}")
+                    raise e
         all_dfs.append(dfs)
 
     for dfs in zip(*all_dfs):

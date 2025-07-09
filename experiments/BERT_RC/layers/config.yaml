@@ -9,12 +9,11 @@ base_config:
     eps: 1e-9
     representations:
       model_name: bert-base-uncased
-      layer: 7
       level: sentence
 
 grid_search_prepare:
-  trainer.max_epochs:
-    - 0
+  trainer.representations.layer:
+    - 7
 
 grid_search:
   trainer.model_builder.param:
