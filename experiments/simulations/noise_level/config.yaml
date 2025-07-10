@@ -12,13 +12,13 @@ base_config:
       level: simulated
 
 grid_search:
-  trainer.representations.seed:
+  trainer.dataset.seed:
     - 0
     - 1
     - 2
     - 3
     - 4
-  trainer.representations.noise_level:
+  trainer.dataset.noise_level:
     - 1
     - 2
     - 3
