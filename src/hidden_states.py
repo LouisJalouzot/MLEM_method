@@ -62,6 +62,7 @@ def compute_hidden_states(
         >>> print(offsets.shape)
         torch.Size([2, 8, 2])
     """
+    import torch
     from torch.masked import masked_tensor
     from transformers import AutoModel, AutoTokenizer
 
