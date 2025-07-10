@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 import typing as tp
 import warnings
 
-import torch
-from torch.masked import MaskedTensor, masked_tensor
+if tp.TYPE_CHECKING:
+    import torch
+    from torch.masked import MaskedTensor
+
 from tqdm.auto import tqdm
-from transformers import AutoModel, AutoTokenizer
 
 # Disable prototype warnings and such
 warnings.filterwarnings(action="ignore", category=UserWarning)
@@ -59,6 +62,9 @@ def compute_hidden_states(
         >>> print(offsets.shape)
         torch.Size([2, 8, 2])
     """
+    from torch.masked import masked_tensor
+    from transformers import AutoModel, AutoTokenizer
+
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token

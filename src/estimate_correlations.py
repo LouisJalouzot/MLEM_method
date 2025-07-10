@@ -1,12 +1,14 @@
+from __future__ import annotations
+
 import typing as tp
 
-import pandas as pd
-import torch
+if tp.TYPE_CHECKING:
+    import pandas as pd
+    import torch
+
 from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
-from scipy import stats
-from sklearn.cluster import AgglomerativeClustering
 
 from src.dataset import Dataset
 from src.pairwise_dataloader import PairwiseDataloader, PairwiseDataloaderBuilder
@@ -25,6 +27,8 @@ def batch_corrcoef(x: torch.Tensor, ddof: int = 1, eps: float = 1e-8) -> torch.T
     Returns:
         Batched correlation matrix of shape (B, D, D).
     """
+    import torch
+
     B, N, D = x.shape
     if N <= ddof:
         raise ValueError(f"Number of observations N={N} must be greater than ddof={ddof}")
@@ -60,6 +64,9 @@ def compute_ci(data: torch.Tensor, confidence: float = 0.99) -> torch.Tensor:
     Returns:
         Tensor of shape (2, T) with lower and upper bounds for each variable's mean.
     """
+    import torch
+    from scipy import stats
+
     n = data.shape[0]
     # Handle case with 1 or 0 samples, returning NaNs
     if n <= 1 or not (0 < confidence < 1):
@@ -99,6 +106,8 @@ def estimate_correlations(
     thresh: float = 0.01,
     ci_confidence: float = 0.99,
 ) -> tp.Tuple[torch.Tensor, int]:
+    import torch
+
     _, n_features = dataloader.get_X_shape()
     triu_indices = torch.triu_indices(n_features, n_features)
     sample_size = init_sample_size
@@ -173,6 +182,8 @@ class EstimateCorrelations(BaseModel):
 
     @infra.apply
     def estimate_correlations(self) -> tp.Tuple[torch.Tensor, int]:
+        import pandas as pd
+
         X = self.dataset.encode().to(self.device or get_device())
         dataloader = self.dataloader_builder.build_for_estimation(X)
 
@@ -200,6 +211,9 @@ class EstimateCorrelations(BaseModel):
         return correlations, n_pairs
 
     def cluster_features(self) -> pd.DataFrame:
+        import pandas as pd
+        from sklearn.cluster import AgglomerativeClustering
+
         correlations, _ = self.estimate_correlations()
         clustering = AgglomerativeClustering(
             metric="precomputed",

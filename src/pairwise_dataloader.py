@@ -1,16 +1,17 @@
+from __future__ import annotations
+
 import typing as tp
 
-import torch
-import torch.nn.functional as F
+if tp.TYPE_CHECKING:
+    import torch
+
 from loguru import logger
 from pydantic import ConfigDict
-from sklearn.model_selection import KFold, train_test_split
-from torch.utils.data import Dataset
 
 from src.utils import BaseModel
 
 
-class PairwiseDataloader(Dataset):
+class PairwiseDataloader:
     """
     A dataset that generates pairs of samples from two datasets (X and Y) and computes the distance between them.
     The dataset can be used for training models that learn to predict the distance between samples.
@@ -26,6 +27,9 @@ class PairwiseDataloader(Dataset):
         nan_to_num=0,
         min_max_scale=True,
     ):
+        import torch
+        from torch.nn import functional as F
+
         self.X = X
         self.Y = Y
         if X is not None and Y is not None:
@@ -67,6 +71,8 @@ class PairwiseDataloader(Dataset):
             raise ValueError("Y is not provided.")
 
     def sample(self, n_pairs=4096, n_trials=1, get_idx=False, only_valid=False):
+        import torch
+
         if n_pairs > self.max_n_pairs and not self.logged_debug:
             logger.debug(
                 f"Number of pairs requested ({n_pairs}) is greater than the total number of pairs in the data ({self.max_n_pairs})."
@@ -161,6 +167,8 @@ class PairwiseDataloaderBuilder(BaseModel):
         if self.cv is None:
             yield build_dl(X, Y), build_dl(X, Y)
         if isinstance(self.cv, int):
+            from sklearn.model_selection import KFold
+
             kf = KFold(n_splits=self.cv, shuffle=True, random_state=0)
             for i, (train_index, test_index) in enumerate(kf.split(X), start=1):
                 train_dl = build_dl(X[train_index], Y[train_index])
@@ -168,6 +176,8 @@ class PairwiseDataloaderBuilder(BaseModel):
                 logger.info(f"Split {i} of {self.cv}")
                 yield train_dl, test_dl
         elif isinstance(self.cv, float):
+            from sklearn.model_selection import train_test_split
+
             X_train, X_test, Y_train, Y_test = train_test_split(
                 X, Y, test_size=self.cv, random_state=0
             )

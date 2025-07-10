@@ -1,12 +1,13 @@
+from __future__ import annotations
+
 import typing as tp
 
 import numpy as np
-import pandas as pd
-import torch
+
+if tp.TYPE_CHECKING:
+    import pandas as pd
+
 from pydantic import ConfigDict, Field
-from sklearn.datasets import make_spd_matrix
-from sklearn.manifold import MDS
-from sklearn.preprocessing import StandardScaler
 
 from src.dataset import Dataset
 from src.utils import BaseModel
@@ -39,6 +40,9 @@ class SimulatedRepresentations(BaseModel):
         return self._gt_weights
 
     def init_weights(self):
+        import pandas as pd
+        from sklearn.datasets import make_spd_matrix
+
         features = self.dataset.features
         n_features = len(features)
         W = make_spd_matrix(n_features)
@@ -51,6 +55,9 @@ class SimulatedRepresentations(BaseModel):
 
     def __call__(self):
         if self._repr is None:
+            import torch
+            from sklearn.manifold import MDS
+
             X = self.dataset.encode()
 
             pX = (X[:, None] - X).abs().clip(0, 1)

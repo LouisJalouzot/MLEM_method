@@ -1,11 +1,9 @@
+from __future__ import annotations
+
 import typing as tp
 
 from exca import TaskInfra
 from pydantic import ConfigDict, Field
-from sklearn.decomposition import PCA
-from sklearn.manifold import MDS, TSNE
-from sklearn.metrics import pairwise_distances
-from umap import UMAP
 
 from src.dataset import Dataset
 from src.sentence_representations import SentenceRepresentations
@@ -66,9 +64,13 @@ class ReduceDimensions(BaseModelSharing):
         data = self.representations().numpy()
         match self.method:
             case "pca":
+                from sklearn.decomposition import PCA
+
                 model = PCA(n_components=self.n_components, random_state=0)
                 proj = model.fit_transform(data)
             case "tsne":
+                from sklearn.manifold import TSNE
+
                 model = TSNE(
                     n_components=self.n_components,
                     metric=self.distance,
@@ -78,6 +80,8 @@ class ReduceDimensions(BaseModelSharing):
                 )
                 proj = model.fit_transform(data)
             case "umap":
+                from umap import UMAP
+
                 model = UMAP(
                     n_components=self.n_components,
                     metric=self.distance,
@@ -87,6 +91,9 @@ class ReduceDimensions(BaseModelSharing):
                 )
                 proj = model.fit_transform(data)
             case "mds":
+                from sklearn.manifold import MDS
+                from sklearn.metrics import pairwise_distances
+
                 distance_matrix = pairwise_distances(data, metric=self.distance)
                 model = MDS(
                     n_components=self.n_components,

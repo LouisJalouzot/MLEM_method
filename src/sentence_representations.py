@@ -1,11 +1,14 @@
+from __future__ import annotations
+
 import typing as tp
 
 import numpy as np
-import torch
+
+if tp.TYPE_CHECKING:
+    import torch
+
 from exca import TaskInfra
-from loguru import logger
 from pydantic import ConfigDict, Field
-from transformers import AutoConfig
 
 from src.dataset import Dataset
 from src.hidden_states import aggregate_masked_tensor, compute_hidden_states
@@ -54,6 +57,8 @@ class SentenceRepresentations(BaseModel):
     )
 
     def __call__(self):
+        import torch
+
         # (n_sentences, n_layers+1, hidden_size)
         sentence_representations = self.forward()
         if self.units is not None:

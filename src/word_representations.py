@@ -1,14 +1,16 @@
+from __future__ import annotations
+
 import string
 import typing as tp
 
+if tp.TYPE_CHECKING:
+    import torch
+    import pandas as pd
+
 import numpy as np
-import pandas as pd
-import torch
 from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
-from torch.masked import masked_tensor
-from transformers import AutoConfig
 
 from src.dataset import Dataset
 from src.hidden_states import aggregate_masked_tensor, compute_hidden_states
@@ -73,6 +75,9 @@ def compute_word_representations(
         reps = compute_word_representations(words_df)
         ```
     """
+    import torch
+    from torch.masked import masked_tensor
+
     sentences = words.sentence.tolist()
     # (n_words)
     word_start_index = torch.tensor(words.start_idx.values, dtype=torch.long)
@@ -158,6 +163,8 @@ class WordRepresentations(BaseModel):
         )
 
     def __call__(self):
+        import torch
+
         # (n_words, n_layers+1, hidden_size)
         word_representations = self.forward()
         if self.units is not None:
