@@ -1,0 +1,27 @@
+target: src.trainer.Trainer
+method: one_log
+
+base_config:
+  dataset:
+    path: simulated
+    infra:
+      folder: null
+  dataloader_builder:
+    cv: 0.2
+  representations:
+    level: simulated
+    noise_level: 2
+  max_epochs: 2000
+  eps: 1e-9
+  monitor: diff_norm
+
+grid_search:
+  representations.seed:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+  model_builder.param:
+    - triu
+    - cholesky

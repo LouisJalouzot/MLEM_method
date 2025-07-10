@@ -8,7 +8,6 @@ base_config:
   trainer:
     dataloader_builder:
       cv: 0.2
-    eps: 1e-9
     representations:
       level: simulated
 
