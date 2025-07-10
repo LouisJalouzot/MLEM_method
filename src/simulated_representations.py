@@ -10,15 +10,13 @@ if tp.TYPE_CHECKING:
 from pydantic import ConfigDict, Field
 
 from src.dataset import Dataset
-from src.utils import BaseModel
+from src.utils import BaseModel, seed_from_basemodel
 
 
 class SimulatedRepresentations(BaseModel):
     dataset: Dataset = Field(default_factory=lambda: Dataset(path="simulated"))
     level: tp.Literal["simulated"] = "simulated"
-    noise_level: float = 0.1
     n_components: int = 768
-    seed: int = 0
     _W: np.ndarray = None
     _gt_weights: pd.DataFrame = None
     _repr: np.ndarray = None
@@ -65,10 +63,13 @@ class SimulatedRepresentations(BaseModel):
             mds = MDS(
                 n_components=self.n_components,
                 dissimilarity="precomputed",
+                random_state=0,
             )
             repr = mds.fit_transform(gt_dist)
             scale = repr.std(axis=0)
-            noise = np.random.normal(scale=scale, size=repr.shape) * self.noise_level
+            rng = np.random.default_rng(seed_from_basemodel(self))
+            noise = rng.normal(scale=scale, size=repr.shape)
+            noise *= self.dataset.noise_level
             self._repr = torch.from_numpy(repr + noise)
 
         return self._repr

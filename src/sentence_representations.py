@@ -12,7 +12,7 @@ from pydantic import ConfigDict, Field
 
 from src.dataset import Dataset
 from src.hidden_states import aggregate_masked_tensor, compute_hidden_states
-from src.utils import BaseModel, get_device
+from src.utils import BaseModel, get_device, seed_from_basemodel
 
 
 def compute_sentence_representations(
@@ -67,7 +67,8 @@ class SentenceRepresentations(BaseModel):
         # (n_sentences, hidden_size)
         sentence_representations = sentence_representations[:, self.layer]
 
-        noise = np.random.normal(size=sentence_representations.shape) * self.noise_level
+        rng = np.random.default_rng(seed_from_basemodel(self))
+        noise = rng.normal(size=sentence_representations.shape) * self.noise_level
 
         return sentence_representations + torch.from_numpy(noise)
 

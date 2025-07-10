@@ -179,6 +179,7 @@ class WordRepresentations(BaseModel):
             )
             word_representations[na_words] = 0
 
-        noise = np.random.normal(size=word_representations.shape) * self.noise_level
+        rng = np.random.default_rng(seed=self.seed)
+        noise = rng.normal(size=word_representations.shape) * self.noise_level
 
         return word_representations + torch.from_numpy(noise)

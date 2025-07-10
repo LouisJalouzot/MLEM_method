@@ -11,7 +11,7 @@ if tp.TYPE_CHECKING:
 from exca import TaskInfra
 from pydantic import ConfigDict
 
-from src.utils import BaseModel, encode_df
+from src.utils import BaseModel, encode_df, seed_from_basemodel
 
 
 class Dataset(BaseModel):
@@ -19,6 +19,8 @@ class Dataset(BaseModel):
     seed: int = 0
     n_features_simu: int = 16
     n_samples_simu: int = 256
+    seed: int = 0
+    noise_level: float = 0.1
     _features: tp.List[str] = None
     _triu_indices: tp.Tuple[np.ndarray, np.ndarray] = None
     _pfeatures: tp.List[str] = None
@@ -43,10 +45,9 @@ class Dataset(BaseModel):
             if only_columns:
                 return features
             else:
+                rng = np.random.default_rng(seed_from_basemodel(self))
                 df = pd.DataFrame(
-                    np.random.choice(
-                        ["A", "B"], size=(self.n_samples_simu, len(features))
-                    ),
+                    rng.choice(["A", "B"], size=(self.n_samples_simu, len(features))),
                     columns=features,
                 )
 
