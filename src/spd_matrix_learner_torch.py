@@ -160,16 +160,20 @@ class SPDMatrixLearner(nn.Module):
                 logger.warning(
                     f"Matrix is not symmetric: Max |W - W^T| = {norm_diff:.2g} > 1e-5"
                 )
+                return False
             min_lambda = self.min_eigenvalue()
             if min_lambda <= 0:
                 logger.warning(
                     f"Matrix is not positive definite: Min λ(W) {min_lambda:.2g} <= 0"
                 )
+                return False
             logger.info(
                 f"SPD check: Max |W - W^T| = {norm_diff:.2g} - Min λ(W) = {min_lambda:.2g}"
             )
         except Exception as e:
             logger.error(f"SPD check failed: {e}.\n")
+            return False
+        return True
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         """Forward pass: weighted sum of transformed features"""

@@ -143,10 +143,9 @@ def train(
             )
             break
 
-    model.check_spd()
-
     logs = pd.DataFrame(logs)
     logs["converged"] = converged
+    logs["spd"] = model.check_spd()
 
     return model, logs
 

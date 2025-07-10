@@ -198,6 +198,7 @@ class FeatureImportance(BaseModelSharing):
             weights["cv"] = i
             weights["split"] = "train"
             weights["converged"] = False if logs.empty else logs.converged.iloc[0]
+            weights["spd"] = False if logs.empty else logs.spd.iloc[0]
             weights["training_duration"] = (
                 0 if logs.empty else logs["Step Duration"].sum()
             )
