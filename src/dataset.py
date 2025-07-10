@@ -1,10 +1,14 @@
+from __future__ import annotations
+
 import typing as tp
 
 import numpy as np
-import pandas as pd
-import torch
+
+if tp.TYPE_CHECKING:
+    import pandas as pd
+    import torch
+
 from exca import TaskInfra
-from pyarrow import parquet
 from pydantic import ConfigDict
 
 from src.utils import BaseModel, encode_df
@@ -32,6 +36,8 @@ class Dataset(BaseModel):
         self.features
 
     def read(self, only_columns=False) -> pd.DataFrame:
+        import pandas as pd
+
         if self.path == "simulated":
             features = np.array([f"Feat. {i+1}" for i in range(self.n_features_simu)])
             if only_columns:
@@ -51,6 +57,8 @@ class Dataset(BaseModel):
                 return data.columns.values
         else:
             if only_columns:
+                from pyarrow import parquet
+
                 return np.array([col.name for col in parquet.read_schema(self.path)])
             else:
                 data = pd.read_parquet(self.path)
@@ -96,6 +104,8 @@ class Dataset(BaseModel):
 
     @property
     def df(self) -> pd.DataFrame:
+        import pandas as pd
+
         if self._df is not None:
             return self._df
         else:

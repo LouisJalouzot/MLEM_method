@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import hashlib
 import json
 import random
@@ -7,21 +9,22 @@ import typing as tp
 
 import numpy as np
 import pandas as pd
-import torch
 import yaml
 from loguru import logger
 from pydantic import BaseModel as _BaseModel
 from pydantic import model_validator
-from sklearn.preprocessing import MinMaxScaler
-from statsmodels.stats.descriptivestats import describe
+
+if tp.TYPE_CHECKING:
+    import pandas as pd
+    import torch
 
 logger.remove()
 logger.add(sink=sys.stdout, level="DEBUG")
 
-torch.manual_seed(0)
-
 
 def get_device():
+    import torch
+
     if torch.cuda.is_available():
         # Get GPU id with the most free memory, select at random if there are multiple
         try:
@@ -43,6 +46,12 @@ def get_device():
 
 
 def encode_df(df: pd.DataFrame) -> torch.Tensor:
+    import pandas as pd
+    import torch
+    from sklearn.preprocessing import MinMaxScaler
+
+    torch.manual_seed(0)
+
     if df.empty:
         # Return an empty tensor with the correct number of columns but 0 rows
         return torch.empty((0, df.shape[1]), dtype=torch.float32)
@@ -167,6 +176,8 @@ class BaseModelSharing(BaseModel):
 
 def compute_stats(data, alpha=0.01):
     """Compute descriptive statistics with confidence intervals"""
+    from statsmodels.stats.descriptivestats import describe
+
     return describe(
         data, stats=["mean", "std", "std_err", "ci"], use_t=True, alpha=alpha
     ).T

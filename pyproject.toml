@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "captum>=0.8.0",
-    "exca>=0.3.0",
     "ipykernel>=6.29.5",
     "ipywidgets>=8.1.5",
     "loguru>=0.7.3",
@@ -40,7 +39,9 @@ dependencies = [
     "torchsort",
     "unflatten>=0.2.0",
     "nvitop>=1.5.1",
+    "exca",
 ]
 
 [tool.uv.sources]
 torchsort = { url = "https://github.com/teddykoker/torchsort/releases/download/v0.1.10/torchsort-0.1.10+pt26cu126-cp312-cp312-linux_x86_64.whl" }
+exca = { git = "https://github.com/facebookresearch/exca" }

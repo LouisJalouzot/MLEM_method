@@ -1,14 +1,12 @@
+from __future__ import annotations
+
 import typing as tp
 from time import time
 
 import numpy as np
-import pandas as pd
-import torch
-from captum.attr import FeaturePermutation
 from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
-from torch import nn
 from tqdm.auto import tqdm
 
 from src.dataset import Dataset
@@ -16,6 +14,10 @@ from src.estimate_correlations import EstimateCorrelations
 from src.pairwise_dataloader import PairwiseDataloader
 from src.trainer import Trainer
 from src.utils import BaseModelSharing, compute_stats
+
+if tp.TYPE_CHECKING:
+    import pandas as pd
+    from torch import nn
 
 
 def compute_feature_importance(
@@ -27,6 +29,9 @@ def compute_feature_importance(
     thresh: float = 0.01,
     alpha: float = 0.01,
 ) -> tp.Tuple[pd.DataFrame, pd.Series]:
+    import pandas as pd
+    import torch
+    from captum.attr import FeaturePermutation
 
     features = clusters.Feature
     clusters = torch.from_numpy(clusters.Cluster.values)
@@ -120,6 +125,8 @@ def compute_feature_importance(
 
 
 def compute_cv_stats_per_split(df, alpha=0.01):
+    import pandas as pd
+
     values = "mean" if "mean" in df.columns else "Weight"
     df[values] = df[values].astype(float)
     if "AllFeatures" in df.columns:
@@ -166,6 +173,8 @@ class FeatureImportance(BaseModelSharing):
 
     @infra.apply
     def compute(self) -> tp.Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        import pandas as pd
+
         # Estimate correlations with forced product
         ec_params = self.estimate_correlations.model_dump()
         ec_params["product"] = True
