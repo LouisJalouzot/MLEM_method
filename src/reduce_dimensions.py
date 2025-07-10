@@ -113,8 +113,12 @@ class ReduceDimensions(BaseModelSharing):
         return proj
 
     def transform(self):
-        proj = self._transform_cached()
-        df = self.dataset.df
-        df[list(range(self.n_components))] = proj
+        import pandas as pd
 
-        return df
+        proj = self._transform_cached()
+        proj = pd.DataFrame(
+            proj, columns=[f"coord_{i}" for i in range(1, self.n_components + 1)]
+        )
+        df = self.dataset.df
+
+        return pd.concat([df, proj], axis=1)
