@@ -33,8 +33,8 @@ def train(
     max_epochs: int = 500,
     eps: float = 1e-3,
     device: str = "cpu",
-    monitor: str = "diff_norm",
-    patience: int = 20,
+    monitor: str = "loss",
+    patience: int = 50,
 ) -> tp.Tuple[nn.Module, pd.DataFrame]:
     model.train()
     optimizer = torch.optim.AdamW(
@@ -171,8 +171,13 @@ class Trainer(BaseModelSharing):
     )
     lr: float = 0.1
     weight_decay: float = 0
-    max_epochs: int = 500
+    max_epochs: int = 1000
+    monitor: tp.Literal["grad_norm", "diff_norm", "train_score", "test_score", "loss"] = (
+        "loss"
+    )
+    patience: int = 50
     eps: float = 1e-3
+
     device: str | None = None
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
@@ -180,10 +185,6 @@ class Trainer(BaseModelSharing):
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
         "dataset": ["estimate_correlations", "representations"],
     }
-    monitor: tp.Literal["grad_norm", "diff_norm", "train_score", "test_score", "loss"] = (
-        "diff_norm"
-    )
-    patience: int = 100
 
     def model_post_init(self, __context: tp.Any) -> None:
         assert self.dataset.level == self.representations.level, (
