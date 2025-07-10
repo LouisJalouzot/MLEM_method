@@ -14,7 +14,7 @@ from pydantic import ConfigDict, Field
 
 from src.dataset import Dataset
 from src.hidden_states import aggregate_masked_tensor, compute_hidden_states
-from src.utils import BaseModel, get_device
+from src.utils import BaseModel, get_device, seed_from_basemodel
 
 
 def cum_join_index(words):
@@ -179,7 +179,9 @@ class WordRepresentations(BaseModel):
             )
             word_representations[na_words] = 0
 
-        rng = np.random.default_rng(seed=self.seed)
-        noise = rng.normal(size=word_representations.shape) * self.noise_level
+        scale = word_representations.std(dim=0)
+        rng = np.random.default_rng(seed_from_basemodel(self))
+        noise = rng.normal(scale=scale, size=word_representations.shape)
+        noise *= self.noise_level
 
         return word_representations + torch.from_numpy(noise)

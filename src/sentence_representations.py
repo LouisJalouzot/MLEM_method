@@ -67,8 +67,10 @@ class SentenceRepresentations(BaseModel):
         # (n_sentences, hidden_size)
         sentence_representations = sentence_representations[:, self.layer]
 
+        scale = sentence_representations.std(dim=0)
         rng = np.random.default_rng(seed_from_basemodel(self))
-        noise = rng.normal(size=sentence_representations.shape) * self.noise_level
+        noise = rng.normal(scale=scale, size=sentence_representations.shape)
+        noise *= self.noise_level
 
         return sentence_representations + torch.from_numpy(noise)
 
