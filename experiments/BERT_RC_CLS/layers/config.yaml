@@ -7,17 +7,20 @@ base_config:
     dataloader_builder:
       cv: 5
     representations:
+      token_aggregation: first
       model_name: bert-base-uncased
       level: sentence
 
 grid_search_prepare:
+  trainer.model_builder.param:
+    - diagonal
   trainer.representations.layer:
     - 7
 
 grid_search:
   trainer.model_builder.param:
-    - diagonal
     - triu
+    - diagonal
     - cholesky
   trainer.representations.layer:
     - 1

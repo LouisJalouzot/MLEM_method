@@ -12,7 +12,7 @@ base_config:
 
 grid_search_prepare:
   representations.layer:
-    - 1
+    - 7
 
 grid_search:
   representations.layer:
