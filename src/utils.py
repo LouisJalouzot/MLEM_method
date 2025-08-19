@@ -212,6 +212,7 @@ cluster: auto
 mode: retry
 cpus_per_task: 8
 timeout_min: 120
+slurm_partition: cpu_p1,prepost,visu,archive,compil
 slurm_account: ioj@cpu
 slurm_additional_parameters:
     hint: nomultithread
