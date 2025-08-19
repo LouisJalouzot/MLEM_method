@@ -10,9 +10,6 @@ base_config:
       level: simulated
 
 grid_search:
-  dataset.sparse_spd:
-    - false
-    - true
   trainer.dataset.seed:
     - 0
     - 1

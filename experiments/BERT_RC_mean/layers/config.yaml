@@ -12,14 +12,13 @@ base_config:
 
 grid_search_prepare:
   trainer.model_builder.param:
-    - diagonal
+    - triu
   trainer.representations.layer:
     - 7
 
 grid_search:
   trainer.model_builder.param:
     - triu
-    - diagonal
     - cholesky
   trainer.representations.layer:
     - 1
