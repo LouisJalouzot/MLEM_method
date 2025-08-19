@@ -16,6 +16,7 @@ from src.utils import BaseModel, seed_from_basemodel
 class SimulatedRepresentations(BaseModel):
     dataset: Dataset = Field(default_factory=lambda: Dataset(path="simulated"))
     level: tp.Literal["simulated"] = "simulated"
+    sparse_spd: bool = False
     n_components: int = 768
     _W: np.ndarray = None
     _gt_weights: pd.DataFrame = None
@@ -39,11 +40,14 @@ class SimulatedRepresentations(BaseModel):
 
     def init_weights(self):
         import pandas as pd
-        from sklearn.datasets import make_spd_matrix
+        from sklearn.datasets import make_sparse_spd_matrix, make_spd_matrix
 
         features = self.dataset.features
         n_features = len(features)
-        W = make_spd_matrix(n_features)
+        if self.sparse_spd:
+            W = make_sparse_spd_matrix(n_features)
+        else:
+            W = make_spd_matrix(n_features)
         W /= np.linalg.norm(W, ord="fro")
         self._W = W
         W_triu = W[*self.dataset.triu_indices]
