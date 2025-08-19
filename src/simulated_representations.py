@@ -17,6 +17,7 @@ class SimulatedRepresentations(BaseModel):
     dataset: Dataset = Field(default_factory=lambda: Dataset(path="simulated"))
     level: tp.Literal["simulated"] = "simulated"
     sparse_spd: bool = False
+    sparse_alpha: float = 0.95
     n_components: int = 768
     _W: np.ndarray = None
     _gt_weights: pd.DataFrame = None
@@ -45,7 +46,7 @@ class SimulatedRepresentations(BaseModel):
         features = self.dataset.features
         n_features = len(features)
         if self.sparse_spd:
-            W = make_sparse_spd_matrix(n_features)
+            W = make_sparse_spd_matrix(n_features, alpha=self.sparse_alpha)
         else:
             W = make_spd_matrix(n_features)
         W /= np.linalg.norm(W, ord="fro")
