@@ -9,6 +9,7 @@ import plotly.express as px
 import seaborn as sns
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
+from scipy import stats
 from sklearn.utils import shuffle
 from tqdm.auto import tqdm
 
@@ -48,6 +49,8 @@ rename = {
     "center_embedding": "Center embedding",
     "subjwho": "Subject relative",
     "objwho": "Object relative",
+    "triu": "FR-RSA-I",
+    "cholesky": "MLEM",
 }
 
 
