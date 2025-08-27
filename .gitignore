@@ -19,3 +19,4 @@ wheels/
 *.conllu
 *.parquet
 paper
+!experiments/**/figures.ipynb
