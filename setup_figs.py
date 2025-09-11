@@ -62,4 +62,7 @@ def _rename_label(label):
 
 
 def clean_names(df):
-    return df.rename(columns=_rename_label, index=_rename_label).replace(rename)
+    df = df.rename(columns=_rename_label, index=_rename_label).replace(rename)
+    if "Feature" in df:
+        df["Feature"] = df["Feature"].apply(_rename_label)
+    return df
