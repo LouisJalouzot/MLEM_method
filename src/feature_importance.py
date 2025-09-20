@@ -31,71 +31,55 @@ def compute_feature_importance(
 ) -> tp.Tuple[pd.DataFrame, pd.Series]:
     import pandas as pd
     import torch
-    from captum.attr import FeaturePermutation
 
-    features = clusters.Feature
-    clusters = torch.from_numpy(clusters.Cluster.values)
+    device = dataloader.X.device
+    cluster_ids = torch.from_numpy(clusters.Cluster.values).to(device)
+    n_clusters = cluster_ids.max().item() + 1
 
     # Storage for results
-    importances = []
+    importances = {}
     score = []
     start = time()
 
-    for i in tqdm(
-        range(1, n_perm + 1),
-        desc="Computing feature importance",
-        disable=True,
-    ):
-        t = time()
-        X_batch, Y_batch = dataloader[i]
-        clusters = clusters.to(X_batch.device)
+    pbar = tqdm(
+        total=n_clusters * n_perm, desc="Computing Permutation Feature Importance"
+    )
+    with pbar:
+        for c in range(n_clusters):
+            mask = cluster_ids == c
+            importances[c] = []
+            for _ in range(n_perm):
+                X_batch, Y_batch = dataloader.sample()
+                # Create flattened feature interactions
+                X_batch_flat = X_batch[:, None] * X_batch[:, :, None]
+                X_batch_flat = X_batch_flat[:, *model.triu_indices]
 
-        # Create flattened feature interactions
-        X_batch_flat = X_batch[:, None] * X_batch[:, :, None]
-        X_batch_flat = X_batch_flat[:, *model.triu_indices]
+                # Compute baseline performance
+                baseline_score = model.score(X_batch_flat, Y_batch)
+                score.append(baseline_score)
 
-        # Calculate feature importance
-        feature_perm = FeaturePermutation(lambda x: model.score(x, Y_batch))
-        batch_importances = feature_perm.attribute(
-            X_batch_flat, feature_mask=clusters[None]
-        ).cpu()
-        batch_importances = batch_importances.double().numpy().squeeze()
-        if not model.maximize:
-            batch_importances *= -1
-        importances.append(batch_importances)
+                # Permute features in the cluster
+                perm = torch.randperm(X_batch_flat.shape[0])
+                X_batch_flat[:, mask] = X_batch_flat[perm][:, mask]
 
-        # Calculate baseline performance
-        s = model.score(X_batch, Y_batch)
-        score.append(s)
+                # Compute score with permuted data
+                permuted_score = model.score(X_batch_flat, Y_batch)
+                importance = baseline_score - permuted_score
+                if not model.maximize:
+                    importance *= -1
+                importances[c].append(importance)
 
-        logger.debug(
-            f"Batch {i:<3} / {n_perm} - "
-            f"Duration: {time() - t:<8.3f}s - "
-            f"Score: {s:<8.3g}"
-        )
+                pbar.update(1)
 
     # Compute importances statistics
-    importances = np.stack(importances)
-    importances = pd.DataFrame(importances, columns=features)
+    importances = pd.DataFrame(importances)
     importances = compute_stats(importances, alpha=alpha)
-    importances = importances.reset_index(names="Feature")
-    importances["Cluster"] = clusters.cpu()
-    cols = [col for col in importances.columns if col not in ["Cluster", "Feature"]]
-    aggregations = {
-        "Feature": [
-            ("Feature", lambda x: min(x, key=len)),
-            ("AllFeatures", list),
-        ]
-    } | {col: "first" for col in cols}
-    importances = importances.groupby("Cluster").agg(aggregations)
-    new_columns = [
-        col_tuple[1] if col_tuple[0] == "Feature" else col_tuple[0]
-        for col_tuple in importances.columns
-    ]
-    importances.columns = new_columns
-    importances = importances.reset_index()
-
-    importances = importances.sort_values("mean", ascending=False)
+    importances = importances.reset_index(names="Cluster")
+    importances["Feature"] = clusters.groupby("Cluster").Feature.apply(
+        lambda x: min(x, key=len)
+    )
+    importances["AllFeatures"] = clusters.groupby("Cluster").Feature.apply(list)
+    importances = importances.reset_index().sort_values("mean", ascending=False)
 
     # Compute score statistics
     score_stats = compute_stats(score, alpha=alpha).iloc[0]
