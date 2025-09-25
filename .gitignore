@@ -20,3 +20,5 @@ wheels/
 *.parquet
 paper
 !experiments/**/figures.ipynb
+
+*.out
