@@ -62,7 +62,11 @@ class SentenceRepresentations(BaseModel):
         # (n_sentences, n_layers+1, hidden_size)
         sentence_representations = self.forward()
         if self.units is not None:
-            sentence_representations = sentence_representations[:, :, self.units]
+            if isinstance(self.units, int):
+                units = [self.units]
+            else:
+                units = self.units
+            sentence_representations = sentence_representations[:, :, units]
 
         # (n_sentences, hidden_size)
         sentence_representations = sentence_representations[:, self.layer]
