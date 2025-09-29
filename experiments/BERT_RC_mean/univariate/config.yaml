@@ -4,6 +4,7 @@ base_config:
   dataset:
     path: datasets/relative_clause.csv
   trainer:
+    device: cpu
     dataloader_builder:
       cv: 5
     representations:
@@ -13,11 +14,25 @@ base_config:
 grid_search_prepare:
   trainer.representations.layer:
     - 7
+  trainer.representations.units:
+    - null
 
 grid_search:
   trainer.representations.layer:
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
     - 7
+    - 8
+    - 9
+    - 10
+    - 11
+    - 12
   trainer.representations.units:
+    - null
     - 0
     - 1
     - 2
