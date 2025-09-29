@@ -7,7 +7,7 @@ parser.add_argument(
     "model_names",
     type=str,
     nargs="*",
-    default=["answerdotai/ModernBERT-base"],
+    default=["bert-base-uncased"],
 )
 args = parser.parse_args()
 
@@ -17,4 +17,5 @@ for model_name in args.model_names:
         repo_id=model_name,
         local_dir_use_symlinks=False,
         ignore_patterns=["*.safetensors_index.json", "*.md", "*.txt", "*.jsonl"],
+        max_workers=4,
     )

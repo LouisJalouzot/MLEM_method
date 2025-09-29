@@ -28,7 +28,7 @@ def yield_grid_search(grid_config):
 def run_grid_search(base_class, grid_search, method=None):
     flat_configs = []
     n_configs = math.prod(len(v) for v in grid_search.values())
-    with base_class.infra.job_array() as array:
+    with base_class.infra.job_array(max_workers=n_configs) as array:
         with tqdm(total=n_configs, desc="Creating tasks") as pbar:
             for flat_config, task in Parallel(
                 n_jobs=-2, return_as="generator", prefer="threads"
