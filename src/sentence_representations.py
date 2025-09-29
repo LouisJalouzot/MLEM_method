@@ -43,7 +43,7 @@ class SentenceRepresentations(BaseModel):
     add_special_tokens: bool = True
 
     layer: int = 5
-    units: tp.List[int] = None
+    units: tp.List[int] | int = None
     noise_level: float = 0.0
     seed: int = 0
 
