@@ -26,7 +26,7 @@ def compute_feature_importance(
     clusters: pd.DataFrame,
     n_perm: int = 5,
     monitor: tp.Literal["std", "ci_width"] = "std",
-    thresh: float = 0.01,
+    thresh: float = 0.02,
     alpha: float = 0.01,
 ) -> tp.Tuple[pd.DataFrame, pd.Series]:
     import pandas as pd
