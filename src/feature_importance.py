@@ -32,6 +32,7 @@ def compute_feature_importance(
     import pandas as pd
     import torch
     from captum.attr import FeaturePermutation
+    from torch.nn.utils import parametrize
 
     features = clusters.Feature
     clusters = torch.from_numpy(clusters.Cluster.values)
@@ -41,38 +42,39 @@ def compute_feature_importance(
     score = []
     start = time()
 
-    for i in tqdm(
-        range(1, n_perm + 1),
-        desc="Computing feature importance",
-        disable=True,
-    ):
-        t = time()
-        X_batch, Y_batch = dataloader[i]
-        clusters = clusters.to(X_batch.device)
+    with parametrize.cached():
+        for i in tqdm(
+            range(1, n_perm + 1),
+            desc="Computing feature importance",
+            disable=True,
+        ):
+            t = time()
+            X_batch, Y_batch = dataloader[i]
+            clusters = clusters.to(X_batch.device)
 
-        # Create flattened feature interactions
-        X_batch_flat = X_batch[:, None] * X_batch[:, :, None]
-        X_batch_flat = X_batch_flat[:, *model.triu_indices]
+            # Create flattened feature interactions
+            X_batch_flat = X_batch[:, None] * X_batch[:, :, None]
+            X_batch_flat = X_batch_flat[:, *model.triu_indices]
 
-        # Calculate feature importance
-        feature_perm = FeaturePermutation(lambda x: model.score(x, Y_batch))
-        batch_importances = feature_perm.attribute(
-            X_batch_flat, feature_mask=clusters[None]
-        ).cpu()
-        batch_importances = batch_importances.double().numpy().squeeze()
-        if not model.maximize:
-            batch_importances *= -1
-        importances.append(batch_importances)
+            # Calculate feature importance
+            feature_perm = FeaturePermutation(lambda x: model.score(x, Y_batch))
+            batch_importances = feature_perm.attribute(
+                X_batch_flat, feature_mask=clusters[None]
+            ).cpu()
+            batch_importances = batch_importances.double().numpy().squeeze()
+            if not model.maximize:
+                batch_importances *= -1
+            importances.append(batch_importances)
 
-        # Calculate baseline performance
-        s = model.score(X_batch, Y_batch)
-        score.append(s)
+            # Calculate baseline performance
+            s = model.score(X_batch, Y_batch)
+            score.append(s)
 
-        logger.debug(
-            f"Batch {i:<3} / {n_perm} - "
-            f"Duration: {time() - t:<8.3f}s - "
-            f"Score: {s:<8.3g}"
-        )
+            logger.debug(
+                f"Batch {i:<3} / {n_perm} - "
+                f"Duration: {time() - t:<8.3f}s - "
+                f"Score: {s:<8.3g}"
+            )
 
     # Compute importances statistics
     importances = np.stack(importances)

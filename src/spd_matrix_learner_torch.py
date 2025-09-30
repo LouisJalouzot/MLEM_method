@@ -1,7 +1,6 @@
 import pandas as pd
 import torch
 from loguru import logger
-from parametrization_cookbook.torch import MatrixSymPosDef
 from torch import nn
 from torch.nn import functional as F
 from torch.nn.utils import parametrize
@@ -31,14 +30,13 @@ class TriuParam(nn.Module):
 
 
 class CholeskyParam(nn.Module):
-    def __init__(self, dim):
-        super().__init__()
-        self.dim = dim
-        self.indices = torch.tril_indices(dim, dim)
-        self.param = MatrixSymPosDef(dim=dim)
-
     def forward(self, W):
-        return self.param.reals1d_to_params(W[*self.indices])
+        L = torch.tril(W)
+        # Apply softplus to diagonal for positivity
+        d = torch.diagonal(L)
+        d_positive = F.softplus(d) + 1e-6
+        L = L - torch.diag(d) + torch.diag(d_positive)
+        return L @ L.T
 
 
 class NormFroParam(nn.Module):
@@ -94,9 +92,7 @@ class SPDMatrixLearner(nn.Module):
             case "exp":
                 parametrize.register_parametrization(self.W, "weight", SPDExpParam())
             case "cholesky":
-                parametrize.register_parametrization(
-                    self.W, "weight", CholeskyParam(n_features)
-                )
+                parametrize.register_parametrization(self.W, "weight", CholeskyParam())
             case "diagonal":
                 parametrize.register_parametrization(self.W, "weight", DiagonalParam())
             case "sym":
