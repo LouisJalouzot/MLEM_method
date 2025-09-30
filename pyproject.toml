@@ -39,6 +39,7 @@ dependencies = [
     "nvitop>=1.5.1",
     "exca",
     "captum>=0.8.0",
+    "parametrization-cookbook>=0.18",
 ]
 
 [tool.uv.sources]
