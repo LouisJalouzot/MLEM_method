@@ -31,11 +31,10 @@ class TriuParam(nn.Module):
 
 class CholeskyParam(nn.Module):
     def forward(self, W):
-        L = torch.tril(W)
+        L = torch.triu(W)
         # Apply softplus to diagonal for positivity
-        d = torch.diagonal(L)
-        d_positive = F.softplus(d) + 1e-6
-        L = L - torch.diag(d) + torch.diag(d_positive)
+        diag_idx = torch.arange(L.shape[0], device=L.device)
+        L[diag_idx, diag_idx] = F.softplus(L[diag_idx, diag_idx])
         return L @ L.T
 
 
@@ -111,7 +110,7 @@ class SPDMatrixLearner(nn.Module):
             parametrize.register_parametrization(self.W, "weight", NormFroParam())
 
     def get_W(self) -> torch.Tensor:
-        W = self.W.weight.data
+        W = self.W.weight.detach()
         if self.param == "triu":
             W = W.triu()
             W = W + W.T
@@ -121,8 +120,7 @@ class SPDMatrixLearner(nn.Module):
     def get_flat_W(self) -> torch.Tensor:
         W = self.get_W()
         W += W.tril(diagonal=-1).T
-        W = W[*self.triu_indices]
-        return W
+        return W[*self.triu_indices]
 
     def get_flat_forwatted_W(self, pfeatures) -> pd.DataFrame:
         return pd.DataFrame(
