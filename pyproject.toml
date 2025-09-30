@@ -39,6 +39,7 @@ dependencies = [
     "unflatten>=0.2.0",
     "nvitop>=1.5.1",
     "exca",
+    "captum>=0.8.0",
 ]
 
 [tool.uv.sources]
