@@ -115,19 +115,12 @@ class SPDMatrixLearner(nn.Module):
             parametrize.register_parametrization(self.W, "weight", NormFroParam())
 
     def get_W(self) -> torch.Tensor:
-        W = self.W.weight.data
-        if self.param == "triu":
-            W = W.triu()
-            W = W + W.T
-            W = W - torch.diag(torch.diag(W)) / 2
-
-        return W
+        return self.W.weight.data
 
     def get_flat_W(self) -> torch.Tensor:
         W = self.get_W()
         W += W.tril(diagonal=-1).T
         W = W[*self.triu_indices]
-
         return W
 
     def get_flat_forwatted_W(self, pfeatures) -> pd.DataFrame:
