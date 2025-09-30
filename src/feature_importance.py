@@ -145,7 +145,7 @@ class FeatureImportance(BaseModelSharing):
 
     n_perm: int = 5
     monitor: tp.Literal["std", "ci_width"] = "std"
-    thresh: float = 0.01
+    thresh: float = 0.02
     alpha: float = 0.01
 
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
