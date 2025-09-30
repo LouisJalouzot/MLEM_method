@@ -53,7 +53,7 @@ class Trainer(BaseModelSharing):
     patience: int = 50
     eps: float = 1e-3
 
-    device: str | None = None
+    device: str | None = "cpu"
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
