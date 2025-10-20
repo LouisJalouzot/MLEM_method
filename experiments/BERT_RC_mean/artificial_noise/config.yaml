@@ -13,7 +13,7 @@ base_config:
 
 grid_search_prepare:
   trainer.model_builder.param:
-    - diagonal
+    - cholesky
   trainer.representations.seed:
     - 0
   trainer.representations.noise_level:
