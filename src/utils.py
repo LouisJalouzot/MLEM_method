@@ -210,9 +210,9 @@ infra_cpu = """
 folder: .cache
 cluster: auto
 mode: retry
-cpus_per_task: 8
+cpus_per_task: 4
 timeout_min: 120
-slurm_partition: cpu_p1,prepost,visu,archive,compil
+slurm_partition: cpu_p1,prepost,visu,archive,compil,compil_h100
 slurm_account: ioj@cpu
 slurm_additional_parameters:
     hint: nomultithread
