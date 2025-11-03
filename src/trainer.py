@@ -22,7 +22,6 @@ if tp.TYPE_CHECKING:
     import torch
 
     from src.spd_matrix_learner_torch import SPDMatrixLearner
-    from src.trainer_torch import train
 
 
 class Trainer(BaseModelSharing):
@@ -47,9 +46,9 @@ class Trainer(BaseModelSharing):
     lr: float = 0.1
     weight_decay: float = 0
     max_epochs: int = 1000
-    monitor: tp.Literal["grad_norm", "diff_norm", "train_score", "test_score", "loss"] = (
-        "loss"
-    )
+    monitor: tp.Literal[
+        "grad_norm", "diff_norm", "train_score", "test_score", "loss"
+    ] = "loss"
     patience: int = 50
     eps: float = 1e-3
 
@@ -83,7 +82,9 @@ class Trainer(BaseModelSharing):
         X = self.dataset.encode().to(device)
         Y = self.representations().to(device)
 
-        return self.dataloader_builder.build(X=X, Y=Y, gamma=self.gamma, n_pairs=n_pairs)
+        return self.dataloader_builder.build(
+            X=X, Y=Y, gamma=self.gamma, n_pairs=n_pairs
+        )
 
     @infra.apply(exclude_from_cache_uid=["device"])
     def _train_cached(self) -> tp.Tuple[tp.List[torch.Tensor], pd.DataFrame]:

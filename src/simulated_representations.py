@@ -46,9 +46,13 @@ class SimulatedRepresentations(BaseModel):
         features = self.dataset.features
         n_features = len(features)
         if self.sparse_spd:
-            W = make_sparse_spd_matrix(n_features, alpha=self.sparse_alpha)
+            W = make_sparse_spd_matrix(
+                n_features,
+                alpha=self.sparse_alpha,
+                random_state=seed_from_basemodel(self),
+            )
         else:
-            W = make_spd_matrix(n_features)
+            W = make_spd_matrix(n_features, random_state=seed_from_basemodel(self))
         W /= np.linalg.norm(W, ord="fro")
         self._W = W
         W_triu = W[*self.dataset.triu_indices]

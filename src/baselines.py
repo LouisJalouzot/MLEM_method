@@ -20,7 +20,7 @@ from src.word_representations import WordRepresentations
 
 def compute_encoding_baseline(X, Y, n_estimators=10, n_jobs=-2, verbose=False):
     model = RandomForestRegressor(
-        n_estimators=n_estimators, n_jobs=n_jobs, verbose=verbose
+        n_estimators=n_estimators, n_jobs=n_jobs, verbose=verbose, random_state=0
     )
     model.fit(X, Y)
     importances = [tree.feature_importances_ for tree in model.estimators_]
@@ -71,7 +71,9 @@ def compute_decoding_baseline(X, Y, n_splits=5):
         for i in range(Y.shape[1]):
             y = Y[:, i].int()
             scores = []
-            for train, test in StratifiedKFold(n_splits=n_splits).split(X, y):
+            for train, test in StratifiedKFold(
+                n_splits=n_splits, shuffle=True, random_state=0
+            ).split(X, y):
                 model.fit(X[train], y[train])
                 pred_prob = model.predict_proba(X[test])
                 if pred_prob.shape[1] == 2:
