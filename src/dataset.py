@@ -19,7 +19,6 @@ class Dataset(BaseModel):
     seed: int = 0
     n_features_simu: int = 16
     n_samples_simu: int = 256
-    seed: int = 0
     noise_level: float = 0.1
     _features: tp.List[str] = None
     _triu_indices: tp.Tuple[np.ndarray, np.ndarray] = None
