@@ -26,6 +26,7 @@ class PairwiseDataloader:
         distance=2,
         nan_to_num=0,
         min_max_scale=True,
+        seed=None,
     ):
         import torch
         from torch.nn import functional as F
@@ -52,6 +53,12 @@ class PairwiseDataloader:
         self.max = -torch.inf
         self.min_max_scale = min_max_scale
         self.logged_debug = False
+        self.seed = seed
+        self.generator = torch.Generator(
+            device=self.device if hasattr(self, "device") else "cpu"
+        )
+        if seed is not None:
+            self.generator.manual_seed(seed)
 
         if distance == "cosine":
             self.distance = lambda x, y: 1 - F.cosine_similarity(x, y, dim=-1)
@@ -81,8 +88,12 @@ class PairwiseDataloader:
 
         n_pairs *= n_trials
 
-        ind_1 = torch.randint(0, self.n, (n_pairs,), device=self.device)
-        ind_2 = torch.randint(0, self.n, (n_pairs,), device=self.device)
+        ind_1 = torch.randint(
+            0, self.n, (n_pairs,), device=self.device, generator=self.generator
+        )
+        ind_2 = torch.randint(
+            0, self.n, (n_pairs,), device=self.device, generator=self.generator
+        )
         if only_valid:
             valid = ind_1 != ind_2
             ind_1 = ind_1[valid]
@@ -139,12 +150,13 @@ class PairwiseDataloaderBuilder(BaseModel):
         elif isinstance(self.cv, float):
             assert 0 < self.cv < 1, "if cv is a float, it needs to be between 0 and 1"
 
-    def build_for_estimation(self, X) -> PairwiseDataloader:
+    def build_for_estimation(self, X, seed=None) -> PairwiseDataloader:
         return PairwiseDataloader(
             X=X,
             distance=self.distance,
             nan_to_num=self.nan_to_num,
             min_max_scale=self.min_max_scale,
+            seed=seed,
         )
 
     def build(
@@ -153,6 +165,7 @@ class PairwiseDataloaderBuilder(BaseModel):
         Y=None,
         n_pairs=None,
         gamma=1,
+        seed=None,
     ) -> PairwiseDataLoaderGenerator:
         build_dl = lambda x, y: PairwiseDataloader(
             X=x,
@@ -162,6 +175,7 @@ class PairwiseDataloaderBuilder(BaseModel):
             distance=self.distance,
             nan_to_num=self.nan_to_num,
             min_max_scale=self.min_max_scale,
+            seed=seed,
         )
         assert X is not None or Y is not None, "X or Y must be provided"
         if self.cv is None:

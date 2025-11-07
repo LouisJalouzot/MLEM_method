@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import random
 import subprocess
 import sys
 import typing as tp
+
+# Set environment variable for deterministic CuBLAS operations
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 import numpy as np
 import yaml
@@ -44,12 +48,20 @@ def get_device():
         return "cpu"
 
 
+def seed_everything(seed: int):
+    import torch
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def encode_df(df: pd.DataFrame) -> torch.Tensor:
     import pandas as pd
     import torch
     from sklearn.preprocessing import MinMaxScaler
-
-    torch.manual_seed(0)
 
     if df.empty:
         # Return an empty tensor with the correct number of columns but 0 rows
@@ -109,7 +121,10 @@ class BaseModelSharing(BaseModel):
         if not isinstance(data, dict) or not cls._shared_fields_config:
             return data
 
-        for shared_field_name, dependent_field_names in cls._shared_fields_config.items():
+        for (
+            shared_field_name,
+            dependent_field_names,
+        ) in cls._shared_fields_config.items():
             # 1. Validate and Get/Create the Shared Instance
             if shared_field_name not in cls.model_fields:
                 raise ValueError(

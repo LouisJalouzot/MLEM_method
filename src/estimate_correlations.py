@@ -12,7 +12,7 @@ from pydantic import ConfigDict, Field
 
 from src.dataset import Dataset
 from src.pairwise_dataloader import PairwiseDataloader, PairwiseDataloaderBuilder
-from src.utils import BaseModel, get_device
+from src.utils import BaseModel, get_device, seed_from_basemodel
 
 
 def batch_corrcoef(x: torch.Tensor, ddof: int = 1, eps: float = 1e-8) -> torch.Tensor:
@@ -31,7 +31,9 @@ def batch_corrcoef(x: torch.Tensor, ddof: int = 1, eps: float = 1e-8) -> torch.T
 
     B, N, D = x.shape
     if N <= ddof:
-        raise ValueError(f"Number of observations N={N} must be greater than ddof={ddof}")
+        raise ValueError(
+            f"Number of observations N={N} must be greater than ddof={ddof}"
+        )
 
     # Center data: (B, N, D)
     mean = torch.mean(x, dim=1, keepdim=True)
@@ -185,7 +187,9 @@ class EstimateCorrelations(BaseModel):
         import pandas as pd
 
         X = self.dataset.encode().to(self.device or get_device())
-        dataloader = self.dataloader_builder.build_for_estimation(X)
+        dataloader = self.dataloader_builder.build_for_estimation(
+            X, seed=seed_from_basemodel(self)
+        )
 
         correlations, n_pairs = estimate_correlations(
             dataloader=dataloader,

@@ -14,7 +14,7 @@ from src.pairwise_dataloader import (
 from src.sentence_representations import SentenceRepresentations
 from src.simulated_representations import SimulatedRepresentations
 from src.spd_matrix_learner import SPDMatrixLearnerBuilder
-from src.utils import BaseModelSharing, get_device
+from src.utils import BaseModelSharing, get_device, seed_everything, seed_from_basemodel
 from src.word_representations import WordRepresentations
 
 if tp.TYPE_CHECKING:
@@ -83,12 +83,14 @@ class Trainer(BaseModelSharing):
         Y = self.representations().to(device)
 
         return self.dataloader_builder.build(
-            X=X, Y=Y, gamma=self.gamma, n_pairs=n_pairs
+            X=X, Y=Y, gamma=self.gamma, n_pairs=n_pairs, seed=seed_from_basemodel(self)
         )
 
     @infra.apply(exclude_from_cache_uid=["device"])
     def _train_cached(self) -> tp.Tuple[tp.List[torch.Tensor], pd.DataFrame]:
         from src.trainer_torch import train
+
+        seed_everything(seed_from_basemodel(self))
 
         # Output state_dict as nn.Module can't be serialized for caching
         all_state_dicts = []
