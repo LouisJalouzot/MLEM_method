@@ -11,7 +11,7 @@ if tp.TYPE_CHECKING:
 from exca import TaskInfra
 from pydantic import ConfigDict
 
-from src.utils import BaseModel, encode_df, seed_from_basemodel
+from mlem.utils import BaseModel, encode_df, seed_from_basemodel
 
 
 class Dataset(BaseModel):
@@ -40,7 +40,7 @@ class Dataset(BaseModel):
         import pandas as pd
 
         if self.path == "simulated":
-            features = np.array([f"Feat. {i+1}" for i in range(self.n_features_simu)])
+            features = np.array([f"Feat. {i + 1}" for i in range(self.n_features_simu)])
             if only_columns:
                 return features
             else:

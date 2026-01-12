@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "mlem-method"
 version = "0.1.0"
@@ -41,3 +45,7 @@ dependencies = [
     "captum>=0.8.0",
     "parametrization-cookbook>=0.18",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mlem*"]

@@ -12,9 +12,9 @@ from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
 
-from src.dataset import Dataset
-from src.hidden_states import aggregate_masked_tensor, compute_hidden_states
-from src.utils import BaseModel, get_device, seed_from_basemodel
+from mlem.dataset import Dataset
+from mlem.hidden_states import aggregate_masked_tensor, compute_hidden_states
+from mlem.utils import BaseModel, get_device, seed_from_basemodel
 
 
 def cum_join_index(words):

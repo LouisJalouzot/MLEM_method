@@ -9,11 +9,11 @@ from loguru import logger
 from pydantic import ConfigDict, Field
 from tqdm.auto import tqdm
 
-from src.dataset import Dataset
-from src.estimate_correlations import EstimateCorrelations
-from src.pairwise_dataloader import PairwiseDataloader
-from src.trainer import Trainer
-from src.utils import BaseModelSharing, compute_stats
+from mlem.dataset import Dataset
+from mlem.estimate_correlations import EstimateCorrelations
+from mlem.pairwise_dataloader import PairwiseDataloader
+from mlem.trainer import Trainer
+from mlem.utils import BaseModelSharing, compute_stats
 
 if tp.TYPE_CHECKING:
     import pandas as pd
@@ -110,10 +110,12 @@ def compute_feature_importance(
     # across batches
     if monitor == "ci_width":
         variability = score_stats["upper_ci"] - score_stats["lower_ci"]
-        message = f"the width of the {(1 - alpha)*100:.3g}% confidence interval of the score correlation is {variability:.3g} "
+        message = f"the width of the {(1 - alpha) * 100:.3g}% confidence interval of the score correlation is {variability:.3g} "
     elif monitor == "std":
         variability = score_stats["std"]
-        message = f"the standard deviation of the score correlation is {variability:.3g} "
+        message = (
+            f"the standard deviation of the score correlation is {variability:.3g} "
+        )
     if variability > thresh:
         logger.warning(
             f"Significant variability between batches: "
@@ -229,7 +231,9 @@ class FeatureImportance(BaseModelSharing):
 
         return all_importances, all_score, all_weights
 
-    def compute_and_aggregate(self) -> tp.Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    def compute_and_aggregate(
+        self,
+    ) -> tp.Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         all_importances, all_score, all_weights = self.compute()
 
         if all_importances.cv.nunique() > 1:

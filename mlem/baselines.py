@@ -11,11 +11,11 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 from tqdm.auto import tqdm
 
-from src.dataset import Dataset
-from src.sentence_representations import SentenceRepresentations
-from src.simulated_representations import SimulatedRepresentations
-from src.utils import BaseModelSharing, compute_stats
-from src.word_representations import WordRepresentations
+from mlem.dataset import Dataset
+from mlem.sentence_representations import SentenceRepresentations
+from mlem.simulated_representations import SimulatedRepresentations
+from mlem.utils import BaseModelSharing, compute_stats
+from mlem.word_representations import WordRepresentations
 
 
 def compute_encoding_baseline(X, Y, n_estimators=10, n_jobs=-2, verbose=False):

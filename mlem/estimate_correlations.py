@@ -10,9 +10,9 @@ from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
 
-from src.dataset import Dataset
-from src.pairwise_dataloader import PairwiseDataloader, PairwiseDataloaderBuilder
-from src.utils import BaseModel, get_device, seed_from_basemodel
+from mlem.dataset import Dataset
+from mlem.pairwise_dataloader import PairwiseDataloader, PairwiseDataloaderBuilder
+from mlem.utils import BaseModel, get_device, seed_from_basemodel
 
 
 def batch_corrcoef(x: torch.Tensor, ddof: int = 1, eps: float = 1e-8) -> torch.Tensor:

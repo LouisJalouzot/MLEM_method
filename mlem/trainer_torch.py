@@ -6,7 +6,7 @@ import torch
 from loguru import logger
 from torch import nn
 
-from src.pairwise_dataloader import PairwiseDataloader
+from mlem.pairwise_dataloader import PairwiseDataloader
 
 torch.set_float32_matmul_precision("medium")
 torch.use_deterministic_algorithms(True)

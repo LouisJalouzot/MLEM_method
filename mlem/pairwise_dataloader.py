@@ -8,7 +8,7 @@ if tp.TYPE_CHECKING:
 from loguru import logger
 from pydantic import ConfigDict
 
-from src.utils import BaseModel
+from mlem.utils import BaseModel
 
 
 class PairwiseDataloader:

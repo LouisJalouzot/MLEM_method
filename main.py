@@ -10,7 +10,7 @@ from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 from unflatten import unflatten
 
-from src.utils import infra_cpu, infra_gpu
+from mlem.utils import infra_cpu, infra_gpu
 
 
 def yield_grid_search(grid_config):

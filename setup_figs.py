@@ -13,9 +13,9 @@ from scipy import stats
 from sklearn.utils import shuffle
 from tqdm.auto import tqdm
 
-from src.estimate_correlations import EstimateCorrelations
-from src.feature_importance import FeatureImportance
-from src.reduce_dimensions import ReduceDimensions
+from mlem.estimate_correlations import EstimateCorrelations
+from mlem.feature_importance import FeatureImportance
+from mlem.reduce_dimensions import ReduceDimensions
 
 sns.set_context("poster")
 sns.set_style("ticks")

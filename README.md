@@ -11,6 +11,7 @@ This project uses `uv` for dependency management.
     curl -LsSf https://astral.sh/uv/install.sh | sh
     ```
     You may need to restart your terminal.
+
 2.  Create and activate a virtual environment with required dependencies:
     ```bash
     uv sync

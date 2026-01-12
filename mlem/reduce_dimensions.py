@@ -5,11 +5,11 @@ import typing as tp
 from exca import TaskInfra
 from pydantic import ConfigDict, Field
 
-from src.dataset import Dataset
-from src.sentence_representations import SentenceRepresentations
-from src.simulated_representations import SimulatedRepresentations
-from src.utils import BaseModelSharing
-from src.word_representations import WordRepresentations
+from mlem.dataset import Dataset
+from mlem.sentence_representations import SentenceRepresentations
+from mlem.simulated_representations import SimulatedRepresentations
+from mlem.utils import BaseModelSharing
+from mlem.word_representations import WordRepresentations
 
 
 class ReduceDimensions(BaseModelSharing):

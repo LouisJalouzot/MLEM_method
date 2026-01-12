@@ -5,23 +5,28 @@ import typing as tp
 from exca import TaskInfra
 from pydantic import ConfigDict, Field
 
-from src.dataset import Dataset
-from src.estimate_correlations import EstimateCorrelations
-from src.pairwise_dataloader import (
+from mlem.dataset import Dataset
+from mlem.estimate_correlations import EstimateCorrelations
+from mlem.pairwise_dataloader import (
     PairwiseDataloaderBuilder,
     PairwiseDataLoaderGenerator,
 )
-from src.sentence_representations import SentenceRepresentations
-from src.simulated_representations import SimulatedRepresentations
-from src.spd_matrix_learner import SPDMatrixLearnerBuilder
-from src.utils import BaseModelSharing, get_device, seed_everything, seed_from_basemodel
-from src.word_representations import WordRepresentations
+from mlem.sentence_representations import SentenceRepresentations
+from mlem.simulated_representations import SimulatedRepresentations
+from mlem.spd_matrix_learner import SPDMatrixLearnerBuilder
+from mlem.utils import (
+    BaseModelSharing,
+    get_device,
+    seed_everything,
+    seed_from_basemodel,
+)
+from mlem.word_representations import WordRepresentations
 
 if tp.TYPE_CHECKING:
     import pandas as pd
     import torch
 
-    from src.spd_matrix_learner_torch import SPDMatrixLearner
+    from mlem.spd_matrix_learner_torch import SPDMatrixLearner
 
 
 class Trainer(BaseModelSharing):
@@ -88,7 +93,7 @@ class Trainer(BaseModelSharing):
 
     @infra.apply(exclude_from_cache_uid=["device"])
     def _train_cached(self) -> tp.Tuple[tp.List[torch.Tensor], pd.DataFrame]:
-        from src.trainer_torch import train
+        from mlem.trainer_torch import train
 
         seed_everything(seed_from_basemodel(self))
 
