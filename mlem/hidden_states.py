@@ -152,6 +152,7 @@ def aggregate_masked_tensor(
             'max': Computes the maximum of unmasked values.
             'first': Selects the first unmasked value along the dimension.
             'last': Selects the last unmasked value along the dimension.
+            'none': No aggregation, returns raw data (requires no padding).
             Defaults to 'mean'.
 
     Returns:
@@ -195,11 +196,21 @@ def aggregate_masked_tensor(
     elif method == "last":
         mask = data.get_mask().int()
         max_seq_len = mask.shape[dim]
-        last_idx = max_seq_len - mask.flip(dims=(dim,)).argmax(dim=dim, keepdim=True) - 1
+        last_idx = (
+            max_seq_len - mask.flip(dims=(dim,)).argmax(dim=dim, keepdim=True) - 1
+        )
         agg = data.get_data().gather(dim, last_idx)
         return agg.select(dim, 0)
+    elif method == "none":
+        mask = data.get_mask()
+        if not mask.all():
+            raise ValueError(
+                "Token aggregation 'none' requires all sentences to have the same "
+                "number of tokens (no padding). Found masked (padding) values."
+            )
+        return data.get_data()
     else:
         raise ValueError(
             f"Unsupported aggregation method: {method}. "
-            "Choose from 'mean', 'min', 'max', 'first', 'last'."
+            "Choose from 'mean', 'min', 'max', 'first', 'last', 'none'."
         )

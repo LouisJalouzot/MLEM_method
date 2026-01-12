@@ -39,7 +39,9 @@ class SentenceRepresentations(BaseModel):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
     level: tp.Literal["sentence"] = "sentence"
     model_name: str = "bert-base-uncased"
-    token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = "mean"
+    token_aggregation: tp.Literal["mean", "max", "min", "first", "last", "none"] = (
+        "mean"
+    )
     add_special_tokens: bool = True
 
     layer: int = 5
