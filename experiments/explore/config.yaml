@@ -1,0 +1,27 @@
+target: src.feature_importance.FeatureImportance
+
+base_config:
+  dataset:
+    path: datasets/relative_clause.csv
+  trainer:
+    dataloader_builder:
+      cv: 5
+    representations:
+      level: sentence
+
+grid_search_prepare:
+  trainer.representations.layer:
+    - 1
+  trainer.representations.token_aggregation:
+    - mean
+  trainer.representations.model_name:
+    - bert-base-uncased
+    - gpt2
+    - answerdotai/ModernBERT-base
+    - microsoft/deberta-v3-base
+    - google/flan-t5-base
+    - state-spaces/mamba-370m-hf
+    - RWKV/RWKV7-Goose-Pile-421M-HF
+    - bigscience/bloom-560m
+    - state-spaces/mamba-2.8b-hf
+    - meta-llama/Llama-3.1-8B
