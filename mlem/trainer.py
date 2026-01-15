@@ -14,6 +14,8 @@ from mlem.pairwise_dataloader import (
 from mlem.sentence_representations import SentenceRepresentations
 from mlem.simulated_representations import SimulatedRepresentations
 from mlem.spd_matrix_learner import SPDMatrixLearnerBuilder
+from mlem.syntmov2024_dataset import SyntMov2024Dataset
+from mlem.syntmov2024_representations import SyntMov2024Representations
 from mlem.utils import (
     BaseModelSharing,
     get_device,
@@ -30,17 +32,17 @@ if tp.TYPE_CHECKING:
 
 
 class Trainer(BaseModelSharing):
-    dataset: Dataset = Field(default_factory=lambda: Dataset())
+    dataset: Dataset | SyntMov2024Dataset = Field(default_factory=lambda: Dataset())
     estimate_correlations: EstimateCorrelations = Field(
         default_factory=lambda: EstimateCorrelations()
     )
-    representations: (
-        tp.Annotated[
-            SentenceRepresentations | WordRepresentations | SimulatedRepresentations,
-            Field(discriminator="level"),
-        ]  # Use sentence or word representations based on the specified level
-        | SentenceRepresentations  # Fallback to sentence representations if not specified
-    ) = Field(default_factory=lambda: SentenceRepresentations())
+    representations: tp.Annotated[
+        SentenceRepresentations
+        | WordRepresentations
+        | SimulatedRepresentations
+        | SyntMov2024Representations,
+        Field(discriminator="level"),
+    ] = Field(default_factory=lambda: SentenceRepresentations())
     dataloader_builder: PairwiseDataloaderBuilder = Field(
         default_factory=lambda: PairwiseDataloaderBuilder()
     )

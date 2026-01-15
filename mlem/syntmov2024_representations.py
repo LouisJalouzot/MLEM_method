@@ -1,0 +1,83 @@
+"""SyntMov2024 fMRI representations for MLEM encoding analysis.
+
+Loads preprocessed BOLD NIfTI, applies HRF delay, resamples, and masks.
+"""
+
+import typing as tp
+
+import numpy as np
+import pandas as pd
+from exca import MapInfra
+from loguru import logger
+from pydantic import ConfigDict
+
+from mlem.syntmov2024_dataset import SyntMov2024Dataset
+from mlem.utils import BaseModel
+
+
+class SyntMov2024Representations(BaseModel):
+    """fMRI BOLD representations for SyntMov2024 encoding analysis."""
+
+    dataset: SyntMov2024Dataset = SyntMov2024Dataset()
+    level: tp.Literal["syntmov2024"] = "syntmov2024"
+
+    target_resolution: float = 4.0
+    template_threshold: float = 0.2
+
+    map_infra: MapInfra = MapInfra(folder=".cache", cluster="processpool")
+    model_config: ConfigDict = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+    @map_infra.apply(item_uid=lambda x: x[0].name, cache_type="NumpyArray")
+    def preprocess(
+        self, runs: tp.Iterable[tp.Tuple[str, pd.DataFrame]]
+    ) -> tp.Iterator[np.ndarray]:
+        """Load BOLD for each run and extract representations for all stimuli.
+
+        Args:
+            runs: Iterable of (run_id, run_df) from df.groupby("run").
+
+        Yields:
+            Array of shape (n_stimuli_in_run, n_voxels) for each run.
+        """
+        from nilearn.datasets import load_mni152_brain_mask
+        from nilearn.image import resample_img
+
+        template = load_mni152_brain_mask(
+            resolution=self.target_resolution, threshold=self.template_threshold
+        )
+        target_affine, target_shape = template.affine, template.shape
+        mask = template.get_fdata() > 0
+        for bold_file, run_df in runs:
+            # Load BOLD and extract masked time series: (n_volumes, n_voxels)
+            bold = resample_img(
+                bold_file,
+                target_affine=target_affine,
+                target_shape=target_shape,
+            ).get_fdata(dtype=np.float32)[mask]
+
+            # Vectorized extraction: build frame indices and average
+            starts = run_df["start_frame"].values
+            ends = run_df["end_frame"].values
+            max_window = self.dataset.n_volumes
+
+            # Frame indices: (n_stimuli, max_window)
+            frame_idx = starts[:, None] + np.arange(max_window)
+            valid = frame_idx < ends[:, None]  # which frames are valid
+            frame_idx = np.clip(frame_idx, 0, bold.shape[0] - 1)
+
+            # Gather and average: (n_stimuli, max_window, n_voxels)
+            bold = bold[frame_idx]
+            bold = np.where(valid[..., None], bold, np.nan)
+            yield np.nanmean(bold, axis=1)
+
+    def forward(self) -> np.ndarray:
+        """Load and process fMRI data for all stimuli."""
+        # Group by run and concatenate results
+        result = np.concatenate(
+            list(self.preprocess(self.dataset.df.groupby("bold_file")))
+        )
+        logger.info(f"Extracted representations: {result.shape}")
+        return result
+
+    def __call__(self) -> np.ndarray:
+        return self.forward()
