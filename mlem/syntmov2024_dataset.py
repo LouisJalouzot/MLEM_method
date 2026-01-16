@@ -6,7 +6,6 @@ Loads BIDS-formatted events from the SyntMov2024 syntactic movement study.
 from __future__ import annotations
 
 import json
-import typing as tp
 from pathlib import Path
 
 import numpy as np
@@ -91,6 +90,16 @@ class SyntMov2024Dataset(Dataset):
     n_volumes: int = 3
     tr: float | None = None
 
+    @property
+    def level(self) -> str:
+        return "sentence"
+
+    @property
+    def features(self) -> np.ndarray:
+        if self._features is None:
+            self._features = np.array(FEATURE_COLS, dtype=str)
+        return self._features
+
     def read(self, only_columns: bool = False) -> pd.DataFrame | np.ndarray:
         """Read events and extract features, validating against fMRI availability."""
         import nibabel as nib
@@ -158,9 +167,3 @@ class SyntMov2024Dataset(Dataset):
         )
 
         return df
-
-    @property
-    def features(self) -> np.ndarray:
-        if self._features is None:
-            self._features = np.array(FEATURE_COLS, dtype=str)
-        return self._features

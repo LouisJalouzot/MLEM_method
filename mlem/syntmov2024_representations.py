@@ -5,11 +5,14 @@ Loads preprocessed BOLD NIfTI, applies HRF delay, resamples, and masks.
 
 import typing as tp
 
+if tp.TYPE_CHECKING:
+    import torch
+
 import numpy as np
 import pandas as pd
 from exca import MapInfra
 from loguru import logger
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
 from mlem.syntmov2024_dataset import SyntMov2024Dataset
 from mlem.utils import BaseModel
@@ -18,7 +21,7 @@ from mlem.utils import BaseModel
 class SyntMov2024Representations(BaseModel):
     """fMRI BOLD representations for SyntMov2024 encoding analysis."""
 
-    dataset: SyntMov2024Dataset = SyntMov2024Dataset()
+    dataset: SyntMov2024Dataset = Field(default_factory=lambda: SyntMov2024Dataset())
     level: tp.Literal["syntmov2024"] = "syntmov2024"
 
     target_resolution: float = 4.0
@@ -79,5 +82,7 @@ class SyntMov2024Representations(BaseModel):
         logger.info(f"Extracted representations: {result.shape}")
         return result
 
-    def __call__(self) -> np.ndarray:
-        return self.forward()
+    def __call__(self) -> "torch.Tensor":
+        import torch
+
+        return torch.from_numpy(self.forward())
