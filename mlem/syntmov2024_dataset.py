@@ -147,11 +147,12 @@ class SyntMov2024Dataset(Dataset):
 
             n_vols = nib.load(bold_file).shape[-1]
             adjusted_onsets = df["onset"] + start_time + delay_time + self.hrf_delay
-            df["bold_file"] = bold_file
-            df["start_frame"] = (adjusted_onsets / tr).astype(int)
-            df["end_frame"] = df["start_frame"] + self.n_volumes
+            df["bold_file"] = str(bold_file)
+            start_times = (adjusted_onsets / tr).astype(int)
+            df["start_frame"] = start_times
+            df["n_volumes"] = self.n_volumes
 
-            valid = (df["start_frame"] >= 0) & (df["end_frame"] < n_vols)
+            valid = (start_times >= 0) & (start_times + self.n_volumes < n_vols)
             n_dropped = (~valid).sum()
             if n_dropped > 0:
                 logger.trace(

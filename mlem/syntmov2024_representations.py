@@ -8,6 +8,8 @@ import typing as tp
 if tp.TYPE_CHECKING:
     import torch
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from exca import MapInfra
@@ -28,10 +30,10 @@ class SyntMov2024Representations(BaseModel):
     target_resolution: float = 4.0
     template_threshold: float = 0.2
 
-    map_infra: MapInfra = MapInfra(folder=".cache", cluster="processpool")
+    map_infra: MapInfra = MapInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
-    @map_infra.apply(item_uid=lambda x: x[0].name, cache_type="NumpyArray")
+    @map_infra.apply(item_uid=lambda x: Path(x[0]).name, cache_type="NumpyArray")
     def preprocess(
         self, runs: tp.Iterable[tp.Tuple[str, pd.DataFrame]]
     ) -> tp.Iterator[np.ndarray]:
@@ -53,26 +55,29 @@ class SyntMov2024Representations(BaseModel):
         mask = template.get_fdata() > 0
         for bold_file, run_df in runs:
             # Load BOLD and extract masked time series: (n_volumes, n_voxels)
-            bold = resample_img(
-                bold_file,
-                target_affine=target_affine,
-                target_shape=target_shape,
-            ).get_fdata(dtype=np.float32)[mask]
+            # (n_trs, n_voxels)
+            img = (
+                resample_img(
+                    bold_file,
+                    target_affine=target_affine,
+                    target_shape=target_shape,
+                    interpolation="continuous",
+                )
+                .get_fdata(dtype=np.float32)[mask]
+                .T
+            )
 
-            # Vectorized extraction: build frame indices and average
             starts = run_df["start_frame"].values
-            ends = run_df["end_frame"].values
-            max_window = self.dataset.n_volumes
+            n_volumes = run_df["n_volumes"].iloc[0]
+            # (n_stimuli, n_volumes)
+            indices = np.tile(np.arange(n_volumes), (starts.shape[0], 1))
+            indices += starts[:, None]
+            # (n_stimuli, n_volumes, n_voxels)
+            img = img[indices]
+            # (n_stimuli, n_voxels)
+            img = img.mean(axis=1)
 
-            # Frame indices: (n_stimuli, max_window)
-            frame_idx = starts[:, None] + np.arange(max_window)
-            valid = frame_idx < ends[:, None]  # which frames are valid
-            frame_idx = np.clip(frame_idx, 0, bold.shape[0] - 1)
-
-            # Gather and average: (n_stimuli, max_window, n_voxels)
-            bold = bold[frame_idx]
-            bold = np.where(valid[..., None], bold, np.nan)
-            yield np.nanmean(bold, axis=1)
+            yield img
 
     def forward(self) -> np.ndarray:
         """Load and process fMRI data for all stimuli."""
