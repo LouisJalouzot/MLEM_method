@@ -183,7 +183,7 @@ class EstimateCorrelations(BaseModel):
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
 
     @infra.apply
-    def estimate_correlations(self) -> tp.Tuple[torch.Tensor, int]:
+    def estimate_correlations(self) -> tp.Tuple[pd.DataFrame, int]:
         import pandas as pd
 
         X = self.dataset.encode().to(self.device or get_device())

@@ -166,6 +166,7 @@ class BaseModelSharing(BaseModel):
                         f"_shared_fields_config not found as a field in {cls.__name__}."
                     )
 
+                dependent_field = cls.model_fields[dependent_field_name]
                 dependent_data = data.get(dependent_field_name, {})
 
                 if isinstance(dependent_data, _BaseModel):
@@ -181,7 +182,15 @@ class BaseModelSharing(BaseModel):
                         f"must be a dict for initialization, got {type(dependent_data).__name__}."
                     )
 
-                # Inject the shared instance into the dependent's data
+                # Skip injection for discriminated union fields with empty data,
+                # allowing them to use their default factories with proper discriminators.
+                # For regular fields, always inject even when data is empty.
+                is_discriminated_union = (
+                    getattr(dependent_field, "discriminator", None) is not None
+                )
+                if is_discriminated_union and not dependent_data:
+                    continue
+
                 dependent_data[shared_field_name] = shared_data
                 data[dependent_field_name] = dependent_data
 

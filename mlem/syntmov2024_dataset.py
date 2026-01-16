@@ -92,7 +92,7 @@ class SyntMov2024Dataset(Dataset):
 
     @property
     def level(self) -> str:
-        return "sentence"
+        return "syntmov2024"
 
     @property
     def features(self) -> np.ndarray:

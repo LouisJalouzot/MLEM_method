@@ -14,6 +14,7 @@ from exca import MapInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
 
+from mlem.dataset import Dataset
 from mlem.syntmov2024_dataset import SyntMov2024Dataset
 from mlem.utils import BaseModel
 
@@ -21,7 +22,7 @@ from mlem.utils import BaseModel
 class SyntMov2024Representations(BaseModel):
     """fMRI BOLD representations for SyntMov2024 encoding analysis."""
 
-    dataset: SyntMov2024Dataset = Field(default_factory=lambda: SyntMov2024Dataset())
+    dataset: Dataset = Field(default_factory=lambda: SyntMov2024Dataset())
     level: tp.Literal["syntmov2024"] = "syntmov2024"
 
     target_resolution: float = 4.0
