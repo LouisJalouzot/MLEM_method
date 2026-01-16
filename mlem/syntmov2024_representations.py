@@ -27,7 +27,7 @@ class SyntMov2024Representations(BaseModel):
     dataset: Dataset = Field(default_factory=lambda: SyntMov2024Dataset())
     level: tp.Literal["syntmov2024"] = "syntmov2024"
 
-    target_resolution: float = 4.0
+    resolution: float = 4.5
     template_threshold: float = 0.2
 
     map_infra: MapInfra = MapInfra(folder=".cache")
@@ -49,7 +49,9 @@ class SyntMov2024Representations(BaseModel):
         from ants.utils import from_nibabel_nifti
         from nilearn.datasets import load_mni152_brain_mask
 
-        mask = load_mni152_brain_mask(resolution=4.2)
+        mask = load_mni152_brain_mask(
+            resolution=self.resolution, threshold=self.template_threshold
+        )
         mask.header.set_xyzt_units(xyz="mm")
         mask = from_nibabel_nifti(mask)
         mask_numpy = mask.numpy() > 0
