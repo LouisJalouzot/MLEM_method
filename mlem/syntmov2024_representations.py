@@ -45,27 +45,21 @@ class SyntMov2024Representations(BaseModel):
         Yields:
             Array of shape (n_stimuli_in_run, n_voxels) for each run.
         """
+        from ants import image_read, resample_image_to_target
+        from ants.utils import from_nibabel_nifti
         from nilearn.datasets import load_mni152_brain_mask
-        from nilearn.image import resample_img
 
-        template = load_mni152_brain_mask(
-            resolution=self.target_resolution, threshold=self.template_threshold
-        )
-        target_affine, target_shape = template.affine, template.shape
-        mask = template.get_fdata() > 0
+        mask = load_mni152_brain_mask(resolution=4.2)
+        mask.header.set_xyzt_units(xyz="mm")
+        mask = from_nibabel_nifti(mask)
+        mask_numpy = mask.numpy() > 0
         for bold_file, run_df in runs:
-            # Load BOLD and extract masked time series: (n_volumes, n_voxels)
             # (n_trs, n_voxels)
-            img = (
-                resample_img(
-                    bold_file,
-                    target_affine=target_affine,
-                    target_shape=target_shape,
-                    interpolation="continuous",
-                )
-                .get_fdata(dtype=np.float32)[mask]
-                .T
+            img = image_read(bold_file)
+            img = resample_image_to_target(
+                img, mask, interp_type="bSpline", imagetype=3
             )
+            img = img.numpy()[mask_numpy].T
 
             starts = run_df["start_frame"].values
             n_volumes = run_df["n_volumes"].iloc[0]
