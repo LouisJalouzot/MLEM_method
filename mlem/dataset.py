@@ -94,12 +94,24 @@ class Dataset(BaseModel):
 
     @property
     def triu_indices(self) -> tp.Tuple[np.ndarray, np.ndarray]:
-        self.features
+        if self._triu_indices is None:
+            self.features  # Ensure features are computed
+            self._triu_indices = np.triu_indices(len(self._features))
         return self._triu_indices
 
     @property
     def pfeatures(self) -> tp.List[str]:
-        self.features
+        if self._pfeatures is None:
+            self.triu_indices  # Ensure features and triu_indices are computed
+            self._pfeatures = np.array(
+                [
+                    f"({self._features[i]} x {self._features[j]})"
+                    if i != j
+                    else self._features[i]
+                    for i, j in zip(*self._triu_indices)
+                ],
+                dtype=str,
+            )
         return self._pfeatures
 
     @property

@@ -178,9 +178,10 @@ class FeatureImportance(BaseModelSharing):
         import pandas as pd
 
         # Estimate correlations with forced product
-        ec_params = self.estimate_correlations.model_dump()
-        ec_params["product"] = True
-        clusters = EstimateCorrelations(**ec_params).cluster_features()
+        ec_forced_product = self.estimate_correlations.infra.clone_obj(
+            dataset=self.dataset, product=True
+        )
+        clusters = ec_forced_product.cluster_features()
 
         all_models, all_logs = self.trainer.train()
 

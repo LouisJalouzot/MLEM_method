@@ -12,4 +12,4 @@ fi = FeatureImportance(
     dataset=SyntMov2024Dataset(),
     trainer=dict(representations=dict(level="syntmov2024")),
 )
-# i, s, w = fi.compute()
+i, s, w = fi.compute()
