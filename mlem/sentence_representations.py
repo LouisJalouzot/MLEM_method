@@ -31,8 +31,22 @@ def compute_sentence_representations(
         device=device,
         add_special_tokens=add_special_tokens,
     )
-    # (n_sentences, n_layers+1, hidden_size)
-    return aggregate_masked_tensor(hidden_states, dim=1, method=token_aggregation)
+    if token_aggregation == "none":
+        mask = hidden_states.get_mask()
+        if not mask.all():
+            raise ValueError(
+                "Token aggregation 'none' requires all sentences to have the same "
+                "number of tokens (no padding). Found masked (padding) values."
+            )
+        # (n_sentences, max_seq_len, n_layers+1, hidden_size)
+        data = hidden_states.get_data()
+        n_stimuli = hidden_states.shape[0]
+        n_layers = hidden_states.shape[2]
+        # (n_sentences, n_layers+1, hidden_size)
+        return data.swapaxes(1, 2).reshape(n_stimuli, n_layers, -1)
+    else:
+        # (n_sentences, n_layers+1, hidden_size)
+        return aggregate_masked_tensor(hidden_states, dim=1, method=token_aggregation)
 
 
 class SentenceRepresentations(BaseModel):

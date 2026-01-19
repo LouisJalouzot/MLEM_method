@@ -73,6 +73,12 @@ def compute_hidden_states(
     model = model.to(device)
     model.eval()
 
+    # For encoder-decoder models (T5, BART, etc.), use only the encoder
+    # to extract hidden states for sentence representations
+    is_encoder_decoder = hasattr(model, "encoder") and hasattr(model, "decoder")
+    if is_encoder_decoder:
+        model = model.encoder
+
     # Tokenize all sentences at once
     encoded_input = tokenizer(
         sentences,
@@ -152,7 +158,6 @@ def aggregate_masked_tensor(
             'max': Computes the maximum of unmasked values.
             'first': Selects the first unmasked value along the dimension.
             'last': Selects the last unmasked value along the dimension.
-            'none': No aggregation, returns raw data (requires no padding).
             Defaults to 'mean'.
 
     Returns:
@@ -201,16 +206,8 @@ def aggregate_masked_tensor(
         )
         agg = data.get_data().gather(dim, last_idx)
         return agg.select(dim, 0)
-    elif method == "none":
-        mask = data.get_mask()
-        if not mask.all():
-            raise ValueError(
-                "Token aggregation 'none' requires all sentences to have the same "
-                "number of tokens (no padding). Found masked (padding) values."
-            )
-        return data.get_data()
     else:
         raise ValueError(
             f"Unsupported aggregation method: {method}. "
-            "Choose from 'mean', 'min', 'max', 'first', 'last', 'none'."
+            "Choose from 'mean', 'min', 'max', 'first', 'last'."
         )
