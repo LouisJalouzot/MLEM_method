@@ -118,7 +118,7 @@ def compute_feature_importance(
         )
     if variability > thresh:
         logger.warning(
-            f"Significant variability between batches: "
+            "Significant variability between batches: "
             + message
             + f"which is larger than the threshold {thresh:.3g}."
         )

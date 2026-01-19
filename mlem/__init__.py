@@ -11,6 +11,7 @@ from .spd_matrix_learner import SPDMatrixLearnerBuilder
 from .syntmov2024_dataset import SyntMov2024Dataset
 from .syntmov2024_representations import SyntMov2024Representations
 from .trainer import Trainer
+from .univariate import UnivariateAnalysis
 from .word_representations import WordRepresentations
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -28,5 +29,6 @@ __all__ = [
     "SyntMov2024Dataset",
     "SyntMov2024Representations",
     "Trainer",
+    "UnivariateAnalysis",
     "WordRepresentations",
 ]

@@ -59,6 +59,8 @@ class Trainer(BaseModelSharing):
     eps: float = 1e-3
 
     device: str | None = "cpu"
+    unit_indices: tp.List[int] | None = None
+
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
@@ -87,6 +89,10 @@ class Trainer(BaseModelSharing):
 
         X = self.dataset.encode().to(device)
         Y = self.representations().to(device)
+
+        # Apply unit selection if specified
+        if self.unit_indices is not None:
+            Y = Y[:, self.unit_indices]
 
         return self.dataloader_builder.build(
             X=X, Y=Y, gamma=self.gamma, n_pairs=n_pairs, seed=seed_from_basemodel(self)
