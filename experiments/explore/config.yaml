@@ -1,4 +1,4 @@
-target: src.feature_importance.FeatureImportance
+target: mlem.FeatureImportance
 
 base_config:
   dataset:
@@ -11,7 +11,7 @@ base_config:
 
 grid_search_prepare:
   trainer.representations.layer:
-    - 1
+    - 2
   trainer.representations.token_aggregation:
     - mean
   trainer.representations.model_name:
@@ -24,4 +24,3 @@ grid_search_prepare:
     - RWKV/RWKV7-Goose-Pile-421M-HF
     - bigscience/bloom-560m
     - state-spaces/mamba-2.8b-hf
-    - meta-llama/Llama-3.1-8B

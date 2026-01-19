@@ -3,7 +3,6 @@
 Enables independent analysis of each neural unit (~20k units) with caching and parallelism.
 """
 
-import sys
 import typing as tp
 
 from exca import MapInfra
@@ -13,9 +12,6 @@ from tqdm.auto import tqdm
 
 from mlem.feature_importance import FeatureImportance
 from mlem.utils import BaseModelSharing
-
-logger.remove()
-logger.add(sys.stdout, level="WARNING")
 
 if tp.TYPE_CHECKING:
     import pandas as pd

@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 from joblib import Parallel, delayed
+from loguru import logger
 from tqdm.auto import tqdm
 from unflatten import unflatten
 
@@ -46,18 +47,31 @@ def run_grid_search(base_class, grid_search, method=None):
                 pbar.update(1)
 
     results = []
-    for task in tqdm(array, desc="Waiting for completion and fetching results"):
+    has_error = False
+    for idx, task in enumerate(
+        tqdm(array, desc="Waiting for completion and fetching results")
+    ):
         # Wait for computation to finish and retrieve result
-        result = task.infra.job().result()
-        if method is not None:
-            result = getattr(task, method)()
-        results.append(result)
+        try:
+            result = task.infra.job().result()
+            if method is not None:
+                result = getattr(task, method)()
+            results.append(result)
+        except Exception:
+            has_error = True
+            logger.error(
+                f"Config: {flat_configs[idx]} | Cache: {task.infra.uid_folder()}"
+            )
+            results.append(None)
+
+    if has_error:
+        raise RuntimeError("Grid search encountered errors")
 
     return flat_configs, results
 
 
 def main(config: dict = {}):
-    target = config.get("target", "src.feature_importance.FeatureImportance")
+    target = config.get("target", "mlem.FeatureImportance")
 
     module_name, class_name = target.rsplit(".", 1)
     module = importlib.import_module(module_name)
@@ -68,21 +82,29 @@ def main(config: dict = {}):
     if "grid_search_prepare" in config:
         base_config.update({"infra": infra_gpu})
         base_class = TargetClass(**base_config)
-        print("Running grid search prepare on GPU")
-        run_grid_search(
-            base_class,
-            config["grid_search_prepare"],
-            method=method,
-        )
+        logger.info("Running grid search prepare on GPU")
+        try:
+            run_grid_search(
+                base_class,
+                config["grid_search_prepare"],
+                method=method,
+            )
+        except Exception:
+            logger.error("Error during grid search prepare")
+            return 1
 
     base_config.update({"infra": infra_cpu})
     base_class = TargetClass(**base_config)
-    print("Running grid search on CPU")
-    flat_configs, results = run_grid_search(
-        base_class,
-        config["grid_search"],
-        method=method,
-    )
+    logger.info("Running grid search on CPU")
+    try:
+        flat_configs, results = run_grid_search(
+            base_class,
+            config["grid_search"],
+            method=method,
+        )
+    except Exception:
+        logger.error("Error during grid search")
+        return 1
 
     all_dfs = []
     for flat_config, dfs in zip(flat_configs, results):

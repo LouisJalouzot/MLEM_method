@@ -1,8 +1,14 @@
 # %%
 import os
+import sys
 from pathlib import Path
 
+from loguru import logger
+
 from mlem import SyntMov2024Dataset, UnivariateAnalysis, map_infra_cpu
+
+logger.remove()
+logger.add(sys.stdout, level="WARNING")
 
 os.chdir(Path(__file__).parent.parent.parent)
 

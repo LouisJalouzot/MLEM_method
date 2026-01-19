@@ -66,10 +66,15 @@ def compute_hidden_states(
     from torch.masked import masked_tensor
     from transformers import AutoModel, AutoTokenizer
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+    except:
+        tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModel.from_pretrained(model_name, output_hidden_states=True)
+    model = AutoModel.from_pretrained(
+        model_name, output_hidden_states=True, trust_remote_code=True
+    )
     model = model.to(device)
     model.eval()
 
