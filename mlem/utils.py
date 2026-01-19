@@ -48,6 +48,38 @@ def get_device():
         return "cpu"
 
 
+def get_n_layers(model_name: str) -> int:
+    """Get the number of hidden layers from a HuggingFace model config.
+
+    Handles different config attribute names across model architectures:
+    - num_hidden_layers (BERT, DeBERTa, Mamba, etc.)
+    - n_layer (GPT-2, Bloom, etc.)
+    - num_layers (T5, etc.)
+
+    Args:
+        model_name: HuggingFace model identifier.
+
+    Returns:
+        Number of hidden layers in the model.
+
+    Raises:
+        ValueError: If no layer count attribute is found in the config.
+    """
+    from transformers import AutoConfig
+
+    config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+
+    # Try different attribute names in order of prevalence
+    for attr in ("num_hidden_layers", "n_layer", "num_layers"):
+        if hasattr(config, attr):
+            return getattr(config, attr)
+
+    raise ValueError(
+        f"Could not determine number of layers for model '{model_name}'. "
+        f"Config has no 'num_hidden_layers', 'n_layer', or 'num_layers' attribute."
+    )
+
+
 def seed_everything(seed: int):
     import torch
 

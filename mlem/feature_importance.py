@@ -4,7 +4,7 @@ import typing as tp
 from time import time
 
 import numpy as np
-from exca import TaskInfra
+from exca import MapInfra, TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
 from tqdm.auto import tqdm
@@ -13,7 +13,7 @@ from mlem.dataset import Dataset
 from mlem.estimate_correlations import EstimateCorrelations
 from mlem.pairwise_dataloader import PairwiseDataloader
 from mlem.trainer import Trainer
-from mlem.utils import BaseModelSharing, compute_stats
+from mlem.utils import BaseModelSharing, compute_stats, get_n_layers
 
 if tp.TYPE_CHECKING:
     import pandas as pd
@@ -167,11 +167,53 @@ class FeatureImportance(BaseModelSharing):
     alpha: float = 0.01
 
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
+    map_infra: MapInfra = MapInfra(folder=".cache")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
         "dataset": ["trainer", "estimate_correlations"],
         "estimate_correlations": ["trainer"],
     }
+
+    @map_infra.apply(
+        item_uid=str, exclude_from_cache_uid=("trainer.representations.layer",)
+    )
+    def run_layers(
+        self, layers: tp.Iterable[int]
+    ) -> tp.Iterator[tp.Tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]]:
+        for layer in layers:
+            fi_for_layer = self.infra.clone_obj(
+                trainer=dict(representations=dict(layer=layer))
+            )
+            importances, scores, weights = fi_for_layer.compute()
+            for df in [importances, scores, weights]:
+                df["layer"] = layer
+            yield importances, scores, weights
+
+    def run_all_layers(
+        self,
+    ) -> tp.Tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]:
+        import pandas as pd
+
+        model_name = self.trainer.representations.model_name
+        n_layers = get_n_layers(model_name)
+        layers = list(range(n_layers + 1))
+        logger.info(
+            f"Running feature importance for {len(layers)} layers "
+            f"of model '{model_name}'"
+        )
+        all_importances, all_scores, all_weights = [], [], []
+        for importances, scores, weights in tqdm(
+            self.run_layers(layers), total=len(layers), desc="Layers"
+        ):
+            all_importances.append(importances)
+            all_scores.append(scores)
+            all_weights.append(weights)
+
+        return (
+            pd.concat(all_importances, ignore_index=True),
+            pd.concat(all_scores, ignore_index=True),
+            pd.concat(all_weights, ignore_index=True),
+        )
 
     @infra.apply
     def compute(self) -> tp.Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
