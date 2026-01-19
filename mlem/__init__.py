@@ -8,6 +8,8 @@ from .pairwise_dataloader import PairwiseDataloaderBuilder
 from .reduce_dimensions import ReduceDimensions
 from .sentence_representations import SentenceRepresentations
 from .spd_matrix_learner import SPDMatrixLearnerBuilder
+from .syntmov2024_dataset import SyntMov2024Dataset
+from .syntmov2024_representations import SyntMov2024Representations
 from .trainer import Trainer
 from .word_representations import WordRepresentations
 
@@ -23,6 +25,8 @@ __all__ = [
     "ReduceDimensions",
     "SentenceRepresentations",
     "SPDMatrixLearnerBuilder",
+    "SyntMov2024Dataset",
+    "SyntMov2024Representations",
     "Trainer",
     "WordRepresentations",
 ]
