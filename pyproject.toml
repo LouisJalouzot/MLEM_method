@@ -9,7 +9,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
-    "antspyx @ git+https://github.com/ANTsX/ANTsPy@0f3a14b5188128d23c08302094f79f71f03ebb74",
+    "antspyx @ git+https://github.com/ANTsX/ANTsPy.git",
     "captum>=0.8.0",
     "conllu>=6.0.0",
     "exca>=0.5.0",
