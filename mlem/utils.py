@@ -242,3 +242,15 @@ slurm_additional_parameters:
     hint: nomultithread
 """
 infra_cpu = yaml.safe_load(infra_cpu)
+
+map_infra_cpu = """
+folder: .cache
+cluster: auto
+cpus_per_task: 4
+timeout_min: 120
+slurm_partition: cpu_p1,prepost,visu,archive,compil
+slurm_account: ioj@cpu
+slurm_additional_parameters:
+    hint: nomultithread
+"""
+map_infra_cpu = yaml.safe_load(map_infra_cpu)

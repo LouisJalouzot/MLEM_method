@@ -12,7 +12,7 @@ from .syntmov2024_dataset import SyntMov2024Dataset
 from .syntmov2024_representations import SyntMov2024Representations
 from .trainer import Trainer
 from .univariate import UnivariateAnalysis
-from .utils import infra_cpu, infra_gpu
+from .utils import infra_cpu, infra_gpu, map_infra_cpu
 from .word_representations import WordRepresentations
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -20,6 +20,7 @@ warnings.simplefilter(action="ignore", category=FutureWarning)
 __all__ = [
     "infra_cpu",
     "infra_gpu",
+    "map_infra_cpu",
     "FeatureImportance",
     "DecodingBaseline",
     "EncodingBaseline",
