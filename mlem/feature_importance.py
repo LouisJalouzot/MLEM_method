@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing as tp
 from time import time
 
@@ -21,14 +19,14 @@ if tp.TYPE_CHECKING:
 
 
 def compute_feature_importance(
-    model: nn.Module,
+    model: "nn.Module",
     dataloader: PairwiseDataloader,
-    clusters: pd.DataFrame,
+    clusters: "pd.DataFrame",
     n_perm: int = 5,
     monitor: tp.Literal["std", "ci_width"] = "std",
     thresh: float = 0.01,
     alpha: float = 0.01,
-) -> tp.Tuple[pd.DataFrame, pd.Series]:
+) -> tp.Tuple["pd.DataFrame", "pd.Series"]:
     import pandas as pd
     import torch
     from captum.attr import FeaturePermutation
@@ -196,10 +194,9 @@ class FeatureImportance(BaseModelSharing):
 
         model_name = self.trainer.representations.model_name
         n_layers = get_n_layers(model_name)
-        layers = list(range(n_layers + 1))
+        layers = list(range(1, n_layers + 1))  # 0 is the embedding layer
         logger.info(
-            f"Running feature importance for {len(layers)} layers "
-            f"of model '{model_name}'"
+            f"Running feature importance for {len(layers)} layers of model '{model_name}'"
         )
         all_importances, all_scores, all_weights = [], [], []
         for importances, scores, weights in tqdm(
@@ -216,7 +213,7 @@ class FeatureImportance(BaseModelSharing):
         )
 
     @infra.apply
-    def compute(self) -> tp.Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    def compute(self) -> tp.Tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]:
         import pandas as pd
 
         # Estimate correlations with forced product
@@ -276,7 +273,7 @@ class FeatureImportance(BaseModelSharing):
 
     def compute_and_aggregate(
         self,
-    ) -> tp.Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    ) -> tp.Tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]:
         all_importances, all_score, all_weights = self.compute()
 
         if all_importances.cv.nunique() > 1:

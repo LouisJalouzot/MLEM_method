@@ -1,6 +1,8 @@
 import argparse
 import importlib
 import math
+import sys
+from functools import reduce
 from itertools import product
 from pathlib import Path
 
@@ -28,40 +30,45 @@ def yield_grid_search(grid_config):
 
 def run_grid_search(base_class, grid_search, method=None):
     flat_configs = []
+    tasks = []
     n_configs = math.prod(len(v) for v in grid_search.values())
-    with base_class.infra.job_array(max_workers=n_configs) as array:
-        with tqdm(total=n_configs, desc="Creating tasks") as pbar:
-            for flat_config, task in Parallel(
-                n_jobs=-2, return_as="generator", prefer="threads"
-            )(
-                delayed(
-                    lambda flat_config, config: (
-                        flat_config,
-                        base_class.infra.clone_obj(config),
-                    )
-                )(flat_config, config)
-                for flat_config, config in yield_grid_search(grid_search)
-            ):
-                flat_configs.append(flat_config)
-                array.append(task)
-                pbar.update(1)
+
+    # Create all tasks
+    # TODO: try to revert to JOB array
+    with tqdm(total=n_configs, desc="Creating tasks") as pbar:
+        for flat_config, task in Parallel(
+            n_jobs=-2, return_as="generator", prefer="threads"
+        )(
+            delayed(
+                lambda flat_config, config: (
+                    flat_config,
+                    base_class.infra.clone_obj(config),
+                )
+            )(flat_config, config)
+            for flat_config, config in yield_grid_search(grid_search)
+        ):
+            flat_configs.append(flat_config)
+            tasks.append(task)
+            pbar.update(1)
 
     results = []
     has_error = False
-    for idx, task in enumerate(
-        tqdm(array, desc="Waiting for completion and fetching results")
-    ):
-        # Wait for computation to finish and retrieve result
+
+    # Resolve method: use default @infra.apply decorated method if not specified
+    if method is None:
+        method = base_class.infra._infra_method.method.__name__
+
+    # Call the method directly on each task
+    for idx, task in enumerate(tqdm(tasks, desc=f"Running {method}")):
         try:
-            result = task.infra.job().result()
-            if method is not None:
-                result = getattr(task, method)()
+            result = reduce(getattr, method.split("."), task)()
             results.append(result)
-        except Exception:
+        except Exception as e:
             has_error = True
             logger.error(
-                f"Config: {flat_configs[idx]} | Cache: {task.infra.uid_folder()}"
+                f"Config: {flat_configs[idx]} | Cache: {Path(task.infra.uid_folder()).resolve()}"
             )
+            logger.exception(e)
             results.append(None)
 
     if has_error:
@@ -78,16 +85,17 @@ def main(config: dict = {}):
     TargetClass = getattr(module, class_name)
     base_config = config.get("base_config", {})
     method = config.get("method", None)
+    method_prepare = config.get("method_prepare", None)
 
     if "grid_search_prepare" in config:
         base_config.update({"infra": infra_gpu})
         base_class = TargetClass(**base_config)
-        logger.info("Running grid search prepare on GPU")
+        logger.info(f"Running grid search prepare on GPU ({target}.{method_prepare})")
         try:
             run_grid_search(
                 base_class,
                 config["grid_search_prepare"],
-                method=method,
+                method=method_prepare,
             )
         except Exception:
             logger.error("Error during grid search prepare")
@@ -127,7 +135,18 @@ def main(config: dict = {}):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config", nargs="*", type=str, default=None)
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        default="ERROR",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Logging level (default: ERROR)",
+    )
     args = parser.parse_args()
+
+    # Configure logging level
+    logger.remove()
+    logger.add(sys.stderr, level=args.log_level)
 
     if args.config:
         for config_file in args.config:
