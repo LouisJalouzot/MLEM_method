@@ -12,7 +12,7 @@ base_config:
       level: sentence
 
 grid_search_prepare:
-  trainer.representations.model_name:
+  model_name:
     - bert-base-uncased
     - gpt2
     - answerdotai/ModernBERT-base

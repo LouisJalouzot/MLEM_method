@@ -75,20 +75,12 @@ def run_grid_search(base_class, grid_search, infra_path=None):
 
     for idx, task in enumerate(tqdm(array, desc="Fetching results")):
         try:
-            task_infra = (
-                reduce(getattr, infra_path.split("."), task)
-                if infra_path
-                else task.infra
-            )
+            task_infra = getattr(task, infra_attr)
             result = task_infra.job().result()
             results.append(result)
         except Exception as e:
             has_error = True
-            task_infra = (
-                reduce(getattr, infra_path.split("."), task)
-                if infra_path
-                else task.infra
-            )
+            task_infra = getattr(task, infra_attr)
             logger.error(
                 f"Config: {flat_configs[idx]} | Cache: {Path(task_infra.uid_folder()).resolve()}"
             )
