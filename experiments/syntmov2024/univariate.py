@@ -10,7 +10,8 @@ from mlem import SyntMov2024Dataset, UnivariateAnalysis, map_infra_cpu
 logger.remove()
 logger.add(sys.stdout, level="WARNING")
 
-os.chdir(Path(__file__).parent.parent.parent)
+script_dir = Path(__file__).parent
+os.chdir(script_dir.parent.parent)
 
 # %%
 uni = UnivariateAnalysis(
@@ -24,3 +25,6 @@ uni = UnivariateAnalysis(
     map_infra=map_infra_cpu,
 )
 all_i, all_s, all_w = uni.run()
+all_i.to_parquet(script_dir / "i.parquet")
+all_s.to_parquet(script_dir / "s.parquet")
+all_w.to_parquet(script_dir / "w.parquet")

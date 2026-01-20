@@ -278,7 +278,7 @@ infra_cpu = yaml.safe_load(infra_cpu)
 map_infra_cpu = """
 folder: .cache
 cluster: auto
-cpus_per_task: 4
+cpus_per_task: 2
 timeout_min: 120
 slurm_partition: cpu_p1,prepost,visu,archive,compil
 slurm_account: ioj@cpu
