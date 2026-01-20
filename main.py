@@ -111,8 +111,9 @@ def main(config: dict = {}):
     infra_prepare = config.get("infra_prepare", None)
 
     if "grid_search_prepare" in config:
-        base_config.update({"infra": infra_gpu})
-        base_class = TargetClass(**base_config)
+        infra_key = infra_prepare if infra_prepare else "infra"
+        prepare_config = {**base_config, **unflatten({infra_key: infra_gpu})}
+        base_class = TargetClass(**prepare_config)
         logger.info(
             f"Running grid search prepare on GPU (infra: {infra_prepare or 'default'})"
         )
@@ -123,8 +124,9 @@ def main(config: dict = {}):
             fetch_results=False,
         )
 
-    base_config.update({"infra": infra_cpu})
-    base_class = TargetClass(**base_config)
+    infra_key = infra_path if infra_path else "infra"
+    main_config = {**base_config, **unflatten({infra_key: infra_cpu})}
+    base_class = TargetClass(**main_config)
     logger.info(f"Running grid search on CPU (infra: {infra_path or 'default'})")
     flat_configs, results = run_grid_search(
         base_class,
