@@ -28,7 +28,7 @@ def yield_grid_search(grid_config):
         yield flat_config, unflatten(flat_config)
 
 
-def run_grid_search(base_class, grid_search, infra_path=None):
+def run_grid_search(base_class, grid_search, infra_path=None, fetch_results=True):
     """Run grid search with job array support.
 
     Args:
@@ -36,6 +36,7 @@ def run_grid_search(base_class, grid_search, infra_path=None):
         grid_search: Dict of parameter paths to lists of values.
         infra_path: Optional dotted path to the infra to use (e.g., 'trainer.representations.infra').
                     If None, uses base_class.infra.
+        fetch_results: If True, collect and return results. If False, just wait for completion.
     """
     flat_configs = []
     n_configs = math.prod(len(v) for v in grid_search.values())
@@ -73,11 +74,16 @@ def run_grid_search(base_class, grid_search, infra_path=None):
     results = []
     has_error = False
 
-    for idx, task in enumerate(tqdm(array, desc="Fetching results")):
+    desc = "Waiting for completion"
+    if fetch_results:
+        desc += " and fetching results"
+    for idx, task in enumerate(tqdm(array, desc=desc)):
         try:
             task_infra = getattr(task, infra_attr)
-            result = task_infra.job().result()
-            results.append(result)
+            job = task_infra.job()
+            job.wait()
+            if fetch_results:
+                results.append(job.result())
         except Exception as e:
             has_error = True
             task_infra = getattr(task, infra_attr)
@@ -85,7 +91,8 @@ def run_grid_search(base_class, grid_search, infra_path=None):
                 f"Config: {flat_configs[idx]} | Cache: {Path(task_infra.uid_folder()).resolve()}"
             )
             logger.exception(e)
-            results.append(None)
+            if fetch_results:
+                results.append(None)
 
     if has_error:
         raise RuntimeError("Grid search encountered errors")
@@ -113,6 +120,7 @@ def main(config: dict = {}):
             base_class,
             config["grid_search_prepare"],
             infra_path=infra_prepare,
+            fetch_results=False,
         )
 
     base_config.update({"infra": infra_cpu})
@@ -148,9 +156,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--log-level",
         type=str,
-        default="ERROR",
+        default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        help="Logging level (default: ERROR)",
+        help="Logging level (default: INFO)",
     )
     args = parser.parse_args()
 
