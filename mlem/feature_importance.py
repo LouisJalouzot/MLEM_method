@@ -165,7 +165,8 @@ class FeatureImportance(BaseModelSharing):
     alpha: float = 0.01
 
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
-    map_infra: MapInfra = MapInfra(folder=".cache")
+    layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
+    map_infra: MapInfra = MapInfra()
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
         "dataset": ["trainer", "estimate_correlations"],
@@ -187,6 +188,7 @@ class FeatureImportance(BaseModelSharing):
                 df["layer"] = layer
             yield importances, scores, weights
 
+    @layers_infra.apply
     def run_all_layers(
         self,
     ) -> tp.Tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]:

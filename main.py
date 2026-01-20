@@ -28,45 +28,69 @@ def yield_grid_search(grid_config):
         yield flat_config, unflatten(flat_config)
 
 
-def run_grid_search(base_class, grid_search, method=None):
+def run_grid_search(base_class, grid_search, infra_path=None):
+    """Run grid search with job array support.
+
+    Args:
+        base_class: The base pydantic class with infra.
+        grid_search: Dict of parameter paths to lists of values.
+        infra_path: Optional dotted path to the infra to use (e.g., 'trainer.representations.infra').
+                    If None, uses base_class.infra.
+    """
     flat_configs = []
-    tasks = []
     n_configs = math.prod(len(v) for v in grid_search.values())
 
-    # Create all tasks
-    # TODO: try to revert to JOB array
-    with tqdm(total=n_configs, desc="Creating tasks") as pbar:
-        for flat_config, task in Parallel(
-            n_jobs=-2, return_as="generator", prefer="threads"
-        )(
-            delayed(
-                lambda flat_config, config: (
-                    flat_config,
-                    base_class.infra.clone_obj(config),
-                )
-            )(flat_config, config)
-            for flat_config, config in yield_grid_search(grid_search)
-        ):
-            flat_configs.append(flat_config)
-            tasks.append(task)
-            pbar.update(1)
+    # Resolve which infra to use for cloning and job array
+    if infra_path is None:
+        infra_attr = "infra"
+    else:
+        infra_attr = infra_path.split(".")[-1]
+    base_infra = (
+        getattr(base_class, infra_attr)
+        if infra_path is None
+        else reduce(getattr, infra_path.split("."), base_class)
+    )
 
+    # Create tasks and submit to job array
+    with base_infra.job_array(max_workers=n_configs) as array:
+        with tqdm(total=n_configs, desc="Creating tasks") as pbar:
+            for flat_config, task in Parallel(
+                n_jobs=-2, return_as="generator", prefer="threads"
+            )(
+                delayed(
+                    lambda flat_config, config: (
+                        flat_config,
+                        base_infra.clone_obj(config),
+                    )
+                )(flat_config, config)
+                for flat_config, config in yield_grid_search(grid_search)
+            ):
+                flat_configs.append(flat_config)
+                array.append(task)
+                pbar.update(1)
+
+    # Collect results
     results = []
     has_error = False
 
-    # Resolve method: use default @infra.apply decorated method if not specified
-    if method is None:
-        method = base_class.infra._infra_method.method.__name__
-
-    # Call the method directly on each task
-    for idx, task in enumerate(tqdm(tasks, desc=f"Running {method}")):
+    for idx, task in enumerate(tqdm(array, desc="Fetching results")):
         try:
-            result = reduce(getattr, method.split("."), task)()
+            task_infra = (
+                reduce(getattr, infra_path.split("."), task)
+                if infra_path
+                else task.infra
+            )
+            result = task_infra.job().result()
             results.append(result)
         except Exception as e:
             has_error = True
+            task_infra = (
+                reduce(getattr, infra_path.split("."), task)
+                if infra_path
+                else task.infra
+            )
             logger.error(
-                f"Config: {flat_configs[idx]} | Cache: {Path(task.infra.uid_folder()).resolve()}"
+                f"Config: {flat_configs[idx]} | Cache: {Path(task_infra.uid_folder()).resolve()}"
             )
             logger.exception(e)
             results.append(None)
@@ -84,35 +108,29 @@ def main(config: dict = {}):
     module = importlib.import_module(module_name)
     TargetClass = getattr(module, class_name)
     base_config = config.get("base_config", {})
-    method = config.get("method", None)
-    method_prepare = config.get("method_prepare", None)
+    infra_path = config.get("infra", None)
+    infra_prepare = config.get("infra_prepare", None)
 
     if "grid_search_prepare" in config:
         base_config.update({"infra": infra_gpu})
         base_class = TargetClass(**base_config)
-        logger.info(f"Running grid search prepare on GPU ({target}.{method_prepare})")
-        try:
-            run_grid_search(
-                base_class,
-                config["grid_search_prepare"],
-                method=method_prepare,
-            )
-        except Exception:
-            logger.error("Error during grid search prepare")
-            return 1
+        logger.info(
+            f"Running grid search prepare on GPU (infra: {infra_prepare or 'default'})"
+        )
+        run_grid_search(
+            base_class,
+            config["grid_search_prepare"],
+            infra_path=infra_prepare,
+        )
 
     base_config.update({"infra": infra_cpu})
     base_class = TargetClass(**base_config)
-    logger.info("Running grid search on CPU")
-    try:
-        flat_configs, results = run_grid_search(
-            base_class,
-            config["grid_search"],
-            method=method,
-        )
-    except Exception:
-        logger.error("Error during grid search")
-        return 1
+    logger.info(f"Running grid search on CPU (infra: {infra_path or 'default'})")
+    flat_configs, results = run_grid_search(
+        base_class,
+        config["grid_search"],
+        infra_path=infra_path,
+    )
 
     all_dfs = []
     for flat_config, dfs in zip(flat_configs, results):

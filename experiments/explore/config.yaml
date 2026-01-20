@@ -1,6 +1,6 @@
 target: mlem.FeatureImportance
-method: run_all_layers
-method_prepare: trainer.representations.forward
+infra: layers_infra
+infra_prepare: trainer.representations.infra
 
 base_config:
   dataset:
