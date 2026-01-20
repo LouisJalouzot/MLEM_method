@@ -13,8 +13,6 @@ from loguru import logger
 from tqdm.auto import tqdm
 from unflatten import unflatten
 
-from mlem.utils import infra_cpu, infra_gpu
-
 
 def yield_grid_search(grid_config):
     if not grid_config:
@@ -28,29 +26,21 @@ def yield_grid_search(grid_config):
         yield flat_config, unflatten(flat_config)
 
 
-def run_grid_search(base_class, grid_search, infra_path=None, fetch_results=True):
+def run_grid_search(base_class, grid_search, infra_path, fetch_results=True):
     """Run grid search with job array support.
 
     Args:
         base_class: The base pydantic class with infra.
         grid_search: Dict of parameter paths to lists of values.
-        infra_path: Optional dotted path to the infra to use (e.g., 'trainer.representations.infra').
-                    If None, uses base_class.infra.
+        infra_path: Dotted path to the infra to use (e.g., 'trainer.representations.infra').
         fetch_results: If True, collect and return results. If False, just wait for completion.
     """
     flat_configs = []
     n_configs = math.prod(len(v) for v in grid_search.values())
 
     # Resolve which infra to use for cloning and job array
-    if infra_path is None:
-        infra_attr = "infra"
-    else:
-        infra_attr = infra_path.split(".")[-1]
-    base_infra = (
-        getattr(base_class, infra_attr)
-        if infra_path is None
-        else reduce(getattr, infra_path.split("."), base_class)
-    )
+    infra_path_split = infra_path.split(".")
+    base_infra = reduce(getattr, infra_path_split, base_class)
 
     # Create tasks and submit to job array
     with base_infra.job_array(max_workers=n_configs) as array:
@@ -79,20 +69,18 @@ def run_grid_search(base_class, grid_search, infra_path=None, fetch_results=True
         desc += " and fetching results"
     for idx, task in enumerate(tqdm(array, desc=desc)):
         try:
-            task_infra = getattr(task, infra_attr)
+            task_infra = getattr(task, infra_path_split[-1])
             job = task_infra.job()
             job.wait()
             if fetch_results:
                 results.append(job.result())
         except Exception as e:
             has_error = True
-            task_infra = getattr(task, infra_attr)
+            task_infra = getattr(task, infra_path_split[-1])
             logger.error(
                 f"Config: {flat_configs[idx]} | Cache: {Path(task_infra.uid_folder()).resolve()}"
             )
             logger.exception(e)
-            if fetch_results:
-                results.append(None)
 
     if has_error:
         raise RuntimeError("Grid search encountered errors")
@@ -102,21 +90,15 @@ def run_grid_search(base_class, grid_search, infra_path=None, fetch_results=True
 
 def main(config: dict = {}):
     target = config.get("target", "mlem.FeatureImportance")
-
     module_name, class_name = target.rsplit(".", 1)
     module = importlib.import_module(module_name)
     TargetClass = getattr(module, class_name)
-    base_config = config.get("base_config", {})
-    infra_path = config.get("infra", None)
-    infra_prepare = config.get("infra_prepare", None)
+    base_class = TargetClass(**config.get("base_config", {}))
+    infra_path = config.get("infra", "infra")
+    infra_prepare = config.get("infra_prepare", "infra")
 
     if "grid_search_prepare" in config:
-        infra_key = infra_prepare if infra_prepare else "infra"
-        prepare_config = {**base_config, **unflatten({infra_key: infra_gpu})}
-        base_class = TargetClass(**prepare_config)
-        logger.info(
-            f"Running grid search prepare on GPU (infra: {infra_prepare or 'default'})"
-        )
+        logger.info(f"Running grid search prepare (target: {infra_prepare})")
         run_grid_search(
             base_class,
             config["grid_search_prepare"],
@@ -124,10 +106,7 @@ def main(config: dict = {}):
             fetch_results=False,
         )
 
-    infra_key = infra_path if infra_path else "infra"
-    main_config = {**base_config, **unflatten({infra_key: infra_cpu})}
-    base_class = TargetClass(**main_config)
-    logger.info(f"Running grid search on CPU (infra: {infra_path or 'default'})")
+    logger.info(f"Running grid search (target: {infra_path})")
     flat_configs, results = run_grid_search(
         base_class,
         config["grid_search"],

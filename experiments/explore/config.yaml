@@ -7,9 +7,46 @@ base_config:
     path: datasets/relative_clause.csv
   trainer:
     dataloader_builder:
-      cv: 5
+      cv: 0.2
     representations:
       level: sentence
+      infra: # GPU infra for computing LLM embeddings
+        folder: .cache
+        cluster: auto
+        mode: retry
+        logs: .cache/logs/explore/repr/%j
+        cpus_per_task: 24
+        gpus_per_node: 1
+        timeout_min: 120
+        slurm_qos: qos_gpu_h100-dev
+        slurm_constraint: h100
+        slurm_account: ioj@h100
+        slurm_additional_parameters:
+            hint: nomultithread
+  layers_infra: # CPU infra for running MLEM
+    folder: .cache
+    cluster: auto
+    mode: retry
+    logs: .cache/logs/explore/layers_fi/%j
+    cpus_per_task: 8
+    timeout_min: 120
+    slurm_partition: cpu_p1,prepost,visu,archive,compil
+    slurm_account: ioj@cpu
+    slurm_additional_parameters:
+        hint: nomultithread
+
+# Test
+# grid_search_prepare:
+#   model_name:
+#     - prajjwal1/bert-tiny
+
+# grid_search:
+#   trainer.representations.token_aggregation:
+#     - none
+#   trainer.dataloader_builder.distance:
+#     - cosine
+#   trainer.representations.model_name:
+#     - prajjwal1/bert-tiny
 
 grid_search_prepare:
   model_name:
@@ -26,8 +63,8 @@ grid_search_prepare:
 
 grid_search:
   trainer.representations.token_aggregation:
-    - mean
     - none
+    - mean
     - first
     - last
   trainer.dataloader_builder.distance:

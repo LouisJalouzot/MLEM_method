@@ -12,16 +12,13 @@ from .syntmov2024_dataset import SyntMov2024Dataset
 from .syntmov2024_representations import SyntMov2024Representations
 from .trainer import Trainer
 from .univariate import UnivariateAnalysis
-from .utils import get_n_layers, infra_cpu, infra_gpu, map_infra_cpu
+from .utils import get_n_layers
 from .word_representations import WordRepresentations
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 __all__ = [
     "get_n_layers",
-    "infra_cpu",
-    "infra_gpu",
-    "map_infra_cpu",
     "FeatureImportance",
     "DecodingBaseline",
     "EncodingBaseline",
