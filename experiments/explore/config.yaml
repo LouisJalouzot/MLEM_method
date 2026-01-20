@@ -35,26 +35,13 @@ base_config:
     slurm_additional_parameters:
         hint: nomultithread
 
-# Test
-# grid_search_prepare:
-#   model_name:
-#     - prajjwal1/bert-tiny
-
-# grid_search:
-#   trainer.representations.token_aggregation:
-#     - none
-#   trainer.dataloader_builder.distance:
-#     - cosine
-#   trainer.representations.model_name:
-#     - prajjwal1/bert-tiny
-
 grid_search_prepare:
   model_name:
     - bert-base-uncased
     - gpt2
     - answerdotai/ModernBERT-base
     - microsoft/deberta-v3-base
-    - google/flan-t5-base
+    - facebook/bart-base
     - state-spaces/mamba-370m-hf
     - RWKV/RWKV7-Goose-Pile-421M-HF
     - bigscience/bloom-560m
@@ -75,7 +62,7 @@ grid_search:
     - gpt2
     - answerdotai/ModernBERT-base
     - microsoft/deberta-v3-base
-    - google/flan-t5-base
+    - facebook/bart-base
     - state-spaces/mamba-370m-hf
     - RWKV/RWKV7-Goose-Pile-421M-HF
     - bigscience/bloom-560m
