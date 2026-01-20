@@ -68,15 +68,17 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True):
     if fetch_results:
         desc += " and fetching results"
     for idx, task in enumerate(tqdm(array, desc=desc)):
+        task_infra = getattr(task, infra_path_split[-1])
         try:
-            task_infra = getattr(task, infra_path_split[-1])
             job = task_infra.job()
-            job.wait()
+            # Wait for completion and return exception if any
+            exc = job.exception()
+            if exc is not None:
+                raise exc
             if fetch_results:
                 results.append(job.result())
         except Exception as e:
             has_error = True
-            task_infra = getattr(task, infra_path_split[-1])
             logger.error(
                 f"Config: {flat_configs[idx]} | Cache: {Path(task_infra.uid_folder()).resolve()}"
             )

@@ -7,7 +7,7 @@ base_config:
     path: datasets/relative_clause.csv
   trainer:
     dataloader_builder:
-      cv: 0.2
+      cv: 5
     representations:
       level: sentence
       infra: # GPU infra for computing LLM embeddings
@@ -15,7 +15,7 @@ base_config:
         cluster: auto
         mode: retry
         logs: .cache/logs/explore/repr/%j
-        cpus_per_task: 24
+        cpus_per_task: 48
         gpus_per_node: 1
         timeout_min: 120
         slurm_qos: qos_gpu_h100-dev
