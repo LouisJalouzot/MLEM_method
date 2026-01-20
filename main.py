@@ -59,30 +59,27 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True):
                 flat_configs.append(flat_config)
                 array.append(task)
                 pbar.update(1)
+        logger.info("Submitting tasks to job array")
 
-    # Collect results
+    # Wait for completion and collect results if necessary
     results = []
     has_error = False
-
     desc = "Waiting for completion"
     if fetch_results:
         desc += " and fetching results"
     for idx, task in enumerate(tqdm(array, desc=desc)):
         task_infra = getattr(task, infra_path_split[-1])
-        try:
-            job = task_infra.job()
-            # Wait for completion and return exception if any
-            exc = job.exception()
-            if exc is not None:
-                raise exc
-            if fetch_results:
-                results.append(job.result())
-        except Exception as e:
+        job = task_infra.job()
+        # Wait for completion and log exception if any
+        exc = job.exception()
+        if exc is not None:
             has_error = True
             logger.error(
                 f"Config: {flat_configs[idx]} | Cache: {Path(task_infra.uid_folder()).resolve()}"
             )
-            logger.exception(e)
+            logger.error(exc)
+        if fetch_results:
+            results.append(job.result())
 
     if has_error:
         raise RuntimeError("Grid search encountered errors")

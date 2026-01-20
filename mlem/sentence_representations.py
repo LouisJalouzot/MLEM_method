@@ -66,6 +66,7 @@ class SentenceRepresentations(BaseModel):
     device: tp.Optional[str] = None
     batch_size: int = 32
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
+    inner_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
         "batch_size",
@@ -94,7 +95,7 @@ class SentenceRepresentations(BaseModel):
 
         return sentence_representations + torch.from_numpy(noise)
 
-    @infra.apply(exclude_from_cache_uid=["layer", "units", "noise_level", "seed"])
+    @inner_infra.apply(exclude_from_cache_uid=["layer", "units", "noise_level", "seed"])
     def forward(self) -> torch.Tensor:
         # (n_sentences, n_layers+1, hidden_size)
         return compute_sentence_representations(
@@ -105,3 +106,8 @@ class SentenceRepresentations(BaseModel):
             add_special_tokens=self.add_special_tokens,
             token_aggregation=self.token_aggregation,
         )
+
+    # Dummy function to indicate successful computation without loading result in RAM
+    @infra.apply(exclude_from_cache_uid=["layer", "units", "noise_level", "seed"])
+    def precompute(self):
+        self.forward()
