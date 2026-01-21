@@ -17,8 +17,7 @@ base_config:
         logs: .cache/logs/explore/repr/%j
         cpus_per_task: 48
         gpus_per_node: 1
-        timeout_min: 120
-        slurm_qos: qos_gpu_h100-dev
+        timeout_min: 1200
         slurm_constraint: h100
         slurm_account: ioj@h100
         slurm_additional_parameters:
@@ -28,14 +27,19 @@ base_config:
     cluster: auto
     mode: retry
     logs: .cache/logs/explore/layers_fi/%j
-    cpus_per_task: 8
-    timeout_min: 120
+    cpus_per_task: 16
+    timeout_min: 1200
     slurm_partition: cpu_p1,prepost,visu,archive,compil
     slurm_account: ioj@cpu
     slurm_additional_parameters:
         hint: nomultithread
 
 grid_search_prepare:
+  token_aggregation:
+    - none
+    - mean
+    - first
+    - last
   model_name:
     - bert-base-uncased
     - gpt2
