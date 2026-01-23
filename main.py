@@ -69,17 +69,23 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True):
         desc += " and fetching results"
     for idx, task in enumerate(tqdm(array, desc=desc)):
         task_infra = getattr(task, infra_path_split[-1])
-        job = task_infra.job()
-        # Wait for completion and log exception if any
-        exc = job.exception()
-        if exc is not None:
-            has_error = True
+        try:
+            job = task_infra.job()
+            # Wait for completion and log exception if any
+            exc = job.exception()
+            if exc is not None:
+                has_error = True
+                logger.error(
+                    f"Config: {flat_configs[idx]} | Cache: {Path(task_infra.uid_folder()).resolve()}"
+                )
+                logger.error(exc)
+            if fetch_results:
+                results.append(job.result())
+        except KeyboardInterrupt:
             logger.error(
-                f"Config: {flat_configs[idx]} | Cache: {Path(task_infra.uid_folder()).resolve()}"
+                f"Keyboard interrupt | Config: {flat_configs[idx]} | Cache: {Path(task_infra.uid_folder()).resolve()}"
             )
-            logger.error(exc)
-        if fetch_results:
-            results.append(job.result())
+            raise
 
     if has_error:
         raise RuntimeError("Grid search encountered errors")
@@ -120,7 +126,7 @@ def main(config: dict = {}):
         for df in dfs:
             for k, v in flat_config.items():
                 try:
-                    df[k] = v
+                    df[k] = str(v)
                 except Exception as e:
                     print(f"Error adding config {k}: {v} to DataFrame: {e}")
                     raise e
