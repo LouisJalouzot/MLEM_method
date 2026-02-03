@@ -1,0 +1,98 @@
+target: mlem.FeatureImportance
+infra: layers_infra
+infra_prepare: trainer.representations.infra
+
+base_config:
+  dataset:
+    path: datasets/relative_clause.csv
+  trainer:
+    dataloader_builder:
+      cv: 5
+    representations:
+      level: sentence
+      batch_size: 4
+      infra: # GPU infra for computing LLM embeddings
+        folder: .cache
+        cluster: auto
+        mode: retry
+        logs: .cache/logs/focus/repr/%j
+        cpus_per_task: 72
+        gpus_per_node: 1
+        timeout_min: 1200
+        slurm_constraint: h100
+        slurm_account: ioj@h100
+        slurm_additional_parameters:
+            hint: nomultithread
+  layers_infra:
+    folder: .cache
+    cluster: local
+    logs: .cache/logs/focus/layers_infra/%j
+    timeout_min: 1200
+  map_infra:
+    folder: .cache
+    cluster: auto
+    logs: .cache/logs/focus/map_infra/%j
+    cpus_per_task: 16
+    timeout_min: 1200
+    slurm_partition: cpu_p1,prepost,visu,archive,compil
+    slurm_account: ioj@cpu
+    slurm_additional_parameters:
+        hint: nomultithread
+
+grid_search_prepare:
+  token_aggregation:
+    - mean
+    - last
+  model_name:
+    # 1. Encoders (Masked Language Models)
+    - bert-base-uncased
+    - roberta-base
+    - microsoft/deberta-v3-base
+    
+    # 2. Decoders (Causal Language Models)
+    - gpt2
+    - EleutherAI/pythia-1.4b
+    
+    # 3. Modern Large Language Models (LLMs)
+    - meta-llama/Meta-Llama-3.1-8B
+    - mistralai/Mistral-7B-v0.3
+    
+    # 4. State Space Models (SSMs)
+    - state-spaces/mamba-370m-hf
+    - AntonV/mamba2-1.3b-hf
+    - tiiuae/falcon-mamba-7b
+    
+    # 5. RNNs
+    - RWKV/RWKV7-Goose-World2.9-0.4B-HF
+    - RWKV/RWKV7-Goose-World3-1.5B-HF
+    - RWKV/RWKV7-Goose-World3-2.9B-HF
+
+
+grid_search:
+  trainer.representations.model_name:
+    # 1. Encoders (Masked Language Models)
+    - bert-base-uncased
+    - roberta-base
+    - microsoft/deberta-v3-base
+    
+    # 2. Decoders (Causal Language Models)
+    - gpt2
+    - EleutherAI/pythia-1.4b
+    
+    # 3. Modern Large Language Models (LLMs)
+    - meta-llama/Meta-Llama-3.1-8B
+    - mistralai/Mistral-7B-v0.3
+    
+    # 4. State Space Models (SSMs)
+    - state-spaces/mamba-370m-hf
+    - AntonV/mamba2-1.3b-hf
+    - tiiuae/falcon-mamba-7b
+    
+    # 5. RNNs
+    - RWKV/RWKV7-Goose-World2.9-0.4B-HF
+    - RWKV/RWKV7-Goose-World3-1.5B-HF
+    - RWKV/RWKV7-Goose-World3-2.9B-HF
+
+  trainer.representations.token_aggregation:
+    - mean
+    - last

@@ -24,13 +24,13 @@ base_config:
             hint: nomultithread
   layers_infra:
     folder: .cache
-    cluster: local
+    cluster: null
     logs: .cache/logs/explore/layers_infra/%j
   map_infra:
     folder: .cache
     cluster: auto
     logs: .cache/logs/explore/map_infra/%j
-    cpus_per_task: 4
+    cpus_per_task: 16
     timeout_min: 1200
     slurm_partition: cpu_p1,prepost,visu,archive,compil
     slurm_account: ioj@cpu

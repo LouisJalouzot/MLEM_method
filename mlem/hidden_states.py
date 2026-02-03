@@ -64,17 +64,24 @@ def compute_hidden_states(
     """
     import torch
     from torch.masked import masked_tensor
-    from transformers import AutoModel, AutoTokenizer
+    from transformers import AutoModel, AutoModelForCausalLM, AutoTokenizer
 
     try:
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-    except:
-        tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+        tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    except Exception:
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name, use_fast=False, trust_remote_code=True
+        )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModel.from_pretrained(
-        model_name, output_hidden_states=True, trust_remote_code=True
-    )
+    try:
+        model = AutoModel.from_pretrained(
+            model_name, output_hidden_states=True, trust_remote_code=True
+        )
+    except Exception:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name, output_hidden_states=True, trust_remote_code=True
+        )
     model = model.to(device)
     model.eval()
 
