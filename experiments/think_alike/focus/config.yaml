@@ -14,9 +14,8 @@ base_config:
       infra: # GPU infra for computing LLM embeddings
         folder: .cache
         cluster: auto
-        mode: retry
         logs: .cache/logs/focus/repr/%j
-        cpus_per_task: 72
+        cpus_per_task: 24
         gpus_per_node: 1
         timeout_min: 1200
         slurm_constraint: h100
@@ -63,9 +62,9 @@ grid_search_prepare:
     - tiiuae/falcon-mamba-7b
     
     # 5. RNNs
-    - RWKV/RWKV7-Goose-World2.9-0.4B-HF
-    - RWKV/RWKV7-Goose-World3-1.5B-HF
-    - RWKV/RWKV7-Goose-World3-2.9B-HF
+    - fla-hub/rwkv7-0.4B-world
+    - fla-hub/rwkv7-1.5B-world
+    - fla-hub/rwkv7-7.2B-g0a
 
 
 grid_search:
@@ -89,9 +88,9 @@ grid_search:
     - tiiuae/falcon-mamba-7b
     
     # 5. RNNs
-    - RWKV/RWKV7-Goose-World2.9-0.4B-HF
-    - RWKV/RWKV7-Goose-World3-1.5B-HF
-    - RWKV/RWKV7-Goose-World3-2.9B-HF
+    - fla-hub/rwkv7-0.4B-world
+    - fla-hub/rwkv7-1.5B-world
+    - fla-hub/rwkv7-7.2B-g0a
 
   trainer.representations.token_aggregation:
     - mean
