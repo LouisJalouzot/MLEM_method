@@ -78,7 +78,7 @@ class SentenceRepresentations(BaseModel):
 
     def model_post_init(self, context):
         super().model_post_init(context)
-        assert isinstance(self.pca, int) or self.svd_solver == "full"
+        assert not isinstance(self.pca, float) or self.svd_solver == "full"
 
     def __call__(self):
         return self._get_final_representations()
