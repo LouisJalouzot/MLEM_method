@@ -8,6 +8,7 @@ if tp.TYPE_CHECKING:
     import torch
 
 from exca import TaskInfra
+from loguru import logger
 from pydantic import ConfigDict, Field
 
 from mlem.dataset import Dataset
@@ -58,8 +59,10 @@ class SentenceRepresentations(BaseModel):
     )
     add_special_tokens: bool = True
 
-    layer: int = 5
-    units: tp.List[int] | int | None = None
+    layer: int | tp.List[int] | None = 5
+    units: int | tp.List[int] | None = None
+    pca: int | float | None = None
+    svd_solver: str = "randomized"
     noise_level: float = 0.0
     seed: int = 0
 
@@ -73,7 +76,14 @@ class SentenceRepresentations(BaseModel):
         "device",
     )
 
+    def model_post_init(self, context):
+        super().model_post_init(context)
+        assert isinstance(self.pca, int) or self.svd_solver == "full"
+
     def __call__(self):
+        return self._get_final_representations()
+
+    def _get_final_representations(self) -> torch.Tensor:
         import torch
 
         # (n_sentences, n_layers+1, hidden_size)
@@ -85,8 +95,32 @@ class SentenceRepresentations(BaseModel):
                 units = self.units
             sentence_representations = sentence_representations[:, :, units]
 
+        if self.layer is not None:
+            sentence_representations = sentence_representations[:, self.layer]
         # (n_sentences, hidden_size)
-        sentence_representations = sentence_representations[:, self.layer]
+        n_stimuli = sentence_representations.shape[0]
+        sentence_representations = sentence_representations.reshape(n_stimuli, -1)
+
+        # Apply PCA if requested (int for n_components, float for variance ratio)
+        if self.pca is not None:
+            from sklearn.decomposition import PCA
+
+            original_shape = sentence_representations.shape
+            pca_model = PCA(
+                n_components=self.pca,
+                random_state=self.seed,
+                svd_solver=self.svd_solver,
+            )
+            sentence_representations = pca_model.fit_transform(sentence_representations)
+            if isinstance(self.pca, float):
+                logger.info(
+                    f"Applied {self.pca * 100:.1f}% PCA: reduced from {original_shape[1]} to {self.pca} dimensions"
+                )
+            else:
+                logger.info(
+                    f"Applied {self.pca} components PCA: retained {pca_model.explained_variance_ratio_.sum() * 100:.1f}% of variance"
+                )
+            sentence_representations = torch.from_numpy(sentence_representations)
 
         scale = sentence_representations.std(dim=0)
         rng = np.random.default_rng(seed_from_basemodel(self))
@@ -110,4 +144,4 @@ class SentenceRepresentations(BaseModel):
     # Dummy function to indicate successful computation without loading result in RAM
     @infra.apply(exclude_from_cache_uid=["layer", "units", "noise_level", "seed"])
     def precompute(self):
-        self.forward()
+        self._get_final_representations()
