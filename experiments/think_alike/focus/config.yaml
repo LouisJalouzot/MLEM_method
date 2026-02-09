@@ -10,7 +10,8 @@ base_config:
       cv: 5
     representations:
       level: sentence
-      batch_size: 4
+      token_aggregation: last
+      batch_size: 8
       infra: # GPU infra for computing LLM embeddings
         folder: .cache
         cluster: auto
@@ -24,74 +25,107 @@ base_config:
             hint: nomultithread
   layers_infra:
     folder: .cache
-    cluster: local
+    cluster: debug
     logs: .cache/logs/focus/layers_infra/%j
     timeout_min: 1200
   map_infra:
     folder: .cache
     cluster: auto
     logs: .cache/logs/focus/map_infra/%j
-    cpus_per_task: 16
+    cpus_per_task: 4
     timeout_min: 1200
-    slurm_partition: cpu_p1,prepost,visu,archive,compil
+    slurm_partition: cpu_p1,prepost,visu,archive,compil,compil_h100
     slurm_account: ioj@cpu
     slurm_additional_parameters:
         hint: nomultithread
 
 grid_search_prepare:
-  token_aggregation:
-    - mean
-    - last
   model_name:
     # 1. Encoders (Masked Language Models)
-    - bert-base-uncased
-    - roberta-base
-    - microsoft/deberta-v3-base
-    
+    - albert/albert-base-v2 # 12M
+    - albert/albert-large-v2 # 18M
+    - albert/albert-xlarge-v2 # 60M
+    - albert/albert-xxlarge-v2 # 200M
+
+    - jhu-clsp/ettin-encoder-17m
+    - jhu-clsp/ettin-encoder-32m
+    - jhu-clsp/ettin-encoder-68m
+    - jhu-clsp/ettin-encoder-150m
+    - jhu-clsp/ettin-encoder-400m
+    - jhu-clsp/ettin-encoder-1b
+
     # 2. Decoders (Causal Language Models)
-    - gpt2
+    - openai-community/gpt2 # 0.1B
+    - openai-community/gpt2-medium # 0.4B
+    - openai-community/gpt2-large # 0.8B
+    - openai-community/gpt2-xl # 2B
+
+    - EleutherAI/pythia-160m
+    - EleutherAI/pythia-410m
+    - EleutherAI/pythia-1b
     - EleutherAI/pythia-1.4b
-    
-    # 3. Modern Large Language Models (LLMs)
-    - meta-llama/Meta-Llama-3.1-8B
-    - mistralai/Mistral-7B-v0.3
+    - EleutherAI/pythia-2.8b
+
+    - facebook/opt-125m
+    # - facebook/opt-350m
+    - facebook/opt-1.3b
+    - facebook/opt-2.7b
     
     # 4. State Space Models (SSMs)
-    - state-spaces/mamba-370m-hf
+    - AntonV/mamba2-130m-hf
+    - AntonV/mamba2-370m-hf
+    - AntonV/mamba2-780m-hf
     - AntonV/mamba2-1.3b-hf
-    - tiiuae/falcon-mamba-7b
+    - AntonV/mamba2-2.7b-hf
     
     # 5. RNNs
+    - fla-hub/rwkv7-191M-world
     - fla-hub/rwkv7-0.4B-world
     - fla-hub/rwkv7-1.5B-world
-    - fla-hub/rwkv7-7.2B-g0a
+    - fla-hub/rwkv7-2.9B-world
 
 
 grid_search:
   trainer.representations.model_name:
     # 1. Encoders (Masked Language Models)
-    - bert-base-uncased
-    - roberta-base
-    - microsoft/deberta-v3-base
-    
+    - albert/albert-base-v2 # 12M
+    - albert/albert-large-v2 # 18M
+    - albert/albert-xlarge-v2 # 60M
+    - albert/albert-xxlarge-v2 # 200M
+
+    - jhu-clsp/ettin-encoder-17m
+    - jhu-clsp/ettin-encoder-32m
+    - jhu-clsp/ettin-encoder-68m
+    - jhu-clsp/ettin-encoder-150m
+    - jhu-clsp/ettin-encoder-400m
+    - jhu-clsp/ettin-encoder-1b
+
     # 2. Decoders (Causal Language Models)
-    - gpt2
+    - openai-community/gpt2 # 0.1B
+    - openai-community/gpt2-medium # 0.4B
+    - openai-community/gpt2-large # 0.8B
+    - openai-community/gpt2-xl # 2B
+
+    - EleutherAI/pythia-160m
+    - EleutherAI/pythia-410m
+    - EleutherAI/pythia-1b
     - EleutherAI/pythia-1.4b
-    
-    # 3. Modern Large Language Models (LLMs)
-    - meta-llama/Meta-Llama-3.1-8B
-    - mistralai/Mistral-7B-v0.3
+    - EleutherAI/pythia-2.8b
+
+    - facebook/opt-125m
+    # - facebook/opt-350m
+    - facebook/opt-1.3b
+    - facebook/opt-2.7b
     
     # 4. State Space Models (SSMs)
-    - state-spaces/mamba-370m-hf
+    - AntonV/mamba2-130m-hf
+    - AntonV/mamba2-370m-hf
+    - AntonV/mamba2-780m-hf
     - AntonV/mamba2-1.3b-hf
-    - tiiuae/falcon-mamba-7b
+    - AntonV/mamba2-2.7b-hf
     
     # 5. RNNs
+    - fla-hub/rwkv7-191M-world
     - fla-hub/rwkv7-0.4B-world
     - fla-hub/rwkv7-1.5B-world
-    - fla-hub/rwkv7-7.2B-g0a
-
-  trainer.representations.token_aggregation:
-    - mean
-    - last
+    - fla-hub/rwkv7-2.9B-world

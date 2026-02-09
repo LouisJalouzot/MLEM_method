@@ -1,0 +1,71 @@
+target: mlem.FeatureImportance
+infra: layers_infra
+infra_prepare: trainer.representations.infra
+
+base_config:
+  dataset:
+    path: datasets/relative_clause.csv
+  trainer:
+    dataloader_builder:
+      cv: 5
+    representations:
+      level: sentence
+      infra: # GPU infra for computing LLM embeddings
+        folder: .cache
+        cluster: auto
+        logs: .cache/logs/pca/repr/%j
+        cpus_per_task: 24
+        gpus_per_node: 1
+        timeout_min: 1200
+        slurm_constraint: h100
+        slurm_account: ioj@h100
+        slurm_additional_parameters:
+            hint: nomultithread
+  layers_infra:
+    folder: .cache
+    cluster: debug
+    logs: .cache/logs/pca/layers_infra/%j
+    timeout_min: 1200
+  map_infra:
+    folder: .cache
+    cluster: auto
+    logs: .cache/logs/pca/map_infra/%j
+    cpus_per_task: 4
+    timeout_min: 1200
+    slurm_partition: cpu_p1,prepost,visu,archive,compil,compil_h100
+    slurm_account: ioj@cpu
+    slurm_additional_parameters:
+        hint: nomultithread
+
+grid_search_prepare:
+  pca:
+    - null
+    - 768
+  token_aggregation:
+    - last
+    - mean
+    - none
+  model_name:
+    - jhu-clsp/ettin-encoder-1b
+    - openai-community/gpt2-large # 0.8B
+    - EleutherAI/pythia-1b
+    - facebook/opt-1.3b
+    - AntonV/mamba2-1.3b-hf    
+    - fla-hub/rwkv7-1.5B-world
+
+
+grid_search:
+  trainer.representations.pca:
+    - null
+    - 768
+  trainer.representations.token_aggregation:
+    - last
+    - mean
+    - none
+  trainer.representations.model_name:
+    - jhu-clsp/ettin-encoder-1b
+    - openai-community/gpt2-large # 0.8B
+    - EleutherAI/pythia-1b
+    - facebook/opt-1.3b
+    - AntonV/mamba2-1.3b-hf    
+    - fla-hub/rwkv7-1.5B-world
