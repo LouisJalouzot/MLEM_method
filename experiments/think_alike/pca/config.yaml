@@ -10,11 +10,12 @@ base_config:
       cv: 5
     representations:
       level: sentence
+      batch_size: 1
       infra: # GPU infra for computing LLM embeddings
         folder: .cache
         cluster: auto
         logs: .cache/logs/pca/repr/%j
-        cpus_per_task: 24
+        cpus_per_task: 48
         gpus_per_node: 1
         timeout_min: 1200
         slurm_constraint: h100
@@ -52,12 +53,13 @@ grid_search_prepare:
     - mean
     - none
   model_name:
-    - jhu-clsp/ettin-encoder-1b
+    - FacebookAI/xlm-roberta-large
+    - EuroBERT/EuroBERT-610m
     - openai-community/gpt2-large # 0.8B
-    - EleutherAI/pythia-1b
     - facebook/opt-1.3b
-    - AntonV/mamba2-1.3b-hf    
-    - fla-hub/rwkv7-1.5B-world
+    - google/flan-t5-large # 0.8B
+    - AntonV/mamba2-780m-hf  
+    - fla-hub/rwkv7-0.4B-world
 
 
 grid_search:
@@ -69,9 +71,10 @@ grid_search:
     - mean
     - none
   trainer.representations.model_name:
-    - jhu-clsp/ettin-encoder-1b
+    - FacebookAI/xlm-roberta-large
+    - EuroBERT/EuroBERT-610m
     - openai-community/gpt2-large # 0.8B
-    - EleutherAI/pythia-1b
     - facebook/opt-1.3b
-    - AntonV/mamba2-1.3b-hf    
-    - fla-hub/rwkv7-1.5B-world
+    - google/flan-t5-large # 0.8B
+    - AntonV/mamba2-780m-hf  
+    - fla-hub/rwkv7-0.4B-world
