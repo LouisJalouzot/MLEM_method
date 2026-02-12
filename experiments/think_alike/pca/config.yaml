@@ -23,9 +23,15 @@ base_config:
             hint: nomultithread
   layers_infra:
     folder: .cache
-    cluster: debug
+    cluster: slurm
+    mode: retry
     logs: .cache/logs/pca/layers_infra/%j
+    cpus_per_task: 1
     timeout_min: 1200
+    slurm_partition: cpu_p1,prepost,visu,archive,compil,compil_h100
+    slurm_account: ioj@cpu
+    slurm_additional_parameters:
+        hint: nomultithread
   map_infra:
     folder: .cache
     cluster: auto

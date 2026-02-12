@@ -11,12 +11,13 @@ base_config:
     representations:
       level: sentence
       token_aggregation: last
-      batch_size: 8
+      batch_size: 1
       infra: # GPU infra for computing LLM embeddings
         folder: .cache
         cluster: auto
+        mode: retry
         logs: .cache/logs/focus/repr/%j
-        cpus_per_task: 24
+        cpus_per_task: 48
         gpus_per_node: 1
         timeout_min: 1200
         slurm_constraint: h100
@@ -25,14 +26,20 @@ base_config:
             hint: nomultithread
   layers_infra:
     folder: .cache
-    cluster: debug
+    cluster: slurm
+    mode: retry
     logs: .cache/logs/focus/layers_infra/%j
+    cpus_per_task: 1
     timeout_min: 1200
+    slurm_partition: cpu_p1,prepost,visu,archive,compil,compil_h100
+    slurm_account: ioj@cpu
+    slurm_additional_parameters:
+        hint: nomultithread
   map_infra:
     folder: .cache
     cluster: auto
     logs: .cache/logs/focus/map_infra/%j
-    cpus_per_task: 4
+    cpus_per_task: 8
     timeout_min: 1200
     slurm_partition: cpu_p1,prepost,visu,archive,compil,compil_h100
     slurm_account: ioj@cpu
@@ -67,7 +74,7 @@ grid_search_prepare:
     - EleutherAI/pythia-2.8b
 
     - facebook/opt-125m
-    # - facebook/opt-350m
+    # - facebook/opt-350m # Dropped because of projection trick only on this model
     - facebook/opt-1.3b
     - facebook/opt-2.7b
     
