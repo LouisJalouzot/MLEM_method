@@ -102,7 +102,11 @@ def encode_df(df: pd.DataFrame) -> torch.Tensor:
     X = np.zeros(df.shape, dtype=np.float32)
     number_cols = np.array(
         [
-            (not pd.api.types.is_categorical_dtype(t) and np.issubdtype(t, np.number))
+            (
+                not pd.api.types.is_categorical_dtype(t)
+                and not pd.api.types.is_string_dtype(t)
+                and np.issubdtype(t, np.number)
+            )
             for t in df.dtypes
         ]
     )
