@@ -43,6 +43,10 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True):
     base_infra = reduce(getattr, infra_path_split, base_class)
 
     # Create tasks and submit to job array
+    logger.info(
+        f"Submitting {n_configs} tasks to {base_class.__class__.__name__}.{infra_path}"
+    )
+    logger.trace(f"Infra config: {base_infra.model_dump_json(indent=2)}")
     with base_infra.job_array(max_workers=n_configs) as array:
         with tqdm(total=n_configs, desc="Creating tasks") as pbar:
             for flat_config, task in Parallel(
@@ -60,6 +64,7 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True):
                 array.append(task)
                 pbar.update(1)
         logger.info("Submitting tasks to job array")
+    logger.info("All tasks submitted to job array")
 
     # Wait for completion and collect results if necessary
     results = []
@@ -103,7 +108,7 @@ def main(config: dict = {}):
     infra_prepare = config.get("infra_prepare", "infra")
 
     if "grid_search_prepare" in config:
-        logger.info(f"Running grid search prepare (target: {infra_prepare})")
+        logger.info("Running grid search prepare")
         run_grid_search(
             base_class,
             config["grid_search_prepare"],
@@ -111,7 +116,7 @@ def main(config: dict = {}):
             fetch_results=False,
         )
 
-    logger.info(f"Running grid search (target: {infra_path})")
+    logger.info("Running grid search")
     flat_configs, results = run_grid_search(
         base_class,
         config["grid_search"],
