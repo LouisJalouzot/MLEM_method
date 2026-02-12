@@ -194,6 +194,9 @@ class FeatureImportance(BaseModelSharing):
     ) -> tp.Tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]:
         import pandas as pd
 
+        logger.info("Checking that embeddings are cached or launching job")
+        self.trainer.representations.precompute()
+
         model_name = self.trainer.representations.model_name
         n_layers = get_n_layers(model_name)
         layers = list(range(1, n_layers + 1))  # 0 is the embedding layer

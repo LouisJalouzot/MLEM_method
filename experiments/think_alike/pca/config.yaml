@@ -13,7 +13,7 @@ base_config:
       batch_size: 1
       infra: # GPU infra for computing LLM embeddings
         folder: .cache
-        cluster: auto
+        cluster: slurm
         logs: .cache/logs/pca/repr/%j
         cpus_per_task: 48
         gpus_per_node: 1
@@ -35,7 +35,7 @@ base_config:
         hint: nomultithread
   map_infra:
     folder: .cache
-    cluster: auto
+    cluster: slurm
     logs: .cache/logs/pca/map_infra/%j
     cpus_per_task: 4
     timeout_min: 1200
@@ -44,22 +44,22 @@ base_config:
     slurm_additional_parameters:
         hint: nomultithread
 
-grid_search_prepare:
-  pca:
-    - null
-    - 768
-  token_aggregation:
-    - last
-    - mean
-    - none
-  model_name:
-    - FacebookAI/xlm-roberta-large
-    - EuroBERT/EuroBERT-610m
-    - openai-community/gpt2-large # 0.8B
-    - facebook/opt-1.3b
-    - google/flan-t5-large # 0.8B
-    - AntonV/mamba2-780m-hf  
-    - fla-hub/rwkv7-0.4B-world
+# grid_search_prepare:
+#   pca:
+#     - null
+#     - 768
+#   token_aggregation:
+#     - last
+#     - mean
+#     - none
+#   model_name:
+#     - FacebookAI/xlm-roberta-large
+#     - EuroBERT/EuroBERT-610m
+#     - openai-community/gpt2-large # 0.8B
+#     - facebook/opt-1.3b
+#     - google/flan-t5-large # 0.8B
+#     - AntonV/mamba2-780m-hf  
+#     - fla-hub/rwkv7-0.4B-world
 
 
 grid_search:
