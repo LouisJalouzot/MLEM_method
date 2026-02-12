@@ -16,7 +16,7 @@ base_config:
         folder: .cache
         cluster: auto
         mode: retry
-        logs: .cache/logs/focus/repr/%j
+        logs: .cache/logs/families/repr/%j
         cpus_per_task: 48
         gpus_per_node: 1
         timeout_min: 1200
@@ -28,7 +28,7 @@ base_config:
     folder: .cache
     cluster: slurm
     mode: retry
-    logs: .cache/logs/focus/layers_infra/%j
+    logs: .cache/logs/families/layers_infra/%j
     cpus_per_task: 1
     timeout_min: 1200
     slurm_partition: cpu_p1,prepost,visu,archive,compil,compil_h100
@@ -38,8 +38,8 @@ base_config:
   map_infra:
     folder: .cache
     cluster: auto
-    logs: .cache/logs/focus/map_infra/%j
-    cpus_per_task: 8
+    logs: .cache/logs/families/map_infra/%j
+    cpus_per_task: 2
     timeout_min: 1200
     slurm_partition: cpu_p1,prepost,visu,archive,compil,compil_h100
     slurm_account: ioj@cpu
