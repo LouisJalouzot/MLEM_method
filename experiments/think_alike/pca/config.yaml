@@ -6,60 +6,22 @@ base_config:
   dataset:
     path: datasets/relative_clause.csv
   trainer:
+    device: cuda
     dataloader_builder:
       cv: 5
     representations:
       level: sentence
-      batch_size: 1
-      infra: # GPU infra for computing LLM embeddings
-        folder: .cache
-        cluster: slurm
-        logs: .cache/logs/pca/repr/%j
-        cpus_per_task: 48
-        gpus_per_node: 1
-        timeout_min: 1200
-        slurm_constraint: h100
-        slurm_account: ioj@h100
-        slurm_additional_parameters:
-            hint: nomultithread
   layers_infra:
     folder: .cache
     cluster: slurm
-    mode: retry
-    logs: .cache/logs/pca/layers_infra/%j
-    cpus_per_task: 1
+    logs: .cache/logs/pca/%j
+    cpus_per_task: 24
+    gpus_per_node: 1
     timeout_min: 1200
-    slurm_partition: cpu_p1,prepost,visu,archive,compil,compil_h100
-    slurm_account: ioj@cpu
+    slurm_constraint: h100
+    slurm_account: ioj@h100
     slurm_additional_parameters:
         hint: nomultithread
-  map_infra:
-    folder: .cache
-    cluster: slurm
-    logs: .cache/logs/pca/map_infra/%j
-    cpus_per_task: 4
-    timeout_min: 1200
-    slurm_partition: cpu_p1,prepost,visu,archive,compil,compil_h100
-    slurm_account: ioj@cpu
-    slurm_additional_parameters:
-        hint: nomultithread
-
-# grid_search_prepare:
-#   pca:
-#     - null
-#     - 768
-#   token_aggregation:
-#     - last
-#     - mean
-#     - none
-#   model_name:
-#     - FacebookAI/xlm-roberta-large
-#     - EuroBERT/EuroBERT-610m
-#     - openai-community/gpt2-large # 0.8B
-#     - facebook/opt-1.3b
-#     - google/flan-t5-large # 0.8B
-#     - AntonV/mamba2-780m-hf  
-#     - fla-hub/rwkv7-0.4B-world
 
 
 grid_search:
@@ -71,10 +33,9 @@ grid_search:
     - mean
     - none
   trainer.representations.model_name:
-    - FacebookAI/xlm-roberta-large
     - EuroBERT/EuroBERT-610m
     - openai-community/gpt2-large # 0.8B
     - facebook/opt-1.3b
-    - google/flan-t5-large # 0.8B
+    - google/t5gemma-b-b-ul2 # 0.6B
     - AntonV/mamba2-780m-hf  
     - fla-hub/rwkv7-0.4B-world

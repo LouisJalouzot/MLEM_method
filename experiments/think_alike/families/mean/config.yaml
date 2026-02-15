@@ -11,11 +11,11 @@ base_config:
       cv: 5
     representations:
       level: sentence
-      token_aggregation: last
+      token_aggregation: mean
   layers_infra:
     folder: .cache
     cluster: slurm
-    logs: .cache/logs/families/%j
+    logs: .cache/logs/families/mean/%j
     cpus_per_task: 24
     gpus_per_node: 1
     timeout_min: 1200
@@ -27,6 +27,18 @@ base_config:
 grid_search:
   trainer.representations.model_name:
     # 1. Encoders
+    - bert-base-uncased
+    - bert-large-uncased
+
+    - roberta-base
+    - roberta-large
+
+    - microsoft/deberta-v3-base
+    - microsoft/deberta-v3-large
+
+    - answerdotai/ModernBERT-base
+    - answerdotai/ModernBERT-large
+    
     - albert/albert-base-v2 # 12M
     - albert/albert-large-v2 # 18M
     - albert/albert-xlarge-v2 # 60M
@@ -66,28 +78,6 @@ grid_search:
     - intfloat/e5-base-v2 # 0.1B
     - intfloat/e5-large-v2 # 0.3B
 
-    # 2. Decoders (Causal Language Models)
-    - openai-community/gpt2 # 0.1B
-    - openai-community/gpt2-medium # 0.4B
-    - openai-community/gpt2-large # 0.8B
-    - openai-community/gpt2-xl # 2B
-
-    - EleutherAI/pythia-160m
-    - EleutherAI/pythia-410m
-    - EleutherAI/pythia-1b
-    - EleutherAI/pythia-1.4b
-    - EleutherAI/pythia-2.8b
-
-    - facebook/opt-125m
-    # - facebook/opt-350m # Dropped because of projection trick only on this model
-    - facebook/opt-1.3b
-    - facebook/opt-2.7b
-
-    - Qwen/Qwen2.5-0.5B
-    - Qwen/Qwen2.5-1.5B
-    - Qwen/Qwen2.5-3B
-    - Qwen/Qwen2.5-7B
-
     # 3. Encoder Decoder
     - google-t5/t5-small # 60M
     - google-t5/t5-base # 0.2B
@@ -105,17 +95,3 @@ grid_search:
     - google/t5gemma-ml-ml-ul2 # 2B
     - google/t5gemma-xl-xl-ul2 # 4B
     - google/t5gemma-2b-2b-ul2 # 6B
-
-    # 4. State Space Models (SSMs)
-    - AntonV/mamba2-130m-hf
-    - AntonV/mamba2-370m-hf
-    - AntonV/mamba2-780m-hf
-    - AntonV/mamba2-1.3b-hf
-    - AntonV/mamba2-2.7b-hf
-    
-    # 5. RNNs
-    - fla-hub/rwkv7-191M-world
-    - fla-hub/rwkv7-0.4B-world
-    - fla-hub/rwkv7-1.5B-world
-    - fla-hub/rwkv7-2.9B-world
-    - fla-hub/rwkv7-7.2B-g0a
