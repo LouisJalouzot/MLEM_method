@@ -67,10 +67,16 @@ def compute_hidden_states(
     from transformers import AutoModel, AutoModelForCausalLM, AutoTokenizer
 
     try:
-        tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name, trust_remote_code=True, fix_mistral_regex=True
+        )
     except Exception:
         tokenizer = AutoTokenizer.from_pretrained(
-            model_name, use_fast=False, trust_remote_code=True
+            model_name,
+            use_fast=False,
+            trust_remote_code=True,
+            legacy=False,
+            fix_mistral_regex=True,
         )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -109,9 +115,9 @@ def compute_hidden_states(
     # (n_sentences, max_seq_len)
     input_ids = encoded_input["input_ids"]
 
-    hidden_states = []  # Renamed for clarity
+    hidden_states = []
     with tqdm(
-        desc=f"Computing sentence representations on device {device}",
+        desc=f"Computing sentence representations of {model_name} on device {device}",
         total=len(sentences),
     ) as pbar:
         for i in range(0, len(sentences), batch_size):

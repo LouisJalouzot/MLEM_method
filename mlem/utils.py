@@ -12,17 +12,23 @@ import typing as tp
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 import numpy as np
-import yaml
+import torch.multiprocessing as mp
 from loguru import logger
 from pydantic import BaseModel as _BaseModel
 from pydantic import model_validator
+
+# Use spawn for multiprocessing to avoid CUDA re-initialization error
+try:
+    mp.set_start_method("spawn", force=True)
+except RuntimeError:
+    pass
 
 if tp.TYPE_CHECKING:
     import pandas as pd
     import torch
 
 logger.remove()
-logger.add(sink=sys.stdout, level="DEBUG")
+logger.add(sink=sys.stdout, level="INFO")
 
 
 def get_device():
@@ -56,6 +62,9 @@ def get_n_layers(model_name: str) -> int:
     - n_layer (GPT-2, Bloom, etc.)
     - num_layers (T5, etc.)
 
+    Also handles encoder-decoder models (e.g., T5Gemma, BART) by checking
+    encoder and decoder sub-configs.
+
     Args:
         model_name: HuggingFace model identifier.
 
@@ -69,14 +78,26 @@ def get_n_layers(model_name: str) -> int:
 
     config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
 
-    # Try different attribute names in order of prevalence
+    # Try different attribute names at top level
     for attr in ("num_hidden_layers", "n_layer", "num_layers"):
         if hasattr(config, attr):
             return getattr(config, attr)
 
+    # For encoder-decoder models, check encoder and decoder configs
+    if hasattr(config, "encoder"):
+        for attr in ("num_hidden_layers", "n_layer", "num_layers"):
+            if hasattr(config.encoder, attr):
+                return getattr(config.encoder, attr)
+
+    if hasattr(config, "decoder"):
+        for attr in ("num_hidden_layers", "n_layer", "num_layers"):
+            if hasattr(config.decoder, attr):
+                return getattr(config.decoder, attr)
+
     raise ValueError(
         f"Could not determine number of layers for model '{model_name}'. "
-        f"Config has no 'num_hidden_layers', 'n_layer', or 'num_layers' attribute."
+        f"Config has no 'num_hidden_layers', 'n_layer', or 'num_layers' attribute "
+        f"at top level or in encoder/decoder sub-configs."
     )
 
 
