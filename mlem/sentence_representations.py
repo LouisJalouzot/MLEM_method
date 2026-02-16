@@ -97,6 +97,9 @@ class SentenceRepresentations(BaseModel):
 
         if self.layer is not None:
             sentence_representations = sentence_representations[:, self.layer]
+        else:
+            # Remove embedding layer
+            sentence_representations = sentence_representations[:, 1:]
         # (n_sentences, hidden_size)
         n_stimuli = sentence_representations.shape[0]
         sentence_representations = sentence_representations.reshape(n_stimuli, -1)
