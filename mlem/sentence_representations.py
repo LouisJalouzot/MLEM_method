@@ -121,7 +121,7 @@ class SentenceRepresentations(BaseModel):
                 )
             else:
                 logger.info(
-                    f"Applied {self.pca} components PCA: retained {pca_model.explained_variance_ratio_.sum() * 100:.1f}% of variance"
+                    f"Applied {self.pca} components PCA: reduced from {original_shape[1]} and retained {pca_model.explained_variance_ratio_.sum() * 100:.1f}% of variance"
                 )
             sentence_representations = torch.from_numpy(sentence_representations)
 

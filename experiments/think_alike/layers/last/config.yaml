@@ -13,6 +13,7 @@ base_config:
       level: sentence
       layer: null
       token_aggregation: last
+      pca: 256
   infra:
     folder: .cache
     cluster: slurm
@@ -33,11 +34,11 @@ grid_search:
     - openai-community/gpt2-large # 0.8B
     - openai-community/gpt2-xl # 2B
 
-    - EleutherAI/pythia-160m
+    # - EleutherAI/pythia-160m
     - EleutherAI/pythia-410m
     - EleutherAI/pythia-1b
     - EleutherAI/pythia-1.4b
-    - EleutherAI/pythia-2.8b
+    # - EleutherAI/pythia-2.8b
 
     - facebook/opt-125m
     # - facebook/opt-350m # Dropped because of projection trick only on this model
