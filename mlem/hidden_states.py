@@ -20,6 +20,7 @@ def compute_hidden_states(
     device: str = "cpu",
     add_special_tokens: bool = True,
     return_offsets_mapping: bool = False,
+    untrained: bool = False,
 ) -> MaskedTensor | tp.Tuple[MaskedTensor, torch.Tensor]:
     """
     Computes hidden states for a list of sentences using a specified transformer model.
@@ -34,6 +35,8 @@ def compute_hidden_states(
             during tokenization. Defaults to True.
         return_offsets_mapping: Whether to return the character offsets mapping
             for each token. Defaults to False.
+        untrained: If True, use a randomly initialized model with the same
+            architecture instead of loading pretrained weights.
 
     Returns:
         If `return_offsets_mapping` is False:
@@ -80,14 +83,25 @@ def compute_hidden_states(
         )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    if untrained:
+        from transformers import AutoConfig
+
+        config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+        config.output_hidden_states = True
+
+        def load(cls):
+            return cls.from_config(config)
+    else:
+
+        def load(cls):
+            return cls.from_pretrained(
+                model_name, output_hidden_states=True, trust_remote_code=True
+            )
+
     try:
-        model = AutoModel.from_pretrained(
-            model_name, output_hidden_states=True, trust_remote_code=True
-        )
+        model = load(AutoModel)
     except Exception:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name, output_hidden_states=True, trust_remote_code=True
-        )
+        model = load(AutoModelForCausalLM)
     model = model.to(device)
     model.eval()
 

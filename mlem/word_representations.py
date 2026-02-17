@@ -12,9 +12,9 @@ from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
 
-from mlem.dataset import Dataset
-from mlem.hidden_states import aggregate_masked_tensor, compute_hidden_states
-from mlem.utils import BaseModel, get_device, seed_from_basemodel
+from .dataset import Dataset
+from .hidden_states import aggregate_masked_tensor, compute_hidden_states
+from .utils import BaseModel, get_device, seed_from_basemodel
 
 
 def cum_join_index(words):
@@ -36,6 +36,7 @@ def compute_word_representations(
     batch_size: int = 32,
     device: str = "cpu",
     add_special_tokens: bool = True,
+    untrained: bool = False,
 ) -> torch.Tensor:
     """Computes word representations from hidden states by aggregating token representations.
 
@@ -93,6 +94,7 @@ def compute_word_representations(
         device,
         add_special_tokens,
         return_offsets_mapping=True,
+        untrained=untrained,
     )
     # Get rid of original attention masking
     hidden_states = hidden_states.get_data()
@@ -135,6 +137,7 @@ class WordRepresentations(BaseModel):
     model_name: str = "bert-base-uncased"
     token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = "mean"
     add_special_tokens: bool = True
+    untrained: bool = False
 
     layer: int = 5
     units: tp.List[int] = None
@@ -160,6 +163,7 @@ class WordRepresentations(BaseModel):
             device=self.device or get_device(),
             add_special_tokens=self.add_special_tokens,
             token_aggregation=self.token_aggregation,
+            untrained=self.untrained,
         )
 
     def __call__(self):

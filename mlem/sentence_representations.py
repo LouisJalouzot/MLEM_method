@@ -11,9 +11,9 @@ from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
 
-from mlem.dataset import Dataset
-from mlem.hidden_states import aggregate_masked_tensor, compute_hidden_states
-from mlem.utils import BaseModel, get_device, seed_from_basemodel
+from .dataset import Dataset
+from .hidden_states import aggregate_masked_tensor, compute_hidden_states
+from .utils import BaseModel, get_device, seed_from_basemodel
 
 
 def compute_sentence_representations(
@@ -23,6 +23,7 @@ def compute_sentence_representations(
     device: str = "cpu",
     add_special_tokens: bool = True,
     token_aggregation: str = "mean",
+    untrained: bool = False,
 ) -> torch.Tensor:
     # (n_sentences, max_seq_len, n_layers+1, hidden_size)
     hidden_states = compute_hidden_states(
@@ -31,6 +32,7 @@ def compute_sentence_representations(
         batch_size=batch_size,
         device=device,
         add_special_tokens=add_special_tokens,
+        untrained=untrained,
     )
     if token_aggregation == "none":
         mask = hidden_states.get_mask()
@@ -58,6 +60,7 @@ class SentenceRepresentations(BaseModel):
         "mean"
     )
     add_special_tokens: bool = True
+    untrained: bool = False
 
     layer: int | tp.List[int] | None = 5
     units: int | tp.List[int] | None = None
@@ -142,6 +145,7 @@ class SentenceRepresentations(BaseModel):
             device=self.device or get_device(),
             add_special_tokens=self.add_special_tokens,
             token_aggregation=self.token_aggregation,
+            untrained=self.untrained,
         )
 
     # Dummy function to indicate successful computation without loading result in RAM
