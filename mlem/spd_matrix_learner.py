@@ -4,10 +4,10 @@ import typing as tp
 
 from pydantic import ConfigDict
 
-from mlem.utils import BaseModel
+from .utils import BaseModel
 
 if tp.TYPE_CHECKING:
-    from mlem.spd_matrix_learner_torch import SPDMatrixLearner
+    from .spd_matrix_learner_torch import SPDMatrixLearner
 
 
 class SPDMatrixLearnerBuilder(BaseModel):
@@ -22,7 +22,7 @@ class SPDMatrixLearnerBuilder(BaseModel):
 
     def build(self, n_features) -> SPDMatrixLearner:
         """Build the model using this configuration"""
-        from mlem.spd_matrix_learner_torch import SPDMatrixLearner
+        from .spd_matrix_learner_torch import SPDMatrixLearner
 
         return SPDMatrixLearner(
             n_features=n_features,

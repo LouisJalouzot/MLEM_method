@@ -16,9 +16,9 @@ from exca import MapInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
 
-from mlem.dataset import Dataset
-from mlem.syntmov2024_dataset import SyntMov2024Dataset
-from mlem.utils import BaseModel
+from .dataset import Dataset
+from .syntmov2024_dataset import SyntMov2024Dataset
+from .utils import BaseModel
 
 
 class SyntMov2024Representations(BaseModel):

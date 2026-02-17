@@ -10,8 +10,8 @@ from loguru import logger
 from pydantic import ConfigDict, Field
 from tqdm.auto import tqdm
 
-from mlem.feature_importance import FeatureImportance
-from mlem.utils import BaseModelSharing
+from .feature_importance import FeatureImportance
+from .utils import BaseModelSharing
 
 if tp.TYPE_CHECKING:
     import pandas as pd

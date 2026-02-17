@@ -26,3 +26,5 @@ paper
 *.nii.gz
 *.html
 *.png
+*.csv
+*.pkl

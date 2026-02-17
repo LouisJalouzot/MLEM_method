@@ -7,11 +7,11 @@ from loguru import logger
 from pydantic import ConfigDict, Field
 from tqdm.auto import tqdm
 
-from mlem.dataset import Dataset
-from mlem.estimate_correlations import EstimateCorrelations
-from mlem.pairwise_dataloader import PairwiseDataloader
-from mlem.trainer import Trainer
-from mlem.utils import BaseModelSharing, compute_stats, get_n_layers
+from .dataset import Dataset
+from .estimate_correlations import EstimateCorrelations
+from .pairwise_dataloader import PairwiseDataloader
+from .trainer import Trainer
+from .utils import BaseModelSharing, compute_stats, get_n_layers
 
 if tp.TYPE_CHECKING:
     import pandas as pd

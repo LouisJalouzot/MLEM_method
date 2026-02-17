@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from mlem.dataset import Dataset
+from .dataset import Dataset
 
 # Feature columns extracted from trial_type
 FEATURE_COLS = [

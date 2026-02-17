@@ -9,8 +9,8 @@ if tp.TYPE_CHECKING:
 
 from pydantic import ConfigDict, Field
 
-from mlem.dataset import Dataset
-from mlem.utils import BaseModel, seed_from_basemodel
+from .dataset import Dataset
+from .utils import BaseModel, seed_from_basemodel
 
 
 class SimulatedRepresentations(BaseModel):

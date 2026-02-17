@@ -11,7 +11,7 @@ if tp.TYPE_CHECKING:
 from exca import TaskInfra
 from pydantic import ConfigDict
 
-from mlem.utils import BaseModel, encode_df, seed_from_basemodel
+from .utils import BaseModel, encode_df, seed_from_basemodel
 
 
 class Dataset(BaseModel):
