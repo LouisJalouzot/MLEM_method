@@ -11,7 +11,7 @@ base_config:
       cv: 5
     representations:
       level: sentence
-      token_aggregation: last
+      token_aggregation: mean
   layers_infra:
     folder: .cache
     cluster: slurm
@@ -22,7 +22,7 @@ base_config:
     slurm_constraint: h100
     slurm_account: ioj@h100
     slurm_additional_parameters:
-        hint: nomultithread
+      hint: nomultithread
 
 grid_search:
   trainer.representations.model_name:
@@ -78,6 +78,10 @@ grid_search:
     - EleutherAI/pythia-1.4b
     - EleutherAI/pythia-2.8b
 
+    - EleutherAI/gpt-neo-125m
+    - EleutherAI/gpt-neo-1.3B
+    - EleutherAI/gpt-neo-2.7B
+
     - facebook/opt-125m
     # - facebook/opt-350m # Dropped because of projection trick only on this model
     - facebook/opt-1.3b
@@ -87,6 +91,15 @@ grid_search:
     - Qwen/Qwen2.5-1.5B
     - Qwen/Qwen2.5-3B
     - Qwen/Qwen2.5-7B
+    - Qwen/Qwen2.5-14B
+
+    - meta-llama/Llama-3.2-1B
+    - meta-llama/Llama-3.2-3B
+    - meta-llama/Llama-3.1-8B
+
+    - mistralai/Ministral-3-3B-Base-2512
+    - mistralai/Ministral-3-8B-Base-2512
+    - mistralai/Ministral-3-14B-Base-2512
 
     # 3. Encoder Decoder
     - google-t5/t5-small # 60M
