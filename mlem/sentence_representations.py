@@ -61,6 +61,7 @@ class SentenceRepresentations(BaseModel):
     )
     add_special_tokens: bool = True
     untrained: bool = False
+    normalize_embeddings: tp.Literal["none", "layer0", "diff"] = "none"
 
     layer: int | tp.List[int] | None = 5
     units: int | tp.List[int] | None = None
@@ -91,6 +92,14 @@ class SentenceRepresentations(BaseModel):
 
         # (n_sentences, n_layers+1, hidden_size)
         sentence_representations = self.forward()
+
+        # Apply embedding normalization
+        if self.normalize_embeddings == "layer0":
+            # Subtract embedding layer (layer 0) from all layers
+            sentence_representations -= sentence_representations[:, 0:1]
+        elif self.normalize_embeddings == "diff":
+            # Subtract previous layer from each layer
+            sentence_representations[:, 1:] -= sentence_representations[:, :-1].clone()
         if self.units is not None:
             if isinstance(self.units, int):
                 units = [self.units]
@@ -135,7 +144,15 @@ class SentenceRepresentations(BaseModel):
 
         return sentence_representations + torch.from_numpy(noise)
 
-    @inner_infra.apply(exclude_from_cache_uid=["layer", "units", "noise_level", "seed"])
+    @inner_infra.apply(
+        exclude_from_cache_uid=[
+            "layer",
+            "units",
+            "noise_level",
+            "seed",
+            "normalize_embeddings",
+        ]
+    )
     def forward(self) -> torch.Tensor:
         # (n_sentences, n_layers+1, hidden_size)
         return compute_sentence_representations(
@@ -149,6 +166,14 @@ class SentenceRepresentations(BaseModel):
         )
 
     # Dummy function to indicate successful computation without loading result in RAM
-    @infra.apply(exclude_from_cache_uid=["layer", "units", "noise_level", "seed"])
+    @infra.apply(
+        exclude_from_cache_uid=[
+            "layer",
+            "units",
+            "noise_level",
+            "seed",
+            "normalize_embeddings",
+        ]
+    )
     def precompute(self):
-        self._get_final_representations()
+        self.forward()

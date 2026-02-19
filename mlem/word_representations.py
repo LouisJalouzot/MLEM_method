@@ -4,8 +4,8 @@ import string
 import typing as tp
 
 if tp.TYPE_CHECKING:
-    import torch
     import pandas as pd
+    import torch
 
 import numpy as np
 from exca import TaskInfra
@@ -138,22 +138,38 @@ class WordRepresentations(BaseModel):
     token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = "mean"
     add_special_tokens: bool = True
     untrained: bool = False
+    normalize_embeddings: tp.Literal["none", "layer0", "diff"] = "none"
 
-    layer: int = 5
-    units: tp.List[int] = None
+    layer: int | tp.List[int] | None = 5
+    units: int | tp.List[int] | None = None
+    pca: int | float | None = None
+    svd_solver: str = "randomized"
     noise_level: float = 0.0
     seed: int = 0
 
     device: tp.Optional[str] = None
     batch_size: int = 32
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
+    inner_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
         "device",
         "batch_size",
     )
 
-    @infra.apply(exclude_from_cache_uid=["layer", "units", "noise_level"])
+    def model_post_init(self, context):
+        super().model_post_init(context)
+        assert not isinstance(self.pca, float) or self.svd_solver == "full"
+
+    @inner_infra.apply(
+        exclude_from_cache_uid=[
+            "layer",
+            "units",
+            "noise_level",
+            "seed",
+            "normalize_embeddings",
+        ]
+    )
     def forward(self) -> torch.Tensor:
         # (n_words, n_layers+1, hidden_size)
         return compute_word_representations(
@@ -166,22 +182,76 @@ class WordRepresentations(BaseModel):
             untrained=self.untrained,
         )
 
+    # Dummy function to indicate successful computation without loading result in RAM
+    @infra.apply(
+        exclude_from_cache_uid=[
+            "layer",
+            "units",
+            "noise_level",
+            "seed",
+            "normalize_embeddings",
+        ]
+    )
+    def precompute(self):
+        self.forward()
+
     def __call__(self):
         import torch
 
         # (n_words, n_layers+1, hidden_size)
         word_representations = self.forward()
-        if self.units is not None:
-            word_representations = word_representations[:, :, self.units]
 
+        # Apply embedding normalization
+        if self.normalize_embeddings == "layer0":
+            # Subtract embedding layer (layer 0) from all layers
+            word_representations -= word_representations[:, 0:1]
+        elif self.normalize_embeddings == "diff":
+            # Subtract previous layer from each layer
+            word_representations[:, 1:] -= word_representations[:, :-1].clone()
+
+        if self.units is not None:
+            if isinstance(self.units, int):
+                units = [self.units]
+            else:
+                units = self.units
+            word_representations = word_representations[:, :, units]
+
+        if self.layer is not None:
+            word_representations = word_representations[:, self.layer]
+        else:
+            # Remove embedding layer
+            word_representations = word_representations[:, 1:]
         # (n_words, hidden_size)
-        word_representations = word_representations[:, self.layer]
+        n_stimuli = word_representations.shape[0]
+        word_representations = word_representations.reshape(n_stimuli, -1)
+
         na_words = torch.isnan(word_representations).any(dim=1)
         if na_words.any():
             logger.warning(
                 f"Found {na_words.sum()}/{len(na_words)} words not containing any tokens (mismatch between data and tokenizers splits). Setting their representation to 0"
             )
             word_representations[na_words] = 0
+
+        # Apply PCA if requested (int for n_components, float for variance ratio)
+        if self.pca is not None:
+            from sklearn.decomposition import PCA
+
+            original_shape = word_representations.shape
+            pca_model = PCA(
+                n_components=self.pca,
+                random_state=self.seed,
+                svd_solver=self.svd_solver,
+            )
+            word_representations = pca_model.fit_transform(word_representations)
+            if isinstance(self.pca, float):
+                logger.info(
+                    f"Applied {self.pca * 100:.1f}% PCA: reduced from {original_shape[1]} to {self.pca} dimensions"
+                )
+            else:
+                logger.info(
+                    f"Applied {self.pca} components PCA: reduced from {original_shape[1]} and retained {pca_model.explained_variance_ratio_.sum() * 100:.1f}% of variance"
+                )
+            word_representations = torch.from_numpy(word_representations)
 
         scale = word_representations.std(dim=0)
         rng = np.random.default_rng(seed_from_basemodel(self))
