@@ -7,20 +7,20 @@ base_config:
     path: datasets/relative_clause.csv
   trainer:
     # device: cuda
-    token_aggregation: last
     dataloader_builder:
       cv: 5
     representations:
       # batch_size: 1
       level: sentence
+      token_aggregation: last
   layers_infra:
     folder: .cache
     mode: retry
     # cluster: null
     cluster: slurm
     logs: .cache/logs/families/%j
-    cpus_per_task: 24
-    gpus_per_node: 1
+    cpus_per_task: 48
+    gpus_per_node: 2
     timeout_min: 1200
     slurm_constraint: h100
     slurm_account: ioj@h100
@@ -112,9 +112,9 @@ grid_search:
     - meta-llama/Llama-3.2-3B
     - meta-llama/Llama-3.1-8B
 
-    # - mistralai/Ministral-3-3B-Base-2512
-    # - mistralai/Ministral-3-8B-Base-2512
-    # - mistralai/Ministral-3-14B-Base-2512
+    - mistralai/Ministral-3-3B-Base-2512
+    - mistralai/Ministral-3-8B-Base-2512
+    - mistralai/Ministral-3-14B-Base-2512
 
     # 3. Encoder Decoder
     - google-t5/t5-small # 60M
