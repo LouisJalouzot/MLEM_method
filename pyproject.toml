@@ -62,5 +62,25 @@ dependencies = [
 where = ["."]
 include = ["mlem*"]
 
+[tool.pyright]
+# Reduce memory usage
+typeCheckingMode = "partial"
+analyzeUnannotatedFunctions = false
+useLibraryCodeForTypes = false
+
+# Exclude notebooks from analysis (major memory hog)
+exclude = [
+    "**/*.ipynb",
+    ".venv",
+    ".cache",
+    "**/__pycache__",
+    "**/node_modules",
+    "**/.*",
+]
+
+# Reduce analysis depth
+reportMissingImports = false
+reportMissingTypeStubs = false
+
 [tool.uv.sources]
 captum = { git = "https://github.com/meta-pytorch/captum" }
