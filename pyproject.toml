@@ -7,7 +7,7 @@ name = "mlem-method"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "antspyx>=0.6.2",
     "captum>=0.8.0",
@@ -83,4 +83,11 @@ reportMissingImports = false
 reportMissingTypeStubs = false
 
 [tool.uv.sources]
+torch = { index = "pytorch-cu13" }
+torchvision = { index = "pytorch-cu13" }
 captum = { git = "https://github.com/meta-pytorch/captum" }
+
+[[tool.uv.index]]
+name = "pytorch-cu13"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true

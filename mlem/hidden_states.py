@@ -87,12 +87,15 @@ def compute_hidden_states(
         config.output_hidden_states = True
 
         def load(cls):
-            return cls.from_config(config)
+            return cls.from_config(config, dtype="float32")
     else:
 
         def load(cls):
             return cls.from_pretrained(
-                model_name, output_hidden_states=True, trust_remote_code=True
+                model_name,
+                output_hidden_states=True,
+                trust_remote_code=True,
+                dtype="float32",
             )
 
     try:
