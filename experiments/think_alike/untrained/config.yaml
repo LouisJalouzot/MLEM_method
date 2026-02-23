@@ -1,0 +1,25 @@
+target: mlem.FeatureImportance
+infra: layers_infra
+
+base_config:
+  dataset:
+    path: datasets/relative_clause.csv
+  trainer:
+    device: cuda
+    representations:
+      level: sentence
+      token_aggregation: mean
+      model_name: bert-base-uncased
+
+grid_search:
+  trainer.representations.token_aggregation:
+    - last
+    - mean
+    - none
+  trainer.representations.normalize_embeddings:
+    - none
+    - layer0
+    - diff
+  trainer.representations.untrained:
+    - true
+    - false

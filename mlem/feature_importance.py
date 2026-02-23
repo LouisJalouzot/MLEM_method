@@ -165,9 +165,14 @@ class FeatureImportance(BaseModelSharing):
     alpha: float = 0.01
 
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
-    layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
+    layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="1")
     map_infra: MapInfra = MapInfra()
     model_config: ConfigDict = ConfigDict(extra="forbid")
+    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
+        "infra",
+        "layers_infra",
+        "map_infra",
+    )
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
         "dataset": ["trainer", "estimate_correlations"],
         "estimate_correlations": ["trainer"],
@@ -199,7 +204,7 @@ class FeatureImportance(BaseModelSharing):
 
         model_name = self.trainer.representations.model_name
         n_layers = get_n_layers(model_name)
-        layers = list(range(1, n_layers + 1))  # 0 is the embedding layer
+        layers = range(n_layers + 1)
         logger.info(
             f"Running feature importance for {len(layers)} layers of model '{model_name}'"
         )

@@ -70,16 +70,13 @@ def compute_hidden_states(
     from transformers import AutoModel, AutoModelForCausalLM, AutoTokenizer
 
     try:
-        tokenizer = AutoTokenizer.from_pretrained(
-            model_name, trust_remote_code=True, fix_mistral_regex=True
-        )
+        tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     except Exception:
         tokenizer = AutoTokenizer.from_pretrained(
             model_name,
             use_fast=False,
             trust_remote_code=True,
             legacy=False,
-            fix_mistral_regex=True,
         )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
