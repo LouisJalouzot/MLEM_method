@@ -54,6 +54,14 @@ def get_device():
         return "cpu"
 
 
+def _get_layers_from_config(config) -> int | None:
+    """Try to extract layer count from a config object."""
+    for attr in ("num_hidden_layers", "n_layer", "num_layers"):
+        if hasattr(config, attr):
+            return getattr(config, attr)
+    return None
+
+
 def get_n_layers(model_name: str) -> int:
     """Get the number of hidden layers from a HuggingFace model config.
 
@@ -62,8 +70,8 @@ def get_n_layers(model_name: str) -> int:
     - n_layer (GPT-2, Bloom, etc.)
     - num_layers (T5, etc.)
 
-    Also handles encoder-decoder models (e.g., T5Gemma, BART) by checking
-    encoder and decoder sub-configs.
+    Also handles encoder-decoder models (e.g., T5Gemma, BART) and multimodal
+    models with text_config (e.g., VLMs, Ministral).
 
     Args:
         model_name: HuggingFace model identifier.
@@ -78,26 +86,27 @@ def get_n_layers(model_name: str) -> int:
 
     config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
 
-    # Try different attribute names at top level
-    for attr in ("num_hidden_layers", "n_layer", "num_layers"):
-        if hasattr(config, attr):
-            return getattr(config, attr)
+    # Try top-level config
+    if (layers := _get_layers_from_config(config)) is not None:
+        return layers
 
-    # For encoder-decoder models, check encoder and decoder configs
-    if hasattr(config, "encoder"):
-        for attr in ("num_hidden_layers", "n_layer", "num_layers"):
-            if hasattr(config.encoder, attr):
-                return getattr(config.encoder, attr)
-
-    if hasattr(config, "decoder"):
-        for attr in ("num_hidden_layers", "n_layer", "num_layers"):
-            if hasattr(config.decoder, attr):
-                return getattr(config.decoder, attr)
+    # For encoder-decoder or multimodal models, check sub-configs
+    sub_configs = (
+        getattr(config, "encoder", None),
+        getattr(config, "decoder", None),
+        getattr(config, "text_config", None),
+    )
+    for sub_config in sub_configs:
+        if (
+            sub_config is not None
+            and (layers := _get_layers_from_config(sub_config)) is not None
+        ):
+            return layers
 
     raise ValueError(
         f"Could not determine number of layers for model '{model_name}'. "
         f"Config has no 'num_hidden_layers', 'n_layer', or 'num_layers' attribute "
-        f"at top level or in encoder/decoder sub-configs."
+        f"at top level or in encoder/decoder/text_config sub-configs."
     )
 
 

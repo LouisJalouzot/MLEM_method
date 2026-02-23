@@ -64,7 +64,7 @@ include = ["mlem*"]
 
 [tool.pyright]
 # Reduce memory usage
-typeCheckingMode = "basic"
+typeCheckingMode = "off"
 analyzeUnannotatedFunctions = false
 useLibraryCodeForTypes = false
 
