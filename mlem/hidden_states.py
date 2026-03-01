@@ -13,6 +13,44 @@ from tqdm.auto import tqdm
 warnings.filterwarnings(action="ignore", category=UserWarning)
 
 
+def subtract_word_mean_tokens(
+    hidden_states: torch.Tensor,
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+) -> None:
+    """Subtracts per-(position, token-type) mean in-place from hidden states.
+
+    For each token position j, groups sentences by their token ID at j and
+    subtracts the group mean. Padding positions are skipped.
+
+    Args:
+        hidden_states: (n_sentences, max_seq_len, n_layers+1, hidden_size) float32.
+        input_ids: (n_sentences, max_seq_len) long.
+        attention_mask: (n_sentences, max_seq_len) bool. True for real tokens.
+    """
+    import torch
+
+    n_sentences, max_seq_len, n_layers, hidden_size = hidden_states.shape
+    for j in range(max_seq_len):
+        mask_j = attention_mask[:, j]  # (n_sentences,)
+        if not mask_j.any():
+            continue
+        ids_j = input_ids[mask_j, j]  # (n_real,)
+        h_j = hidden_states[mask_j, j, :, :]  # (n_real, n_layers, hidden_size)
+
+        _, inverse = torch.unique(ids_j, return_inverse=True)
+        n_groups = int(inverse.max().item()) + 1
+
+        # (n_groups, n_layers, hidden_size)
+        group_sums = torch.zeros(n_groups, n_layers, hidden_size, dtype=h_j.dtype)
+        counts = torch.zeros(n_groups, dtype=h_j.dtype)
+        group_sums.scatter_add_(0, inverse[:, None, None].expand_as(h_j), h_j)
+        counts.scatter_add_(0, inverse, torch.ones(inverse.shape[0], dtype=h_j.dtype))
+
+        group_means = group_sums / counts[:, None, None]
+        hidden_states[mask_j, j, :, :] -= group_means[inverse]
+
+
 def compute_hidden_states(
     sentences: tp.List[str],
     model_name: str = "prajjwal1/bert-tiny",
@@ -20,8 +58,9 @@ def compute_hidden_states(
     device: str = "cpu",
     add_special_tokens: bool = True,
     return_offsets_mapping: bool = False,
+    return_input_ids: bool = False,
     untrained: bool = False,
-) -> MaskedTensor | tp.Tuple[MaskedTensor, torch.Tensor]:
+) -> MaskedTensor | tp.Tuple[MaskedTensor, ...]:
     """
     Computes hidden states for a list of sentences using a specified transformer model.
 
@@ -35,19 +74,15 @@ def compute_hidden_states(
             during tokenization. Defaults to True.
         return_offsets_mapping: Whether to return the character offsets mapping
             for each token. Defaults to False.
+        return_input_ids: Whether to return the input IDs tensor. Defaults to False.
         untrained: If True, use a randomly initialized model with the same
             architecture instead of loading pretrained weights.
 
     Returns:
-        If `return_offsets_mapping` is False:
-            A MaskedTensor of shape (n_sentences, max_seq_len, n_layers+1, hidden_size)
-            containing the hidden states for each token in each sentence across all layers.
-            Padding tokens are masked.
-        If `return_offsets_mapping` is True:
-            A tuple containing:
-            - The MaskedTensor of hidden states as described above.
-            - A torch.Tensor of shape (n_sentences, max_seq_len, 2) containing the
-              start and end character offsets for each token.
+        If both flags are False: MaskedTensor (n_sentences, max_seq_len, n_layers+1, hidden_size).
+        If return_offsets_mapping: tuple (MaskedTensor, offsets (n_sentences, max_seq_len, 2)).
+        If return_input_ids: tuple (MaskedTensor, input_ids (n_sentences, max_seq_len)).
+        If both: tuple (MaskedTensor, offsets, input_ids).
 
     Example:
         >>> sentences = ["This is a test sentence.", "Another example."]
@@ -161,17 +196,22 @@ def compute_hidden_states(
 
     # Broadcast attention mask to match hidden states shape and cast to bool
     # (n_sentences, max_seq_len) -> (n_sentences, max_seq_len, 1, 1)
-    attention_mask = attention_mask[:, :, None, None]
+    attn_mask_4d = attention_mask[:, :, None, None]
     # Broadcast to (n_sentences, max_seq_len, n_layers+1, hidden_size)
-    attention_mask = attention_mask.broadcast_to(hidden_states.shape)
+    attn_mask_4d = attn_mask_4d.broadcast_to(hidden_states.shape)
 
     # Mask hidden states based on the full attention mask
-    all_hidden_states_masked = masked_tensor(hidden_states, attention_mask.bool())
+    all_hidden_states_masked = masked_tensor(hidden_states, attn_mask_4d.bool())
 
-    if return_offsets_mapping:
-        return all_hidden_states_masked, offsets_mapping
+    result: tp.Any = all_hidden_states_masked
+    if return_offsets_mapping and return_input_ids:
+        return result, offsets_mapping, input_ids
+    elif return_offsets_mapping:
+        return result, offsets_mapping
+    elif return_input_ids:
+        return result, input_ids
     else:
-        return all_hidden_states_masked
+        return result
 
 
 def aggregate_masked_tensor(

@@ -139,6 +139,7 @@ class WordRepresentations(BaseModel):
     add_special_tokens: bool = True
     untrained: bool = False
     normalize_embeddings: tp.Literal["none", "layer0", "diff"] = "none"
+    normalize_by_word: bool = False
 
     layer: int | tp.List[int] | None = 5
     units: int | tp.List[int] | None = None
@@ -168,6 +169,7 @@ class WordRepresentations(BaseModel):
             "noise_level",
             "seed",
             "normalize_embeddings",
+            "normalize_by_word",
         ]
     )
     def forward(self) -> torch.Tensor:
@@ -190,6 +192,7 @@ class WordRepresentations(BaseModel):
             "noise_level",
             "seed",
             "normalize_embeddings",
+            "normalize_by_word",
         ]
     )
     def precompute(self):
@@ -200,6 +203,36 @@ class WordRepresentations(BaseModel):
 
         # (n_words, n_layers+1, hidden_size)
         word_representations = self.forward()
+
+        # Subtract per-word-type mean per layer (vectorized via scatter_add)
+        if self.normalize_by_word:
+            words = self.dataset.words_df["word"].values
+            _, inverse = np.unique(words, return_inverse=True)
+            inverse_t = torch.tensor(inverse, dtype=torch.long)
+            n_groups = int(inverse_t.max().item()) + 1
+            n_layers, hidden_size = (
+                word_representations.shape[1],
+                word_representations.shape[2],
+            )
+
+            group_sums = torch.zeros(
+                n_groups, n_layers, hidden_size, dtype=word_representations.dtype
+            )
+            counts = torch.zeros(n_groups, dtype=word_representations.dtype)
+            group_sums.scatter_add_(
+                0,
+                inverse_t[:, None, None].expand_as(word_representations),
+                word_representations,
+            )
+            counts.scatter_add_(
+                0,
+                inverse_t,
+                torch.ones(len(inverse_t), dtype=word_representations.dtype),
+            )
+            group_means = (
+                group_sums / counts[:, None, None]
+            )  # (n_groups, n_layers, hidden_size)
+            word_representations = word_representations - group_means[inverse_t]
 
         # Apply embedding normalization
         if self.normalize_embeddings == "layer0":

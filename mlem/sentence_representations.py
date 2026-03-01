@@ -12,7 +12,11 @@ from loguru import logger
 from pydantic import ConfigDict, Field
 
 from .dataset import Dataset
-from .hidden_states import aggregate_masked_tensor, compute_hidden_states
+from .hidden_states import (
+    aggregate_masked_tensor,
+    compute_hidden_states,
+    subtract_word_mean_tokens,
+)
 from .utils import BaseModel, get_device, seed_from_basemodel
 
 
@@ -62,6 +66,7 @@ class SentenceRepresentations(BaseModel):
     add_special_tokens: bool = True
     untrained: bool = False
     normalize_embeddings: tp.Literal["none", "layer0", "diff"] = "none"
+    normalize_by_word: bool = False
 
     layer: int | tp.List[int] | None = 5
     units: int | tp.List[int] | None = None
@@ -151,19 +156,59 @@ class SentenceRepresentations(BaseModel):
             "noise_level",
             "seed",
             "normalize_embeddings",
+            "normalize_by_word",
         ]
     )
     def forward(self) -> torch.Tensor:
+        import torch
+        from torch.masked import masked_tensor
+
         # (n_sentences, n_layers+1, hidden_size)
-        return compute_sentence_representations(
-            sentences=self.dataset.sentences,
-            model_name=self.model_name,
-            batch_size=self.batch_size,
-            device=self.device or get_device(),
-            add_special_tokens=self.add_special_tokens,
-            token_aggregation=self.token_aggregation,
-            untrained=self.untrained,
-        )
+        if self.normalize_by_word:
+            # Get token-level data to normalize per position and token type
+            hidden_states_masked, input_ids = compute_hidden_states(
+                sentences=self.dataset.sentences,
+                model_name=self.model_name,
+                batch_size=self.batch_size,
+                device=self.device or get_device(),
+                add_special_tokens=self.add_special_tokens,
+                return_input_ids=True,
+                untrained=self.untrained,
+            )
+            # (n_sentences, max_seq_len) bool
+            attention_mask = hidden_states_masked.get_mask()[:, :, 0, 0]
+            # (n_sentences, max_seq_len, n_layers+1, hidden_size) — mutable copy
+            data = hidden_states_masked.get_data().clone()
+
+            subtract_word_mean_tokens(data, input_ids, attention_mask)
+
+            # Re-mask and aggregate
+            attn_mask_4d = attention_mask[:, :, None, None].broadcast_to(data.shape)
+            hidden_states_masked = masked_tensor(data, attn_mask_4d)
+
+            if self.token_aggregation == "none":
+                if not attn_mask_4d.all():
+                    raise ValueError(
+                        "Token aggregation 'none' requires all sentences to have the same "
+                        "number of tokens (no padding). Found masked (padding) values."
+                    )
+                n_stimuli = data.shape[0]
+                n_layers = data.shape[2]
+                return data.swapaxes(1, 2).reshape(n_stimuli, n_layers, -1)
+            else:
+                return aggregate_masked_tensor(
+                    hidden_states_masked, dim=1, method=self.token_aggregation
+                )
+        else:
+            return compute_sentence_representations(
+                sentences=self.dataset.sentences,
+                model_name=self.model_name,
+                batch_size=self.batch_size,
+                device=self.device or get_device(),
+                add_special_tokens=self.add_special_tokens,
+                token_aggregation=self.token_aggregation,
+                untrained=self.untrained,
+            )
 
     # Dummy function to indicate successful computation without loading result in RAM
     @infra.apply(
@@ -173,6 +218,7 @@ class SentenceRepresentations(BaseModel):
             "noise_level",
             "seed",
             "normalize_embeddings",
+            "normalize_by_word",
         ]
     )
     def precompute(self):

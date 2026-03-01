@@ -40,6 +40,7 @@ dependencies = [
     "protobuf>=6.33.4",               # For microsoft/deberta-v3-base and mistralai/Ministral-3-*B-Base-2512
     "pyarrow>=23.0.1",
     "pydantic>=2.11.1",
+    "pytest-testmon>=2.2.0",
     "pytest>=8.3.5",
     "scikit-learn>=1.6.1",
     "scipy>=1.15.2",
