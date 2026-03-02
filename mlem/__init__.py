@@ -6,6 +6,7 @@ from .estimate_correlations import EstimateCorrelations
 from .feature_importance import FeatureImportance
 from .pairwise_dataloader import PairwiseDataloaderBuilder
 from .reduce_dimensions import ReduceDimensions
+from .rsa import RSA
 from .sentence_representations import SentenceRepresentations
 from .spd_matrix_learner import SPDMatrixLearnerBuilder
 from .syntmov2024_dataset import SyntMov2024Dataset
@@ -26,6 +27,7 @@ __all__ = [
     "EstimateCorrelations",
     "PairwiseDataloaderBuilder",
     "ReduceDimensions",
+    "RSA",
     "SentenceRepresentations",
     "SPDMatrixLearnerBuilder",
     "SyntMov2024Dataset",

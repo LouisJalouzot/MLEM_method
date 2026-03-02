@@ -7,6 +7,8 @@ from torch.nn import functional as F
 from torch.nn.utils import parametrize
 from torchsort import soft_rank
 
+from .utils import corrcoef, spearman
+
 
 class DiagonalParam(nn.Module):
     def forward(self, W):
@@ -190,21 +192,6 @@ class SPDMatrixLearner(nn.Module):
 
         return total_norm
 
-    def corrcoef(self, x, y):
-        y_n = y - y.mean()
-        x_n = x - x.mean()
-        y_n = y_n / y_n.norm()
-        x_n = x_n / x_n.norm()
-
-        return (y_n * x_n).sum()
-
-    def spearman(self, x, y):
-        dtype = x.dtype
-        x_rank = x.argsort().argsort().to(dtype)
-        y_rank = y.argsort().argsort().to(dtype)
-
-        return self.corrcoef(x_rank, y_rank)
-
     def spearman_diff(self, x, y):
         n = x.shape[0]
         x_rank = soft_rank(
@@ -218,7 +205,7 @@ class SPDMatrixLearner(nn.Module):
             regularization_strength=self.spearman_regularization_strength,
         )
 
-        return self.corrcoef(x_rank / n, y_rank / n)
+        return corrcoef(x_rank / n, y_rank / n)
 
     def mse(self, x, y):
 
@@ -232,6 +219,6 @@ class SPDMatrixLearner(nn.Module):
             pred = self.flat_forward(x)
 
         if self.scoring == "spearman":
-            return self.spearman(pred, y).item()
+            return spearman(pred, y).item()
         elif self.scoring == "mse":
             return self.mse(pred, y).item()

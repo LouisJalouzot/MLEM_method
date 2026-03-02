@@ -21,6 +21,7 @@ class PairwiseDataloader:
         self,
         X=None,
         Y=None,
+        Y2=None,
         n_pairs=4096,
         gamma=1,
         distance=2,
@@ -33,9 +34,13 @@ class PairwiseDataloader:
 
         self.X = X
         self.Y = Y
+        self.Y2 = Y2
         if X is not None and Y is not None:
             assert len(X) == len(Y)
             assert X.device == Y.device
+        if Y is not None and Y2 is not None:
+            assert len(Y2) == len(Y)
+            assert Y2.device == Y.device
         self.n_pairs = n_pairs
         self.gamma = gamma
         if X is not None:
@@ -47,10 +52,16 @@ class PairwiseDataloader:
             self.n = len(Y)
             self.device = Y.device
             self.Y = Y.float()
+        if Y2 is not None:
+            self.n = len(Y2)
+            self.device = Y2.device
+            self.Y2 = Y2.float()
         self.max_n_pairs = self.n * (self.n - 1) // 2
         self.nan_to_num = nan_to_num
         self.min = torch.inf
         self.max = -torch.inf
+        self.min2 = torch.inf
+        self.max2 = -torch.inf
         self.min_max_scale = min_max_scale
         self.logged_debug = False
         self.seed = seed
@@ -119,6 +130,17 @@ class PairwiseDataloader:
             Y_dist = Y_dist.reshape(n_trials, -1).squeeze()
             out = (*out, Y_dist)
 
+        if self.Y2 is not None:
+            Y2_1 = self.Y2[ind_1]
+            Y2_2 = self.Y2[ind_2]
+            Y2_dist = self.distance(Y2_1, Y2_2).reshape(-1)
+            if self.min_max_scale:
+                self.min2 = min(self.min2, Y2_dist.min())
+                self.max2 = max(self.max2, Y2_dist.max())
+                Y2_dist = (Y2_dist - self.min2) / (self.max2 - self.min2)
+            Y2_dist = Y2_dist.reshape(n_trials, -1).squeeze()
+            out = (*out, Y2_dist)
+
         if get_idx:
             out = (ind_1, ind_2, *out)
 
@@ -163,13 +185,15 @@ class PairwiseDataloaderBuilder(BaseModel):
         self,
         X=None,
         Y=None,
+        Y2=None,
         n_pairs=None,
         gamma=1,
         seed=None,
     ) -> PairwiseDataLoaderGenerator:
-        build_dl = lambda x, y: PairwiseDataloader(
+        build_dl = lambda x, y, y2=None: PairwiseDataloader(
             X=x,
             Y=y,
+            Y2=y2,
             n_pairs=n_pairs,
             gamma=gamma,
             distance=self.distance,
@@ -179,21 +203,32 @@ class PairwiseDataloaderBuilder(BaseModel):
         )
         assert X is not None or Y is not None, "X or Y must be provided"
         if self.cv is None:
-            yield build_dl(X, Y), build_dl(X, Y)
+            yield build_dl(X, Y, Y2), build_dl(X, Y, Y2)
         if isinstance(self.cv, int):
             from sklearn.model_selection import KFold
 
             kf = KFold(n_splits=self.cv, shuffle=True, random_state=0)
             for i, (train_index, test_index) in enumerate(kf.split(X), start=1):
-                train_dl = build_dl(X[train_index], Y[train_index])
-                test_dl = build_dl(X[test_index], Y[test_index])
+                train_dl = build_dl(
+                    X[train_index] if X is not None else None,
+                    Y[train_index] if Y is not None else None,
+                    Y2[train_index] if Y2 is not None else None,
+                )
+                test_dl = build_dl(
+                    X[test_index] if X is not None else None,
+                    Y[test_index] if Y is not None else None,
+                    Y2[test_index] if Y2 is not None else None,
+                )
                 logger.info(f"Split {i} of {self.cv}")
                 yield train_dl, test_dl
         elif isinstance(self.cv, float):
             from sklearn.model_selection import train_test_split
 
-            X_train, X_test, Y_train, Y_test = train_test_split(
-                X, Y, test_size=self.cv, random_state=0
-            )
+            arrays = [a for a in [X, Y, Y2] if a is not None]
+            splits = train_test_split(*arrays, test_size=self.cv, random_state=0)
+            it = iter(splits)
+            X_train, X_test = (next(it), next(it)) if X is not None else (None, None)
+            Y_train, Y_test = (next(it), next(it)) if Y is not None else (None, None)
+            Y2_train, Y2_test = (next(it), next(it)) if Y2 is not None else (None, None)
 
-            yield build_dl(X_train, Y_train), build_dl(X_test, Y_test)
+            yield build_dl(X_train, Y_train, Y2_train), build_dl(X_test, Y_test, Y2_test)
