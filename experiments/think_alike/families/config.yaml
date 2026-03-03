@@ -66,7 +66,25 @@ grid_search:
     # - intfloat/e5-base-v2 # 0.1B
     # - intfloat/e5-large-v2 # 0.3B
 
-    # 2. Decoders (Causal Language Models)
+    # # 2. Encoder Decoder
+    # - google-t5/t5-small # 60M
+    # - google-t5/t5-base # 0.2B
+    # - google-t5/t5-large # 0.7B
+
+    # - google/flan-t5-small # 77M
+    # - google/flan-t5-base # 0.2B
+    # - google/flan-t5-large # 0.8B
+    # - google/flan-t5-xl # 3B
+    # - google/flan-t5-xxl # 11B
+
+    # - google/t5gemma-s-s-ul2 # 0.3B
+    # - google/t5gemma-b-b-ul2 # 0.6B
+    # - google/t5gemma-l-l-ul2 # 1B
+    # - google/t5gemma-ml-ml-ul2 # 2B
+    # - google/t5gemma-xl-xl-ul2 # 4B
+    # - google/t5gemma-2b-2b-ul2 # 6B
+
+    # 3. Decoders (Causal Language Models)
     - openai-community/gpt2 # 0.1B
     - openai-community/gpt2-medium # 0.4B
     - openai-community/gpt2-large # 0.8B
@@ -126,24 +144,6 @@ grid_search:
     - Qwen/Qwen3.5-4B-Base
     - Qwen/Qwen3.5-9B-Base
 
-    # # 3. Encoder Decoder
-    # - google-t5/t5-small # 60M
-    # - google-t5/t5-base # 0.2B
-    # - google-t5/t5-large # 0.7B
-
-    # - google/flan-t5-small # 77M
-    # - google/flan-t5-base # 0.2B
-    # - google/flan-t5-large # 0.8B
-    # - google/flan-t5-xl # 3B
-    # - google/flan-t5-xxl # 11B
-
-    # - google/t5gemma-s-s-ul2 # 0.3B
-    # - google/t5gemma-b-b-ul2 # 0.6B
-    # - google/t5gemma-l-l-ul2 # 1B
-    # - google/t5gemma-ml-ml-ul2 # 2B
-    # - google/t5gemma-xl-xl-ul2 # 4B
-    # - google/t5gemma-2b-2b-ul2 # 6B
-
     # 4. State Space Models (SSMs)
     - state-spaces/mamba-130m-hf
     - state-spaces/mamba-370m-hf
@@ -151,11 +151,12 @@ grid_search:
     - state-spaces/mamba-1.4b-hf
     - state-spaces/mamba-2.8b-hf
 
-    - AntonV/mamba2-130m-hf
-    - AntonV/mamba2-370m-hf
-    - AntonV/mamba2-780m-hf
-    - AntonV/mamba2-1.3b-hf
-    - AntonV/mamba2-2.7b-hf
+    # Broken for now
+    # - AntonV/mamba2-130m-hf
+    # - AntonV/mamba2-370m-hf
+    # - AntonV/mamba2-780m-hf
+    # - AntonV/mamba2-1.3b-hf
+    # - AntonV/mamba2-2.7b-hf
     
     # 5. RNNs
     - RWKV/v6-Finch-1B6-HF
@@ -173,3 +174,13 @@ grid_search:
     - fla-hub/rwkv7-1.5B-world
     - fla-hub/rwkv7-2.9B-world
     - fla-hub/rwkv7-7.2B-g0a
+
+    # 6. Liquid neural nets
+    - LiquidAI/LFM2-350M
+    - LiquidAI/LFM2-700M
+    - LiquidAI/LFM2-1.2B
+    - LiquidAI/LFM2-2.6B
+
+    # 7. Griffin / hybrid recurrent
+    - google/recurrentgemma-2b
+    - google/recurrentgemma-9b
