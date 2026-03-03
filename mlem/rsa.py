@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing as tp
 
 if tp.TYPE_CHECKING:
@@ -69,12 +67,16 @@ class RSA(BaseModelSharing):
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     map_infra: MapInfra = MapInfra()
     model_config: ConfigDict = ConfigDict(extra="forbid")
-    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device", "map_infra")
+    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
+        "device",
+        "infra",
+        "map_infra",
+    )
     _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
         "dataset": ["estimate_correlations", "representations_1", "representations_2"],
     }
 
-    @infra.apply(exclude_from_cache_uid=["device"])
+    @infra.apply
     def compute(self) -> tp.List[float]:
         """
         Sample n_batches batches of random pairs and return the Spearman
@@ -135,7 +137,7 @@ class RSA(BaseModelSharing):
     )
     def run_layers(
         self, layers: tp.Iterable[tp.Tuple[int, int]]
-    ) -> tp.Iterator[pd.DataFrame]:
+    ) -> tp.Iterator["pd.DataFrame"]:
         """
         Run RSA for multiple pairs of layers using MapInfra.
 
@@ -163,7 +165,7 @@ class RSA(BaseModelSharing):
         self,
         layers_1: tp.Optional[tp.Iterable[int]] = None,
         layers_2: tp.Optional[tp.Iterable[int]] = None,
-    ) -> pd.DataFrame:
+    ) -> "pd.DataFrame":
         """
         Run RSA for all pairs of layers within two ranges.
 
