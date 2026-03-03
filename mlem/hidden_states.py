@@ -177,6 +177,7 @@ def compute_hidden_states(
                 outputs = model(
                     input_ids=batch_input_ids,
                     attention_mask=batch_attention_mask,
+                    output_hidden_states=True,
                 )
                 batch_hidden_states = outputs.hidden_states
 
