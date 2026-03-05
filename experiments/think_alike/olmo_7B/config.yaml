@@ -11,16 +11,13 @@ base_config:
     representations:
       level: sentence
       token_aggregation: last
+      model_name: allenai/OLMo-7B-0724-hf
 
 grid_search:
-  trainer.representations.model_name:
-    - allenai/OLMo-1B-0724-hf
-    - allenai/OLMo-7B-0724-hf
-
   trainer.representations.revision:
     - step0-tokens0B
-    - step1000-tokens2B
-    - step2000-tokens4B
-    - step3000-tokens6B
-    - step4000-tokens8B
-    - step5000-tokens10B
+    - step1000-tokens4B
+    - step2000-tokens8B
+    - step3000-tokens12B
+    - step4000-tokens16B
+    - step5000-tokens20B
