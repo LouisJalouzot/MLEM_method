@@ -37,6 +37,7 @@ def compute_word_representations(
     device: str = "cpu",
     add_special_tokens: bool = True,
     untrained: bool = False,
+    revision: tp.Optional[str] = None,
 ) -> torch.Tensor:
     """Computes word representations from hidden states by aggregating token representations.
 
@@ -56,6 +57,10 @@ def compute_word_representations(
             Defaults to "cpu".
         add_special_tokens (bool, optional): Whether to include special tokens
             ([CLS], [SEP]) during tokenization. Defaults to True.
+        untrained (bool, optional): If True, use a randomly initialized model.
+            Defaults to False.
+        revision (str, optional): The specific model revision or checkpoint to use.
+            Defaults to None (uses main).
 
     Returns:
         torch.Tensor: A tensor containing word representations for all words,
@@ -95,6 +100,7 @@ def compute_word_representations(
         add_special_tokens,
         return_offsets_mapping=True,
         untrained=untrained,
+        revision=revision,
     )
     # Get rid of original attention masking
     hidden_states = hidden_states.get_data()
@@ -135,6 +141,7 @@ class WordRepresentations(BaseModel):
     )
     level: tp.Literal["word"] = "word"
     model_name: str = "bert-base-uncased"
+    revision: tp.Optional[str] = None
     token_aggregation: tp.Literal["mean", "max", "min", "first", "last"] = "mean"
     add_special_tokens: bool = True
     untrained: bool = False
@@ -182,6 +189,7 @@ class WordRepresentations(BaseModel):
             add_special_tokens=self.add_special_tokens,
             token_aggregation=self.token_aggregation,
             untrained=self.untrained,
+            revision=self.revision,
         )
 
     # Dummy function to indicate successful computation without loading result in RAM

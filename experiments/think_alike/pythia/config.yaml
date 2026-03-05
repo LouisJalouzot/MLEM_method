@@ -1,0 +1,38 @@
+target: mlem.FeatureImportance
+infra: layers_infra
+
+base_config:
+  dataset:
+    path: datasets/relative_clause.csv
+  trainer:
+    device: cuda
+    dataloader_builder:
+      cv: 5
+    representations:
+      level: sentence
+      token_aggregation: last
+
+grid_search:
+  trainer.representations.model_name:
+    - EleutherAI/pythia-14m-deduped
+    - EleutherAI/pythia-70m-deduped
+    - EleutherAI/pythia-160m-deduped
+    - EleutherAI/pythia-410m-deduped
+    - EleutherAI/pythia-1b-deduped
+    - EleutherAI/pythia-1.4b-deduped
+    - EleutherAI/pythia-2.8b-deduped
+    - EleutherAI/pythia-6.9b-deduped
+    - EleutherAI/pythia-12b-deduped
+
+  trainer.representations.revision:
+    - step0
+    - step1
+    - step2
+    - step4
+    - step8
+    - step16
+    - step32
+    - step64
+    - step128
+    - step256
+    - step512

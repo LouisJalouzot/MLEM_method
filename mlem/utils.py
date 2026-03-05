@@ -62,7 +62,7 @@ def _get_layers_from_config(config) -> int | None:
     return None
 
 
-def get_n_layers(model_name: str) -> int:
+def get_n_layers(model_name: str, revision: tp.Optional[str] = None) -> int:
     """Get the number of hidden layers from a HuggingFace model config.
 
     Handles different config attribute names across model architectures:
@@ -75,6 +75,7 @@ def get_n_layers(model_name: str) -> int:
 
     Args:
         model_name: HuggingFace model identifier.
+        revision: The specific model revision or checkpoint to use. Defaults to None (uses main).
 
     Returns:
         Number of hidden layers in the model.
@@ -84,7 +85,7 @@ def get_n_layers(model_name: str) -> int:
     """
     from transformers import AutoConfig
 
-    config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+    config = AutoConfig.from_pretrained(model_name, trust_remote_code=True, revision=revision)
 
     # Try top-level config
     if (layers := _get_layers_from_config(config)) is not None:

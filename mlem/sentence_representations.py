@@ -28,6 +28,7 @@ def compute_sentence_representations(
     add_special_tokens: bool = True,
     token_aggregation: str = "mean",
     untrained: bool = False,
+    revision: tp.Optional[str] = None,
 ) -> torch.Tensor:
     # (n_sentences, max_seq_len, n_layers+1, hidden_size)
     hidden_states = compute_hidden_states(
@@ -37,6 +38,7 @@ def compute_sentence_representations(
         device=device,
         add_special_tokens=add_special_tokens,
         untrained=untrained,
+        revision=revision,
     )
     if token_aggregation == "none":
         mask = hidden_states.get_mask()
@@ -60,6 +62,7 @@ class SentenceRepresentations(BaseModel):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
     level: tp.Literal["sentence"] = "sentence"
     model_name: str = "bert-base-uncased"
+    revision: tp.Optional[str] = None
     token_aggregation: tp.Literal["mean", "max", "min", "first", "last", "none"] = (
         "mean"
     )
@@ -174,6 +177,7 @@ class SentenceRepresentations(BaseModel):
                 add_special_tokens=self.add_special_tokens,
                 return_input_ids=True,
                 untrained=self.untrained,
+                revision=self.revision,
             )
             # (n_sentences, max_seq_len) bool
             attention_mask = hidden_states_masked.get_mask()[:, :, 0, 0]
@@ -208,6 +212,7 @@ class SentenceRepresentations(BaseModel):
                 add_special_tokens=self.add_special_tokens,
                 token_aggregation=self.token_aggregation,
                 untrained=self.untrained,
+                revision=self.revision,
             )
 
     # Dummy function to indicate successful computation without loading result in RAM

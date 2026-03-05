@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-03-05
+- Added `revision` support to load HuggingFace checkpoints (Pythia/OLMo steps).
+
 ## 2026-03-02
 - **Features**
   - **New `RSA` class** in `mlem/rsa.py` for Representational Similarity Analysis: computes Spearman correlation between RDMs of two model representations via random pair sampling. Integrates with the caching pipeline (`TaskInfra`, `BaseModelSharing`) and supports HPC execution. Includes `dataset` field sharing with sub-components via `_shared_fields_config`.

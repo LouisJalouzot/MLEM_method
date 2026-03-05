@@ -60,6 +60,7 @@ def compute_hidden_states(
     return_offsets_mapping: bool = False,
     return_input_ids: bool = False,
     untrained: bool = False,
+    revision: tp.Optional[str] = None,
 ) -> MaskedTensor | tp.Tuple[MaskedTensor, ...]:
     """
     Computes hidden states for a list of sentences using a specified transformer model.
@@ -77,6 +78,8 @@ def compute_hidden_states(
         return_input_ids: Whether to return the input IDs tensor. Defaults to False.
         untrained: If True, use a randomly initialized model with the same
             architecture instead of loading pretrained weights.
+        revision: The specific model revision or checkpoint to use (e.g., 'main',
+            'step1000-tokens4B' for OLMo, 'step100' for Pythia). Defaults to None (uses main).
 
     Returns:
         If both flags are False: MaskedTensor (n_sentences, max_seq_len, n_layers+1, hidden_size).
@@ -105,20 +108,21 @@ def compute_hidden_states(
     from transformers import AutoModel, AutoModelForCausalLM, AutoTokenizer
 
     try:
-        tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True, revision=revision)
     except Exception:
         tokenizer = AutoTokenizer.from_pretrained(
             model_name,
             use_fast=False,
             trust_remote_code=True,
             legacy=False,
+            revision=revision,
         )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     if untrained:
         from transformers import AutoConfig
 
-        config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+        config = AutoConfig.from_pretrained(model_name, trust_remote_code=True, revision=revision)
         config.output_hidden_states = True
 
         def load(cls):
@@ -131,6 +135,7 @@ def compute_hidden_states(
                 output_hidden_states=True,
                 trust_remote_code=True,
                 dtype="float32",
+                revision=revision,
             )
 
     try:
