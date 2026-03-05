@@ -118,7 +118,10 @@ def compute_hidden_states(
             revision=revision,
         )
     if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+        if tokenizer.eos_token is not None:
+            tokenizer.pad_token = tokenizer.eos_token
+        else:
+            tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     if untrained:
         from transformers import AutoConfig
 
