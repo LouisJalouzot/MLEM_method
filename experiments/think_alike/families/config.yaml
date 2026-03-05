@@ -151,12 +151,11 @@ grid_search:
     - state-spaces/mamba-1.4b-hf
     - state-spaces/mamba-2.8b-hf
 
-    # Broken for now
-    # - AntonV/mamba2-130m-hf
-    # - AntonV/mamba2-370m-hf
-    # - AntonV/mamba2-780m-hf
-    # - AntonV/mamba2-1.3b-hf
-    # - AntonV/mamba2-2.7b-hf
+    - AntonV/mamba2-130m-hf
+    - AntonV/mamba2-370m-hf
+    - AntonV/mamba2-780m-hf
+    - AntonV/mamba2-1.3b-hf
+    - AntonV/mamba2-2.7b-hf
     
     # 5. RNNs
     - RWKV/v6-Finch-1B6-HF

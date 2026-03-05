@@ -1,6 +1,5 @@
 target: mlem.FeatureImportance
 infra: layers_infra
-infra_prepare: trainer.representations.infra
 
 base_config:
   dataset:
@@ -11,44 +10,9 @@ base_config:
     representations:
       level: sentence
       pca: 256
-  trainer.representations.infra:
-    folder: .cache
-    cluster: slurm
-    logs: .cache/logs/agg/repr/%j
-    cpus_per_task: 24
-    gpus_per_node: 1
-    timeout_min: 1200
-    slurm_constraint: h100
-    slurm_account: ioj@h100
-    slurm_additional_parameters:
-      hint: nomultithread
-  layers_infra:
-    folder: .cache
-    cluster: slurm
-    logs: .cache/logs/agg/layers/%j
-    cpus_per_task: 1
-    timeout_min: 1200
-    slurm_partition: cpu_p1,prepost,visu,archive,compil
-    slurm_account: ioj@cpu
-    slurm_additional_parameters:
-      hint: nomultithread
-  map_infra:
-    folder: .cache
-    cluster: slurm
-    logs: .cache/logs/agg/map/%j
-    cpus_per_task: 4
-    timeout_min: 1200
-    slurm_partition: cpu_p1,prepost,visu,archive,compil
-    slurm_account: ioj@cpu
-    slurm_additional_parameters:
-      hint: nomultithread
 
 
 grid_search:
-  dataset.path:
-    - datasets/relative_clause.csv
-    - datasets/relative_clause_improved.csv
-    - datasets/relative_clause_2.csv
   trainer.representations.token_aggregation:
     - last
     - mean
@@ -56,8 +20,11 @@ grid_search:
   trainer.representations.untrained:
     - true
     - false
+  trainer.representations.normalize_by_word:
+    - true
+    - false
   trainer.representations.model_name:
     - bert-base-uncased
+    - bert-large-uncased
     - openai-community/gpt2 # 0.1B
-    - AntonV/mamba2-370m-hf
-    - fla-hub/rwkv7-0.4B-world
+    - openai-community/gpt2-medium # 0.3B

@@ -1,6 +1,5 @@
 target: mlem.FeatureImportance
 infra: layers_infra
-infra_prepare: trainer.representations.infra
 
 base_config:
   dataset:
@@ -10,81 +9,6 @@ base_config:
       cv: 5
     representations:
       level: sentence
-      infra: # GPU infra for computing LLM embeddings
-        folder: .cache
-        cluster: auto
-        mode: retry
-        logs: .cache/logs/explore/repr/%j
-        cpus_per_task: 24
-        gpus_per_node: 1
-        timeout_min: 1200
-        slurm_constraint: h100
-        slurm_account: ioj@h100
-        slurm_additional_parameters:
-            hint: nomultithread
-  layers_infra:
-    folder: .cache
-    cluster: null
-    logs: .cache/logs/explore/layers_infra/%j
-  map_infra:
-    folder: .cache
-    cluster: auto
-    logs: .cache/logs/explore/map_infra/%j
-    cpus_per_task: 16
-    timeout_min: 1200
-    slurm_partition: cpu_p1,prepost,visu,archive,compil
-    slurm_account: ioj@cpu
-    slurm_additional_parameters:
-        hint: nomultithread
-  # layers_infra:
-  #   folder: .cache
-  #   # cluster: auto
-  #   cluster: null
-  #   mode: retry
-  #   logs: .cache/logs/explore/layers_fi/%j
-    # cpus_per_task: 6
-    # timeout_min: 1200
-    # slurm_partition: prepost
-    # slurm_account: ioj@cpu
-    # slurm_additional_parameters:
-    #     hint: nomultithread
-  # layers_infra: # CPU infra for running MLEM
-  #   folder: .cache
-  #   cluster: auto
-  #   mode: retry
-  #   cpus_per_task: 4
-  #   timeout_min: 1200
-  #   slurm_partition: cpu_p1,prepost,visu,archive,compil
-  #   slurm_account: ioj@cpu
-  #   slurm_additional_parameters:
-  #       hint: nomultithread
-  # map_infra: # For the huge models
-  #   folder: .cache
-  #   cluster: auto
-  #   cpus_per_task: 6
-  #   timeout_min: 1200
-  #   slurm_partition: prepost
-  #   slurm_account: ioj@cpu
-  #   slurm_additional_parameters:
-  #       hint: nomultithread
-
-grid_search_prepare:
-  token_aggregation:
-    - none
-    - mean
-    - first
-    - last
-  model_name:
-    - bert-base-uncased
-    - gpt2
-    - answerdotai/ModernBERT-base
-    - microsoft/deberta-v3-base
-    - facebook/bart-base
-    - state-spaces/mamba-370m-hf
-    - AntonV/mamba2-370m-hf
-    - RWKV/RWKV7-Goose-Pile-421M-HF
-    - bigscience/bloom-560m
-    - meta-llama/Llama-3.1-8B
 
 grid_search:
   trainer.representations.model_name:
