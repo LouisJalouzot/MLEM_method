@@ -1,0 +1,39 @@
+target: mlem.FeatureImportance
+infra: layers_infra
+
+base_config:
+  dataset:
+    path: datasets/relative_clause.csv
+  trainer:
+    device: cuda
+    dataloader_builder:
+      cv: 5
+    representations:
+      level: sentence
+      token_aggregation: last
+      model_name: allenai/OLMo-2-0425-1B
+
+grid_search:
+  trainer.representations.revision:
+    - stage1-step0-tokens0B
+    - stage1-step300-tokens1B
+    - stage1-step10000-tokens21B
+    - stage1-step20000-tokens42B
+    - stage1-step50000-tokens105B
+    - stage1-step100000-tokens210B
+    - stage1-step200000-tokens420B
+    - stage1-step400000-tokens839B
+    - stage1-step1000000-tokens2098B
+    - stage1-step1907359-tokens4001B
+
+    - stage2-ingredient1-step1000-tokens3B 
+    - stage2-ingredient1-step5000-tokens11B
+    - stage2-ingredient1-step23852-tokens51B
+
+    - stage2-ingredient2-step1000-tokens3B
+    - stage2-ingredient2-step5000-tokens11B
+    - stage2-ingredient2-step23852-tokens51B
+
+    - stage2-ingredient3-step1000-tokens3B
+    - stage2-ingredient3-step5000-tokens11B
+    - stage2-ingredient3-step23852-tokens51B

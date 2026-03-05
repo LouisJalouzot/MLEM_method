@@ -105,7 +105,7 @@ grid_search:
     - EleutherAI/gpt-neo-2.7B
 
     - facebook/opt-125m
-    - facebook/opt-350m 
+    # - facebook/opt-350m # Dropped because of projection trick only on this model
     - facebook/opt-1.3b
     - facebook/opt-2.7b
     - facebook/opt-6.7b
@@ -118,6 +118,10 @@ grid_search:
 
     - allenai/OLMo-1B-0724-hf
     - allenai/OLMo-7B-0724-hf
+
+    - allenai/OLMo-2-0425-1B
+    - allenai/OLMo-2-1124-7B
+    - allenai/OLMo-2-1124-13B
 
     - Qwen/Qwen2.5-0.5B
     - Qwen/Qwen2.5-1.5B
