@@ -285,17 +285,17 @@ def seed_from_basemodel(model: BaseModel):
     return int(config_hash, 16) % (2**32)
 
 
-def corrcoef(x: torch.Tensor, y: torch.Tensor) -> float:
+def corrcoef(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     """Pearson correlation coefficient between two 1D tensors"""
     x_n = x - x.mean()
     y_n = y - y.mean()
     x_n = x_n / x_n.norm()
     y_n = y_n / y_n.norm()
 
-    return (x_n * y_n).sum().item()
+    return (x_n * y_n).sum()
 
 
-def spearman(x: torch.Tensor, y: torch.Tensor) -> float:
+def spearman(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     """Spearman correlation coefficient between two 1D tensors"""
     dtype = x.dtype
     x_rank = x.argsort().argsort().to(dtype)
