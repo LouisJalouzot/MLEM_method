@@ -185,7 +185,11 @@ class RSA(BaseModelSharing):
         n2 = get_n_layers(self.representations_2.model_name)
 
         pairs = [(l1, l2) for l1 in range(n1 + 1) for l2 in range(n2 + 1)]
-        logger.info(f"RSA: running {len(pairs)} layer pairs")
+        logger.info(
+            f"RSA: running {len(pairs)} layer pairs for "
+            f"{self.representations_1.model_name} and "
+            f"{self.representations_2.model_name}"
+        )
 
         all_res = []
         for (l1, l2), res in tqdm(
