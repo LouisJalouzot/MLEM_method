@@ -1,5 +1,6 @@
 target: mlem.RSA
 infra: layers_infra
+max_workers: 10
 
 base_config:
   dataset:

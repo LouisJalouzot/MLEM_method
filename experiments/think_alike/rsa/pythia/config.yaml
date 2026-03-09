@@ -1,0 +1,37 @@
+target: mlem.RSA
+infra: layers_infra
+max_workers: 10
+
+base_config:
+  dataset:
+    path: datasets/relative_clause.csv
+  representations_1:
+    level: sentence
+    token_aggregation: last
+  representations_2:
+    level: sentence
+    token_aggregation: last
+
+grid_search:
+  representations_1.model_name:
+    - EleutherAI/pythia-410m-deduped
+    - EleutherAI/pythia-1b-deduped
+    - EleutherAI/pythia-1.4b-deduped
+  representations_1.revision:
+    - step0
+    - step2000
+    - step6000
+    - step24000
+    - step80000
+    - step143000
+  representations_2.model_name:
+    - EleutherAI/pythia-410m-deduped
+    - EleutherAI/pythia-1b-deduped
+    - EleutherAI/pythia-1.4b-deduped
+  representations_2.revision:
+    - step0
+    - step2000
+    - step6000
+    - step24000
+    - step80000
+    - step143000
