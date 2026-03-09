@@ -2,9 +2,6 @@ from __future__ import annotations
 
 import typing as tp
 
-if tp.TYPE_CHECKING:
-    import torch
-
 from loguru import logger
 from pydantic import ConfigDict
 
@@ -231,4 +228,7 @@ class PairwiseDataloaderBuilder(BaseModel):
             Y_train, Y_test = (next(it), next(it)) if Y is not None else (None, None)
             Y2_train, Y2_test = (next(it), next(it)) if Y2 is not None else (None, None)
 
-            yield build_dl(X_train, Y_train, Y2_train), build_dl(X_test, Y_test, Y2_test)
+            yield (
+                build_dl(X_train, Y_train, Y2_train),
+                build_dl(X_test, Y_test, Y2_test),
+            )

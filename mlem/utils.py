@@ -28,7 +28,8 @@ if tp.TYPE_CHECKING:
     import torch
 
 logger.remove()
-logger.add(sink=sys.stdout, level="INFO")
+level = os.getenv("LOGGER_LEVEL", "INFO").upper()
+logger.add(sink=sys.stdout, level=level)
 
 
 def get_device():
@@ -85,7 +86,9 @@ def get_n_layers(model_name: str, revision: tp.Optional[str] = None) -> int:
     """
     from transformers import AutoConfig
 
-    config = AutoConfig.from_pretrained(model_name, trust_remote_code=True, revision=revision)
+    config = AutoConfig.from_pretrained(
+        model_name, trust_remote_code=True, revision=revision
+    )
 
     # Try top-level config
     if (layers := _get_layers_from_config(config)) is not None:
@@ -282,17 +285,17 @@ def seed_from_basemodel(model: BaseModel):
     return int(config_hash, 16) % (2**32)
 
 
-def corrcoef(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+def corrcoef(x: torch.Tensor, y: torch.Tensor) -> float:
     """Pearson correlation coefficient between two 1D tensors"""
     x_n = x - x.mean()
     y_n = y - y.mean()
     x_n = x_n / x_n.norm()
     y_n = y_n / y_n.norm()
 
-    return (x_n * y_n).sum()
+    return (x_n * y_n).sum().item()
 
 
-def spearman(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+def spearman(x: torch.Tensor, y: torch.Tensor) -> float:
     """Spearman correlation coefficient between two 1D tensors"""
     dtype = x.dtype
     x_rank = x.argsort().argsort().to(dtype)
