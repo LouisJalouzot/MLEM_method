@@ -1,0 +1,44 @@
+target: mlem.RSA
+infra: layers_infra
+
+base_config:
+  dataset:
+    path: datasets/relative_clause.csv
+  representations_1:
+    level: sentence
+    token_aggregation: last
+  representations_2:
+    level: sentence
+    token_aggregation: last
+
+grid_search:
+  representations_1.model_name:
+    - openai-community/gpt2 # 0.1B
+    - openai-community/gpt2-medium # 0.4B
+    - EleutherAI/pythia-1b-deduped
+    - EleutherAI/pythia-1.4b-deduped
+    - facebook/opt-1.3b
+    - facebook/opt-2.7b
+    - meta-llama/Llama-3.2-1B
+    - meta-llama/Llama-3.2-3B
+    # 4. State Space Models (SSMs)
+    - state-spaces/mamba-130m-hf
+    - AntonV/mamba2-130m-hf
+    # 5. RNNs
+    - fla-hub/rwkv7-1.5B-world
+    - fla-hub/rwkv7-2.9B-world
+  representations_2.model_name:
+    - openai-community/gpt2 # 0.1B
+    - openai-community/gpt2-medium # 0.4B
+    - EleutherAI/pythia-1b-deduped
+    - EleutherAI/pythia-1.4b-deduped
+    - facebook/opt-1.3b
+    - facebook/opt-2.7b
+    - meta-llama/Llama-3.2-1B
+    - meta-llama/Llama-3.2-3B
+    # 4. State Space Models (SSMs)
+    - state-spaces/mamba-130m-hf
+    - AntonV/mamba2-130m-hf
+    # 5. RNNs
+    - fla-hub/rwkv7-1.5B-world
+    - fla-hub/rwkv7-2.9B-world
