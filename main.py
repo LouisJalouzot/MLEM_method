@@ -26,7 +26,7 @@ def yield_grid_search(grid_config):
         yield flat_config, unflatten(flat_config)
 
 
-def run_grid_search(base_class, grid_search, infra_path, fetch_results=True):
+def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max_workers=None):
     """Run grid search with job array support.
 
     Args:
@@ -34,6 +34,7 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True):
         grid_search: Dict of parameter paths to lists of values.
         infra_path: Dotted path to the infra to use (e.g., 'trainer.representations.infra').
         fetch_results: If True, collect and return results. If False, just wait for completion.
+        max_workers: Maximum number of workers. Defaults to n_configs if not specified.
     """
     flat_configs = []
     n_configs = math.prod(len(v) for v in grid_search.values())
@@ -47,7 +48,7 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True):
         f"Submitting {n_configs} tasks to {base_class.__class__.__name__}.{infra_path}"
     )
     logger.trace(f"Infra config: {base_infra.model_dump_json(indent=2)}")
-    with base_infra.job_array(max_workers=n_configs) as array:
+    with base_infra.job_array(max_workers=max_workers or n_configs) as array:
         with tqdm(total=n_configs, desc="Creating tasks") as pbar:
             for flat_config, task in Parallel(
                 n_jobs=-2, return_as="generator", prefer="threads"
@@ -114,6 +115,7 @@ def main(config: dict = {}):
             config["grid_search_prepare"],
             infra_path=infra_prepare,
             fetch_results=False,
+            max_workers=config.get("max_workers"),
         )
 
     logger.info("Running grid search")
@@ -121,6 +123,7 @@ def main(config: dict = {}):
         base_class,
         config["grid_search"],
         infra_path=infra_path,
+        max_workers=config.get("max_workers"),
     )
 
     all_dfs = []
