@@ -116,7 +116,7 @@ class RSA(BaseModelSharing):
         for i in range(1, self.n_batches + 1):
             dist1, dist2 = dl[i]
             r = spearman(dist1, dist2)
-            correlations.append(r)
+            correlations.append(r.cpu())
 
         logger.debug(f"RSA done. Mean r = {sum(correlations) / len(correlations):.4f}")
         return np.array(correlations)
