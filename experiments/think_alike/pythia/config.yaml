@@ -32,6 +32,10 @@ grid_search:
     - step6000
     - step12000
     - step24000
+    - step32000
     - step42000
+    - step64000
     - step80000
+    - step100000
+    - step125000
     - step143000
