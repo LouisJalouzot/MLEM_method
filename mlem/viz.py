@@ -14,8 +14,10 @@ from huggingface_hub import model_info
 from joblib import Parallel, delayed
 from plotly.colors import sample_colorscale
 from scipy.ndimage import gaussian_filter
+from scipy.stats import weightedtau
 from sklearn.decomposition import PCA
 from sklearn.manifold import MDS
+from sklearn.metrics import pairwise_distances
 from tqdm.auto import tqdm
 
 pio.templates.default = "simple_white"

@@ -65,26 +65,6 @@ dependencies = [
 where = ["."]
 include = ["mlem*"]
 
-[tool.pyright]
-# Reduce memory usage
-typeCheckingMode = "off"
-analyzeUnannotatedFunctions = false
-useLibraryCodeForTypes = false
-
-# Exclude notebooks from analysis (major memory hog)
-exclude = [
-    "**/*.ipynb",
-    ".venv",
-    ".cache",
-    "**/__pycache__",
-    "**/node_modules",
-    "**/.*",
-]
-
-# Reduce analysis depth
-reportMissingImports = false
-reportMissingTypeStubs = false
-
 [tool.uv.sources]
 torch = { index = "pytorch-cu12" }
 torchvision = { index = "pytorch-cu12" }
