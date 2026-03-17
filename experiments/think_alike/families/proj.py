@@ -23,7 +23,7 @@ model_layers = [
 ]
 for method in ["pca", "mds"]:
     rd = ReduceDimensions(
-        dataset=dict(path="datasets/short_sentence.csv"),
+        dataset=dict(path="datasets/relative_clause.csv"),
         representations=dict(token_aggregation="last"),
         method=method,
     )
