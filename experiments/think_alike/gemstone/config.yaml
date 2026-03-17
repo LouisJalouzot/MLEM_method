@@ -14,25 +14,25 @@ base_config:
 
 grid_search:
   trainer.representations.model_name:
-    - tomg-group-umd/Gemstone-768x3
-    - tomg-group-umd/Gemstone-1792x7
-    - tomg-group-umd/Gemstone-2560x8
-    - tomg-group-umd/Gemstone-512x11
-    - tomg-group-umd/Gemstone-512x12
-    - tomg-group-umd/Gemstone-3072x12
-    - tomg-group-umd/Gemstone-384x13
-    - tomg-group-umd/Gemstone-512x13
-    - tomg-group-umd/Gemstone-512x14
-    - tomg-group-umd/Gemstone-1280x15
-    - tomg-group-umd/Gemstone-512x16
-    - tomg-group-umd/Gemstone-1792x18
     - tomg-group-umd/Gemstone-256x23
     - tomg-group-umd/Gemstone-256x27
-    - tomg-group-umd/Gemstone-2048x27
-    - tomg-group-umd/Gemstone-1024x28
-    - tomg-group-umd/Gemstone-384x36
-    - tomg-group-umd/Gemstone-1280x36
-    - tomg-group-umd/Gemstone-768x45
-    - tomg-group-umd/Gemstone-1536x50
     - tomg-group-umd/Gemstone-256x71
     - tomg-group-umd/Gemstone-256x80
+    - tomg-group-umd/Gemstone-384x13
+    - tomg-group-umd/Gemstone-384x36
+    - tomg-group-umd/Gemstone-512x11
+    - tomg-group-umd/Gemstone-512x12
+    - tomg-group-umd/Gemstone-512x13
+    - tomg-group-umd/Gemstone-512x14
+    - tomg-group-umd/Gemstone-512x16
+    - tomg-group-umd/Gemstone-768x3
+    - tomg-group-umd/Gemstone-768x45
+    - tomg-group-umd/Gemstone-1024x28
+    - tomg-group-umd/Gemstone-1280x15
+    - tomg-group-umd/Gemstone-1280x36
+    - tomg-group-umd/Gemstone-1536x50
+    - tomg-group-umd/Gemstone-1792x18
+    - tomg-group-umd/Gemstone-1792x7
+    - tomg-group-umd/Gemstone-2048x27
+    - tomg-group-umd/Gemstone-2560x8
+    - tomg-group-umd/Gemstone-3072x12
