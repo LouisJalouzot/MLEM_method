@@ -25,6 +25,7 @@ for method in ["pca", "mds"]:
     rd = ReduceDimensions(
         dataset=dict(path="datasets/short_sentence.csv"),
         representations=dict(token_aggregation="last"),
+        method=method,
     )
     df = rd.transform_multiple(model_layers)
     df["method"] = method
