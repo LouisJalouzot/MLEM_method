@@ -4,6 +4,7 @@ import typing as tp
 
 from exca import TaskInfra
 from pydantic import ConfigDict, Field
+from tqdm.auto import tqdm
 
 from .dataset import Dataset
 from .sentence_representations import SentenceRepresentations
@@ -112,13 +113,33 @@ class ReduceDimensions(BaseModelSharing):
 
         return proj
 
-    def transform(self):
+    def _build_transformed_df(self, proj) -> "pd.DataFrame":
+        """Helper to convert projection to DataFrame with coordinate columns."""
         import pandas as pd
 
-        proj = self._transform_cached()
-        proj = pd.DataFrame(
+        proj_df = pd.DataFrame(
             proj, columns=[f"coord_{i}" for i in range(1, self.n_components + 1)]
         )
-        df = self.dataset.df
+        return pd.concat([self.dataset.df, proj_df], axis=1)
 
-        return pd.concat([df, proj], axis=1)
+    def transform(self):
+        proj = self._transform_cached()
+        return self._build_transformed_df(proj)
+
+    def transform_multiple(self, model_layers: tp.List[tp.Tuple[str, int]]):
+        import pandas as pd
+
+        results = []
+        for model_name, layer in tqdm(
+            model_layers, desc="Reducing dimensions for multiple representations"
+        ):
+            task = self.infra.clone_obj(
+                representations=dict(model_name=model_name, layer=layer)
+            )
+            proj = task._transform_cached()
+            df = self._build_transformed_df(proj)
+            df["model_name"] = model_name
+            df["layer"] = layer
+            results.append(df)
+
+        return pd.concat(results, ignore_index=True)
