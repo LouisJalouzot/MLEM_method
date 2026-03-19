@@ -108,7 +108,9 @@ def compute_hidden_states(
     from transformers import AutoModel, AutoModelForCausalLM, AutoTokenizer
 
     try:
-        tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True, revision=revision)
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name, trust_remote_code=True, revision=revision
+        )
     except Exception:
         tokenizer = AutoTokenizer.from_pretrained(
             model_name,
@@ -121,30 +123,152 @@ def compute_hidden_states(
         if tokenizer.eos_token is not None:
             tokenizer.pad_token = tokenizer.eos_token
         else:
-            tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+            tokenizer.add_special_tokens({"pad_token": "[PAD]"})
     if untrained:
         from transformers import AutoConfig
 
-        config = AutoConfig.from_pretrained(model_name, trust_remote_code=True, revision=revision)
+        config = AutoConfig.from_pretrained(
+            model_name, trust_remote_code=True, revision=revision
+        )
         config.output_hidden_states = True
 
         def load(cls):
-            return cls.from_config(config, dtype="float32")
+            try:
+                return cls.from_config(config, dtype="float32")
+            except ValueError:
+                # Some models (like NeuronSpark) don't support from_config with AutoModel/AutoModelForCausalLM
+                # if they are not in the official supported list of AutoModel.
+                if cls.__name__ == "AutoModel":
+                    from transformers import AutoModelForCausalLM
+
+                    return AutoModelForCausalLM.from_config(config)
+                raise
     else:
 
         def load(cls):
+            try:
+                return cls.from_pretrained(
+                    model_name,
+                    output_hidden_states=True,
+                    trust_remote_code=True,
+                    dtype="float32",
+                    revision=revision,
+                )
+            except ValueError as e:
+                # Workaround for NeuronSpark-like models that are not registered for AutoModel
+                if (
+                    "for this kind of AutoModel: AutoModel" in str(e)
+                    and cls.__name__ == "AutoModel"
+                ):
+                    from transformers import AutoModelForCausalLM
+
+                    return AutoModelForCausalLM.from_pretrained(
+                        model_name,
+                        output_hidden_states=True,
+                        trust_remote_code=True,
+                        dtype="float32",
+                        revision=revision,
+                    )
+                raise e
+
+    try:
+        model = load(AutoModel)
+    except (Exception, ValueError):
+        # Apply standard workarounds for custom remote modeling code
+        import transformers
+
+        if not hasattr(transformers.PreTrainedModel, "all_tied_weights_keys"):
+            transformers.PreTrainedModel.all_tied_weights_keys = property(
+                lambda self: {}
+            )
+
+        # Download and inject into path for broken imports
+        try:
+            import sys
+
+            from huggingface_hub import snapshot_download
+
+            local_dir = snapshot_download(model_name, revision=revision)
+            sys.path.insert(0, local_dir)
+            model_name_to_load = local_dir
+        except Exception:
+            model_name_to_load = model_name
+
+        # Re-define load with the path if possible
+        def load_fallback(cls):
             return cls.from_pretrained(
-                model_name,
+                model_name_to_load,
                 output_hidden_states=True,
                 trust_remote_code=True,
                 dtype="float32",
                 revision=revision,
             )
 
-    try:
-        model = load(AutoModel)
-    except Exception:
-        model = load(AutoModelForCausalLM)
+        try:
+            model = load_fallback(AutoModelForCausalLM)
+        except Exception:
+            model = load(AutoModelForCausalLM)
+
+    # Check if we need to hook manually because output_hidden_states=True is ignored
+    is_neuronspark = "neuronspark" in model_name.lower() or (
+        hasattr(model.config, "model_type") and model.config.model_type == "neuronspark"
+    )
+
+    if is_neuronspark:
+        # NeuronSpark doesn't support output_hidden_states=True in its custom forward.
+        # We manually collect hidden states from its layers.
+        # Under NeuronSparkForCausalLM(PreTrainedModel), there is self.model (SNNLanguageModel)
+        # and self.model.layers (ModuleList[SNNDecoderLayer])
+        inner_model = getattr(model, "model", model)
+        layers = getattr(inner_model, "layers", [])
+
+        batch_hidden_states_collected = []
+        patched_layers = []
+
+        from types import MethodType
+
+        for layer in layers:
+            orig_fn = layer.forward_parallel
+
+            def make_wrapped(orig_fn, self_layer):
+                def wrapped_forward(self_obj, h, *args, **kwargs):
+                    output = orig_fn(h, *args, **kwargs)
+                    # output of SNNDecoderLayer.forward_parallel is (h, ponder_cost)
+                    # h has shape (TK, batch, D)
+                    h_out = output[0]
+                    TK, batch, D = h_out.shape
+                    # We want to aggregate K frames to get one vector per token
+                    K = getattr(inner_model, "K", getattr(self_layer, "K", 16))
+                    K = K if K != 0 else TK
+                    seq_len = TK // K
+                    # Simple mean aggregation over K frames to match decode() logic
+                    h_aggregated = h_out.view(seq_len, K, batch, D).mean(
+                        dim=1
+                    )  # (seq_len, batch, D)
+                    # Transpose to (batch, seq_len, D) to match standard HF output
+                    batch_hidden_states_collected.append(
+                        h_aggregated.permute(1, 0, 2).detach()
+                    )
+                    return output
+
+                return wrapped_forward
+
+            layer.forward_parallel = MethodType(make_wrapped(orig_fn, layer), layer)
+            patched_layers.append((layer, orig_fn))
+
+        # We also want the embedding output. In SNNLanguageModel, embed_tokens is an Embedding layer.
+        # But encode() does more than just Embedding (it repeats K times).
+        # We can hook the embed_tokens layer itself.
+        hooks = []
+
+        def hook_emb(module, input, output):
+            # output of Embedding is (batch, seq_len, D)
+            # We insert it at the beginning of the list later
+            batch_hidden_states_collected.insert(0, output.detach())
+
+        if hasattr(inner_model, "embed_tokens"):
+            hooks.append(inner_model.embed_tokens.register_forward_hook(hook_emb))
+
     model = model.to(device)
     model.eval()
 
@@ -182,12 +306,17 @@ def compute_hidden_states(
             batch_attention_mask = attention_mask[i : i + batch_size].to(device)
 
             with torch.no_grad():
-                outputs = model(
-                    input_ids=batch_input_ids,
-                    attention_mask=batch_attention_mask,
-                    output_hidden_states=True,
-                )
-                batch_hidden_states = outputs.hidden_states
+                if is_neuronspark:
+                    batch_hidden_states_collected.clear()
+                    model(input_ids=batch_input_ids)
+                    batch_hidden_states = batch_hidden_states_collected
+                else:
+                    outputs = model(
+                        input_ids=batch_input_ids,
+                        attention_mask=batch_attention_mask,
+                        output_hidden_states=True,
+                    )
+                    batch_hidden_states = outputs.hidden_states
 
             # Stack to tensor shape (n_layers+1, batch, max_seq_len, hidden_size)
             batch_hidden_states = torch.stack(batch_hidden_states)
@@ -198,6 +327,12 @@ def compute_hidden_states(
             hidden_states.append(batch_hidden_states_permuted.cpu())
 
             pbar.update(batch_input_ids.shape[0])
+
+    if is_neuronspark:
+        for hook in hooks:
+            hook.remove()
+        for layer, orig_fn in patched_layers:
+            layer.forward_parallel = orig_fn
 
     # Concatenate along batch dimension (dim=0)
     # Resulting shape: (n_sentences, max_seq_len, n_layers+1, hidden_size)
