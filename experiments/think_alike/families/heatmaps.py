@@ -33,17 +33,6 @@ for family, g in families:
 
     family_ticks_x.append(block_start + (len(g) - 1) / 4)
     family_ticks_y.append(block_start + (len(g) - 1) / 2)
-    match family:
-        case "gpt":
-            family = "gpt-neo"
-        case "Llama":
-            family = "Llama-3.2"
-        case "Ministral":
-            family = "Ministral-3"
-        case "OLMo":
-            family = "OLMo-2"
-        case "rwkv7":
-            family = "RWKV7"
     family_names.append(family)
 
 df_plot = sim.reindex(index=src, columns=src)

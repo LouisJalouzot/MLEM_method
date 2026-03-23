@@ -13,6 +13,7 @@ from dtw import dtw
 from huggingface_hub import model_info
 from joblib import Parallel, delayed
 from matplotlib import ticker
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from plotly.colors import sample_colorscale
 from scipy.ndimage import gaussian_filter
 from scipy.stats import weightedtau
@@ -206,6 +207,14 @@ feature_rename = {
     "subj_ZIPF": "Subject Zipf",
 }
 
+families_rename = {
+    "gpt": "gpt-neo",
+    "Llama": "Llama-3.2",
+    "Ministral": "Ministral-3",
+    "OLMo": "OLMo-2",
+    "rwkv7": "RWKV7",
+}
+
 
 def load_df(
     path: str | Path, meta_cols: tp.List[str] = ["model_name", "layer", "revision"]
@@ -238,6 +247,7 @@ def load_df(
         # Convert to categories to keep original order in plots
         models_meta["model"] = pd.Categorical(models, categories=models.unique())
         families = models.str.split("-").str[0]
+        families = families.replace(families_rename)
         models_meta["family"] = pd.Categorical(families, categories=families.unique())
         rank = models_meta.model.cat.codes
         rank -= rank.groupby(families, observed=True).transform("min")
