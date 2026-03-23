@@ -19,7 +19,6 @@ wheels/
 *.conllu
 *.parquet
 paper
-!experiments/**/figures.ipynb
 
 *.out
 *.ipynb
@@ -28,3 +27,4 @@ paper
 *.png
 *.csv
 *.pkl
+*.pdf
