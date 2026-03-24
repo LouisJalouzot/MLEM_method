@@ -1,0 +1,24 @@
+target: mlem.RSA
+infra: layers_infra
+
+base_config:
+  dataset:
+    path: datasets/relative_clause.csv
+  representations_1:
+    level: sentence
+    token_aggregation: last
+  representations_2:
+    level: sentence
+    token_aggregation: last
+
+grid_search:
+  representations_1.model_name:
+    - openai-community/gpt2 # 0.1B
+    - openai-community/gpt2-medium # 0.4B
+    - openai-community/gpt2-large # 0.8B
+    - openai-community/gpt2-xl # 2B
+  representations_2.model_name:
+    - openai-community/gpt2 # 0.1B
+    - openai-community/gpt2-medium # 0.4B
+    - openai-community/gpt2-large # 0.8B
+    - openai-community/gpt2-xl # 2B
