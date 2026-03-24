@@ -2,6 +2,7 @@ import typing as tp
 from collections import defaultdict
 from pathlib import Path
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -12,8 +13,6 @@ import seaborn as sns
 from dtw import dtw
 from huggingface_hub import model_info
 from joblib import Parallel, delayed
-from matplotlib import ticker
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from plotly.colors import sample_colorscale
 from scipy.ndimage import gaussian_filter
 from scipy.stats import weightedtau
@@ -111,85 +110,85 @@ n_params.update(
 )
 
 to_keep = [
-    "gpt2",
-    "gpt2-medium",
-    "gpt2-large",
-    "gpt2-xl",
-    "gpt-neo-125m",
-    "gpt-neo-1.3B",
-    "gpt-neo-2.7B",
-    "opt-125m",
-    "opt-1.3b",
-    "opt-2.7b",
-    "opt-6.7b",
-    "opt-13b",
-    # "pythia-14m-deduped",
-    # "pythia-70m-deduped",
-    # "pythia-160m-deduped",
-    "pythia-410m-deduped",
-    "pythia-1b-deduped",
-    "pythia-1.4b-deduped",
-    # "pythia-2.8b-deduped",
-    "pythia-6.9b-deduped",
-    "pythia-12b-deduped",
-    # "OLMo-1B-0724-hf",
-    # "OLMo-7B-0724-hf",
-    "OLMo-2-0425-1B",
-    "OLMo-2-1124-7B",
-    "OLMo-2-1124-13B",
-    # "gemma-3-270m",
-    # "gemma-3-1b-pt",
-    # "gemma-3-4b-pt",
-    # "gemma-3-12b-pt",
-    "Llama-3.2-1B",
-    "Llama-3.2-3B",
-    "Llama-3.1-8B",
-    "Ministral-3-3B-Base-2512",
-    "Ministral-3-8B-Base-2512",
-    "Ministral-3-14B-Base-2512",
-    "Qwen2.5-0.5B",
-    "Qwen2.5-1.5B",
-    "Qwen2.5-3B",
-    "Qwen2.5-7B",
-    "Qwen2.5-14B",
-    "Qwen3-0.6B-Base",
-    "Qwen3-1.7B-Base",
-    "Qwen3-4B-Base",
-    "Qwen3-8B-Base",
-    "Qwen3-14B-Base",
-    # "Qwen3.5-0.8B-Base",
-    "Qwen3.5-2B-Base",
-    "Qwen3.5-4B-Base",
-    "Qwen3.5-9B-Base",
-    "mamba-130m-hf",
-    "mamba-370m-hf",
-    "mamba-790m-hf",
-    "mamba-1.4b-hf",
-    "mamba-2.8b-hf",
-    "mamba2-130m-hf",
-    "mamba2-370m-hf",
-    "mamba2-780m-hf",
-    "mamba2-1.3b-hf",
-    "mamba2-2.7b-hf",
-    # "v6-Finch-1B6-HF",
-    # "v6-Finch-3B-HF",
-    # "v6-Finch-7B-HF",
-    # "v6-Finch-14B-HF",
-    # "RWKV7-Goose-World2.8-0.1B-HF",
-    # "RWKV7-Goose-World2.9-0.4B-HF",
-    # "RWKV7-Goose-World3-1.5B-HF",
-    # "RWKV7-Goose-World3-2.9B-HF",
-    "rwkv7-191M-world",
-    "rwkv7-0.4B-world",
-    "rwkv7-1.5B-world",
-    "rwkv7-2.9B-world",
-    "rwkv7-7.2B-g0a",
-    # "LFM2-350M",
-    # "LFM2-700M",
-    # "LFM2-1.2B",
-    # "LFM2-2.6B",
-    # "recurrentgemma-2b",
-    # "recurrentgemma-9b",
+    "openai-community/gpt2",
+    "openai-community/gpt2-medium",
+    "openai-community/gpt2-large",
+    "openai-community/gpt2-xl",
+    # "EleutherAI/gpt-neo-125m",
+    # "EleutherAI/gpt-neo-1.3B",
+    # "EleutherAI/gpt-neo-2.7B",
+    "facebook/opt-125m",
+    "facebook/opt-1.3b",
+    "facebook/opt-2.7b",
+    "facebook/opt-6.7b",
+    "facebook/opt-13b",
+    # "EleutherAI/pythia-14m-deduped",
+    # "EleutherAI/pythia-70m-deduped",
+    # "EleutherAI/pythia-160m-deduped",
+    "EleutherAI/pythia-410m-deduped",
+    "EleutherAI/pythia-1b-deduped",
+    "EleutherAI/pythia-1.4b-deduped",
+    # "EleutherAI/pythia-2.8b-deduped",
+    "EleutherAI/pythia-6.9b-deduped",
+    "EleutherAI/pythia-12b-deduped",
+    # "allenai/OLMo-1B-0724-hf",
+    # "allenai/OLMo-7B-0724-hf",
+    "allenai/OLMo-2-0425-1B",
+    "allenai/OLMo-2-1124-7B",
+    "allenai/OLMo-2-1124-13B",
+    # "google/gemma-3-270m",
+    # "google/gemma-3-1b-pt",
+    # "google/gemma-3-4b-pt",
+    # "google/gemma-3-12b-pt",
+    "meta-llama/Llama-3.2-1B",
+    "meta-llama/Llama-3.2-3B",
+    "meta-llama/Llama-3.1-8B",
+    "mistralai/Ministral-3-3B-Base-2512",
+    "mistralai/Ministral-3-8B-Base-2512",
+    "mistralai/Ministral-3-14B-Base-2512",
+    # "Qwen/Qwen2.5-0.5B",
+    # "Qwen/Qwen2.5-1.5B",
+    # "Qwen/Qwen2.5-3B",
+    # "Qwen/Qwen2.5-7B",
+    # "Qwen/Qwen2.5-14B",
+    "Qwen/Qwen3-0.6B-Base",
+    "Qwen/Qwen3-1.7B-Base",
+    "Qwen/Qwen3-4B-Base",
+    "Qwen/Qwen3-8B-Base",
+    "Qwen/Qwen3-14B-Base",
+    # "Qwen/Qwen3.5-0.8B-Base",
+    # "Qwen/Qwen3.5-2B-Base",
+    # "Qwen/Qwen3.5-4B-Base",
+    # "Qwen/Qwen3.5-9B-Base",
+    "state-spaces/mamba-130m-hf",
+    "state-spaces/mamba-370m-hf",
+    "state-spaces/mamba-790m-hf",
+    "state-spaces/mamba-1.4b-hf",
+    "state-spaces/mamba-2.8b-hf",
+    "AntonV/mamba2-130m-hf",
+    "AntonV/mamba2-370m-hf",
+    "AntonV/mamba2-780m-hf",
+    "AntonV/mamba2-1.3b-hf",
+    "AntonV/mamba2-2.7b-hf",
+    # "RWKV/v6-Finch-1B6-HF",
+    # "RWKV/v6-Finch-3B-HF",
+    # "RWKV/v6-Finch-7B-HF",
+    # "RWKV/v6-Finch-14B-HF",
+    # "RWKV/RWKV7-Goose-World2.8-0.1B-HF",
+    # "RWKV/RWKV7-Goose-World2.9-0.4B-HF",
+    # "RWKV/RWKV7-Goose-World3-1.5B-HF",
+    # "RWKV/RWKV7-Goose-World3-2.9B-HF",
+    "fla-hub/rwkv7-191M-world",
+    "fla-hub/rwkv7-0.4B-world",
+    "fla-hub/rwkv7-1.5B-world",
+    "fla-hub/rwkv7-2.9B-world",
+    "fla-hub/rwkv7-7.2B-g0a",
+    # "LiquidAI/LFM2-350M",
+    # "LiquidAI/LFM2-700M",
+    # "LiquidAI/LFM2-1.2B",
+    # "LiquidAI/LFM2-2.6B",
+    # "google/recurrentgemma-2b",
+    # "google/recurrentgemma-9b",
 ]
 
 feature_rename = {
@@ -216,11 +215,10 @@ families_rename = {
 }
 
 
-def load_df(
-    path: str | Path, meta_cols: tp.List[str] = ["model_name", "layer", "revision"]
-) -> pd.DataFrame | tp.Tuple[pd.DataFrame, pd.DataFrame]:
-    df = pd.read_parquet(path)
-
+def clean_df(
+    df: pd.DataFrame,
+    meta_cols: tp.List[str] = ["model_name", "layer", "revision"],
+) -> pd.DataFrame:
     # collapse dotted column names by keeping last element
     # e.g. "train.representations.model_name" -> "model_name"
     cols_rename = {c: c.split(".")[-1] for c in df.columns}
@@ -244,6 +242,19 @@ def load_df(
         models_meta = df[["model_name"]].drop_duplicates()
         models_meta["n_params"] = models_meta["model_name"].replace(n_params)
         models = models_meta["model_name"].str.split("/").str[-1]
+        for to_remove in [
+            "-deduped",
+            "-world",
+            "-hf",
+            "-g0a",
+            "-Base",
+            "-0724",
+            "-1124",
+            "-2512",
+            "-HF",
+            "-pt",
+        ]:
+            models = models.str.replace(to_remove, "")
         # Convert to categories to keep original order in plots
         models_meta["model"] = pd.Categorical(models, categories=models.unique())
         families = models.str.split("-").str[0]
@@ -253,7 +264,7 @@ def load_df(
         rank -= rank.groupby(families, observed=True).transform("min")
         models_meta["rank"] = rank
         rel_rank = rank / rank.groupby(families, observed=True).transform("max")
-        models_meta["rel. rank"] = rel_rank.round(1)
+        models_meta["rel. rank"] = rel_rank.round(1).fillna(1)
 
         meta = meta.merge(models_meta)
         if "layer" in meta_cols:
@@ -262,6 +273,47 @@ def load_df(
             meta["rel. layer"] = (meta["layer"] - 1) / (max_layer - 1)
 
     return df.merge(meta), meta
+
+
+def load_df(
+    path: str | Path,
+    meta_cols: tp.List[str] = ["model_name", "layer", "revision"],
+) -> pd.DataFrame | tp.Tuple[pd.DataFrame, pd.DataFrame]:
+    df = pd.read_parquet(path)
+    return clean_df(df, meta_cols=meta_cols)
+
+
+def load_rsa(
+    path: str | Path,
+    meta_cols: tp.List[str] = ["model_name", "layer", "revision"],
+) -> tp.List[pd.DataFrame]:
+    rsa = pd.read_parquet(path)
+    df_1 = rsa[["spearman", "model_1", "layer_1"]]
+    df_2 = rsa[["model_2", "layer_2"]]
+    df_1.columns = ["spearman", "model_name", "layer"]
+    df_2.columns = ["model_name", "layer"]
+    df_1["idx"] = df_1.index
+    df_2["idx"] = df_2.index
+    df_1, meta = clean_df(df_1, meta_cols=meta_cols)
+    df_2, _ = clean_df(df_2, meta_cols=meta_cols)
+    df = df_1.merge(df_2, on=["idx"], suffixes=("", "_2")).drop(columns=["idx"])
+    df["cv"] = df.groupby([c for c in df.columns if c != "spearman"]).cumcount()
+    df = df.pivot(
+        index=["cv"] + meta.columns.tolist(),
+        columns=[c + "_2" for c in meta.columns],
+        values="spearman",
+    )
+    df.columns.names = [n.replace("_2", "") for n in df.columns.names]
+
+    dfs = []
+    for _, d in df.groupby(level="cv"):
+        d = d.droplevel(level=0)
+        d = d.loc[d.columns]
+        d = (d + d.T) / 2
+        d = d.clip(-1, 1)
+        dfs.append(d)
+
+    return dfs
 
 
 def select_top_features(
