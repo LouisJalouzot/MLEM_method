@@ -1,15 +1,10 @@
 # %% Load data
 from mlem.viz import *
 
-script_dir = Path(__file__).parent
-
-i, meta = load_df(script_dir / "0.parquet", to_keep=to_keep)
-s, _ = load_df(script_dir / "1.parquet", to_keep=to_keep)
-gb_cols = list(meta.columns)
+i, meta = load_df(Path(__file__).parent / "0.parquet", to_keep=to_keep)
 
 print("Top features:", top_features := select_top_features(i))
 df_plot = i[i["Feature"].isin(top_features)]
-df_plot = remove_unused_categories(df_plot)
 
 # %% Feature Importance
 g = sns.relplot(

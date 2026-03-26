@@ -3,8 +3,7 @@ from mlem.viz import *
 
 script_dir = Path(__file__).parent
 
-i, meta = load_df(script_dir / "0.parquet")
-s, _ = load_df(script_dir / "1.parquet")
+i, meta = load_df(script_dir / "0.parquet", to_keep=to_keep)
 gb_cols = list(meta.columns)
 
 # %%
