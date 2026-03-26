@@ -250,6 +250,7 @@ def clean_df(
             "-Base",
             "-0724",
             "-1124",
+            "-0425",
             "-2512",
             "-HF",
             "-pt",
@@ -278,8 +279,12 @@ def clean_df(
 def load_df(
     path: str | Path,
     meta_cols: tp.List[str] = ["model_name", "layer", "revision"],
+    to_keep: tp.List[str] | None = None,
 ) -> pd.DataFrame | tp.Tuple[pd.DataFrame, pd.DataFrame]:
     df = pd.read_parquet(path)
+    if to_keep is not None:
+        model_name_col = [c for c in df.columns if c.endswith("model_name")][0]
+        df = df[df[model_name_col].isin(to_keep)]
     return clean_df(df, meta_cols=meta_cols)
 
 
