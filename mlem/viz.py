@@ -262,9 +262,9 @@ def clean_df(
         families = families.replace(families_rename)
         models_meta["family"] = pd.Categorical(families, categories=families.unique())
         rank = models_meta.model.cat.codes
-        rank -= rank.groupby(families, observed=True).transform("min")
+        rank -= rank.groupby(families).transform("min")
         models_meta["rank"] = rank
-        rel_rank = rank / rank.groupby(families, observed=True).transform("max")
+        rel_rank = rank / rank.groupby(families).transform("max")
         models_meta["rel. rank"] = rel_rank.round(1).fillna(1)
 
         meta = meta.merge(models_meta)
@@ -331,13 +331,13 @@ def select_top_features(
 ) -> tp.List[str]:
     if group_by_mean is None:
         group_by_mean = [g for g in group_by_mean if g in df.columns]
-        df = df.groupby(group_by_mean + ["Feature"], observed=True)[target]
+        df = df.groupby(group_by_mean + ["Feature"])[target]
         df = df.mean().reset_index()
 
     group_by_max = [g for g in group_by_max if g in df.columns]
-    df = df.groupby(group_by_max + ["Feature"], observed=True)[target].max()
+    df = df.groupby(group_by_max + ["Feature"])[target].max()
 
-    top_features = df.groupby(group_by_max, observed=True).nlargest(n_largest)
+    top_features = df.groupby(group_by_max).nlargest(n_largest)
     top_features = top_features.sort_values(ascending=False).reset_index(level=-1)
     top_features = top_features[top_features["FI"] > threshold]
 
@@ -350,3 +350,92 @@ def remove_unused_categories(df):
     for col in cat_cols:
         df_out[col] = df_out[col].cat.remove_unused_categories()
     return df_out
+
+
+def lineplot2d(
+    data, x, y, r=None, hue=None, marker=None, ax=None, band_alpha=0.4, **kwargs
+):
+    ax = ax or plt.gca()
+
+    palette = kwargs.pop("palette", "tab10") if hue else None
+
+    gb_cols = [c for c in [hue, marker] if c]
+    groups = data.groupby(gb_cols) if gb_cols else [(None, data)]
+
+    markers = ["o", "s", "^", "v", "D", "p", "*", "X"]
+    unique_m = data[marker].unique() if marker else []
+
+    unique_h = data[hue].unique() if hue else []
+    colors = sns.color_palette(palette, n_colors=len(unique_h)) if hue else [None]
+    color_map = dict(zip(unique_h, colors)) if hue else {}
+
+    for name, grp in groups:
+        xv, yv = grp[x].values, grp[y].values
+        rv = grp[r].values if r else None
+
+        h_val = name[0] if len(gb_cols) == 2 else (name if hue else None)
+        m_val = name[1] if len(gb_cols) == 2 else (name if marker else None)
+
+        plot_kwargs = kwargs.copy()
+        if marker:
+            plot_kwargs["marker"] = markers[list(unique_m).index(m_val) % len(markers)]
+
+        if hue:
+            plot_kwargs["color"] = color_map[h_val]
+
+        label = str(name) if name else kwargs.get("label")
+
+        # Plot main trajectory, auto-assigning labels
+        line = ax.plot(xv, yv, label=label, **plot_kwargs)[0]
+        color = line.get_color()
+
+        # Plot 2D error band
+        if rv is not None:
+            dx, dy = np.gradient(xv), np.gradient(yv)
+            norm = np.hypot(dx, dy) + 1e-8
+            nx, ny = -dy / norm, dx / norm
+
+            x_tube = np.concatenate([xv + nx * rv, (xv - nx * rv)[::-1]])
+            y_tube = np.concatenate([yv + ny * rv, (yv - ny * rv)[::-1]])
+            band_color = mpl.colors.to_rgba(color, band_alpha)
+            ax.fill(
+                x_tube,
+                y_tube,
+                facecolor=band_color,
+                edgecolor="none",
+            )
+
+    if gb_cols:
+        ax.legend(title=", ".join(gb_cols))
+
+    ax.set_xlabel(x)
+    ax.set_ylabel(y)
+
+    return ax
+
+
+def pca_lineplot2d(
+    df: pd.DataFrame,
+    x: str = "PC1",
+    y: str = "PC2",
+    gb_cols: tp.List[str] = ["family", "model", "layer"],
+    hue: str = "model",
+    marker: str = "family",
+    ax=None,
+    **kwargs,
+) -> mpl.axes.Axes:
+    df_agg = df.groupby(gb_cols).mean(numeric_only=True)
+    x_std = df.groupby(gb_cols)[x].std().fillna(0)
+    y_std = df.groupby(gb_cols)[y].std().fillna(0)
+    df_agg["radius"] = np.sqrt(x_std**2 + y_std**2)
+
+    return lineplot2d(
+        data=df_agg.reset_index(),
+        x=x,
+        y=y,
+        r="radius",
+        hue=hue,
+        marker=marker,
+        ax=ax,
+        **kwargs,
+    )
