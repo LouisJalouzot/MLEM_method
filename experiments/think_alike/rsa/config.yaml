@@ -10,6 +10,9 @@ base_config:
   representations_2:
     level: sentence
     token_aggregation: last
+  map_infra:
+    cluster: processpool
+    max_jobs: 12
 
 grid_search:
   representations_1.model_name:
@@ -17,8 +20,32 @@ grid_search:
     - openai-community/gpt2-medium # 0.4B
     - openai-community/gpt2-large # 0.8B
     - openai-community/gpt2-xl # 2B
+
+    - facebook/opt-125m
+    - facebook/opt-1.3b
+    - facebook/opt-2.7b
+    - facebook/opt-6.7b
+    - facebook/opt-13b
+
+    - EleutherAI/pythia-410m-deduped
+    - EleutherAI/pythia-1b-deduped
+    - EleutherAI/pythia-1.4b-deduped
+    - EleutherAI/pythia-6.9b-deduped
+    - EleutherAI/pythia-12b-deduped
   representations_2.model_name:
     - openai-community/gpt2 # 0.1B
     - openai-community/gpt2-medium # 0.4B
     - openai-community/gpt2-large # 0.8B
     - openai-community/gpt2-xl # 2B
+
+    - facebook/opt-125m
+    - facebook/opt-1.3b
+    - facebook/opt-2.7b
+    - facebook/opt-6.7b
+    - facebook/opt-13b
+
+    - EleutherAI/pythia-410m-deduped
+    - EleutherAI/pythia-1b-deduped
+    - EleutherAI/pythia-1.4b-deduped
+    - EleutherAI/pythia-6.9b-deduped
+    - EleutherAI/pythia-12b-deduped
