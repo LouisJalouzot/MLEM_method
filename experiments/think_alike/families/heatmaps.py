@@ -61,5 +61,3 @@ ax.set_xticklabels(family_names, rotation=-45, va="top", ha="left")
 ax.set_yticks(family_ticks_y)
 ax.set_yticklabels(family_names, rotation=0)
 plt.savefig("think_alike/figures/euclidean_heatmap.pdf", bbox_inches="tight")
-
-# %% Trajectories

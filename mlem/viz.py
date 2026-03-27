@@ -344,6 +344,27 @@ def select_top_features(
     return list(top_features["Feature"].unique())
 
 
+def smooth_fi_by_layer(
+    df: pd.DataFrame,
+    sigma: float = 1.0,
+    fi_col: str = "FI",
+    gb_cols: tp.List[str] = ["cv", "revision", "model_name", "Feature"],
+    layer_col: str = "layer",
+    overwrite: bool = True,
+    output_col: str = "FI_smooth",
+) -> pd.DataFrame:
+    """Smooth FI along layer for each model using a Gaussian filter."""
+    df_out = df.copy()
+    gb_cols = [c for c in gb_cols if c in df_out.columns]
+    target_col = fi_col if overwrite else output_col
+    df_out = df_out.sort_values(gb_cols + [layer_col])
+    df_out[target_col] = df_out.groupby(gb_cols)[fi_col].transform(
+        gaussian_filter, sigma=sigma
+    )
+
+    return df_out
+
+
 def remove_unused_categories(df):
     df_out = df.copy()
     cat_cols = df_out.select_dtypes(include=["category"]).columns
