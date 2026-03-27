@@ -1,12 +1,7 @@
 # %% Load data
 from mlem.viz import *
 
-script_dir = Path(__file__).parent
-
-i, meta = load_df(script_dir / "families" / "0.parquet", to_keep=to_keep)
-# i = smooth_fi_by_layer(i)
-gb_cols = list(meta.columns)
-rsa = load_rsa(script_dir / "rsa" / "0.parquet")
+rsa = load_rsa(Path(__file__).parent / "0.parquet")
 
 # %% Reindex and plot
 df = sum(rsa) / len(rsa)
@@ -87,7 +82,7 @@ for i, (ax, family) in enumerate(zip(axes, families)):
         ax=ax,
     )
 
-    # # White for first layer
+    # White for first layer
     sns.scatterplot(
         df[df["rel. layer"] == 0],
         x="MDS1",
@@ -118,8 +113,8 @@ for i, (ax, family) in enumerate(zip(axes, families)):
         labels,
         title="",
         frameon=False,
-        loc="upper left",
-        bbox_to_anchor=(1, 1),
+        loc="center left",
+        bbox_to_anchor=(1, 0.5),
     )
 
     ax.set_title(family.upper(), fontsize=12, weight="bold")

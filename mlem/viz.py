@@ -348,7 +348,7 @@ def smooth_fi_by_layer(
     df: pd.DataFrame,
     sigma: float = 1.0,
     fi_col: str = "FI",
-    gb_cols: tp.List[str] = ["cv", "revision", "model_name", "Feature"],
+    gb_cols: tp.List[str] = ["model_name", "revision", "cv", "Feature"],
     layer_col: str = "layer",
     overwrite: bool = True,
     output_col: str = "FI_smooth",
@@ -380,6 +380,12 @@ def lineplot2d(
 
     palette = kwargs.pop("palette", "tab10") if hue else None
 
+    # If marker is a string that is not a column name, use it as a fixed marker
+    fixed_marker = None
+    if isinstance(marker, str) and marker not in data.columns:
+        fixed_marker = marker
+        marker = None
+
     gb_cols = [c for c in [hue, marker] if c]
     groups = data.groupby(gb_cols) if gb_cols else [(None, data)]
 
@@ -394,17 +400,26 @@ def lineplot2d(
         xv, yv = grp[x].values, grp[y].values
         rv = grp[r].values if r else None
 
-        h_val = name[0] if len(gb_cols) == 2 else (name if hue else None)
-        m_val = name[1] if len(gb_cols) == 2 else (name if marker else None)
+        if len(gb_cols) == 2:
+            h_val, m_val = name
+        else:
+            h_val = name[0] if isinstance(name, tuple) else name
+            m_val = h_val
 
         plot_kwargs = kwargs.copy()
         if marker:
             plot_kwargs["marker"] = markers[list(unique_m).index(m_val) % len(markers)]
+        elif fixed_marker:
+            plot_kwargs["marker"] = fixed_marker
 
         if hue:
             plot_kwargs["color"] = color_map[h_val]
 
-        label = str(name) if name else kwargs.get("label")
+        # Use cleaner label for single-column groups
+        if isinstance(name, tuple):
+            label = ", ".join(map(str, name)) if len(name) > 1 else str(name[0])
+        else:
+            label = str(name) if name else kwargs.get("label")
 
         # Plot main trajectory, auto-assigning labels
         line = ax.plot(xv, yv, label=label, **plot_kwargs)[0]
