@@ -22,15 +22,6 @@ families = meta["family"].unique()
 cols = 3
 rows = (len(families) + cols - 1) // cols
 fig, axes = plt.subplots(rows, cols, figsize=(cols * 4.5, rows * 3), squeeze=False)
-markers = ["o", "s", "^", "v", "D", "p"]
-palettes = [
-    "Reds",
-    "Greens",
-    "Blues",
-    "Oranges",
-    "Purples",
-    "Greys",
-]
 
 for idx, (ax, family) in enumerate(zip(axes.flat, families)):
     df_plot = all_coords[all_coords["family"] == family]

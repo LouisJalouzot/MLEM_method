@@ -24,6 +24,16 @@ from tqdm.auto import tqdm
 plt.rcParams["font.serif"] = ["Times New Roman", "DejaVu Serif", "serif"]
 plt.rcParams["font.family"] = "serif"
 pio.templates.default = "simple_white"
+markers = ["o", "s", "^", "v", "D", "p"]
+palettes = [
+    "Reds",
+    "Greens",
+    "Blues",
+    "Oranges",
+    "Purples",
+    "Greys",
+]
+
 n_params = defaultdict(lambda: pd.NA)
 n_params.update(
     {
