@@ -156,6 +156,17 @@ for idx, (family, g) in enumerate(families):
     )
 
     first = g.iloc[0]
+    ax.scatter(
+        first["MDS1"],
+        first["MDS2"],
+        s=70,
+        marker=marker,
+        facecolors="white",
+        edgecolors=colors[0],
+        linewidth=1.2,
+        zorder=3,
+    )
+
     ax.text(
         first["MDS1"],
         first["MDS2"] + ypad,
@@ -181,12 +192,26 @@ for idx, (family, g) in enumerate(families):
     )
 
 ax.legend(
-    handles,
-    [family for family, _ in families],
+    handles
+    + [
+        mpl.lines.Line2D(
+            [],
+            [],
+            marker="o",
+            linestyle="None",
+            markerfacecolor="white",
+            markeredgecolor="black",
+            markersize=7,
+        )
+    ],
+    [family for family, _ in families] + ["smallest model"],
     title="Family",
+    title_fontproperties={"weight": "bold", "size": 12},
     frameon=False,
     loc="center left",
-    bbox_to_anchor=(1, 0.5),
+    bbox_to_anchor=(1.05, 0.5),
+    fontsize=12,
+    markerscale=1.5,
 )
 ax.set(xlabel="MDS 1", ylabel="MDS 2")
 ax.set_aspect("equal")
