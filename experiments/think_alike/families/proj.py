@@ -14,16 +14,21 @@ model_layers = [
     ("facebook/opt-1.3b", 17),
     ("Qwen/Qwen3-0.6B-Base", 9),
     ("Qwen/Qwen3-1.7B-Base", 9),
+    ("Qwen/Qwen3-4B-Base", 11),
     ("Qwen/Qwen3-4B-Base", 16),
     ("Qwen/Qwen3-8B-Base", 11),
+    ("EleutherAI/pythia-1.4b-deduped", 8),
     ("EleutherAI/pythia-1.4b-deduped", 11),
+    ("EleutherAI/pythia-6.9b-deduped", 10),
     ("EleutherAI/pythia-6.9b-deduped", 14),
     ("state-spaces/mamba-790m-hf", 11),
     ("state-spaces/mamba-790m-hf", 21),
+    ("AntonV/mamba2-780m-hf", 14),
     ("AntonV/mamba2-1.3b-hf", 21),
     ("fla-hub/rwkv7-191M-world", 6),
     ("fla-hub/rwkv7-191M-world", 9),
     ("fla-hub/rwkv7-1.5B-world", 8),
+    ("fla-hub/rwkv7-7.2B-g0a", 10),
 ]
 for method in ["pca", "mds"]:
     rd = ReduceDimensions(
