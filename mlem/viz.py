@@ -216,6 +216,15 @@ feature_rename = {
     "subj_ZIPF": "Subject Zipf",
 }
 
+feature_order = [
+    "Relative clause type",
+    "Attachment site",
+    "Verb lemma",
+    "Subject number",
+    "Subject gender",
+    "Embedded number",
+]
+
 families_rename = {
     "gpt": "gpt-neo",
     "Llama": "Llama-3.2",
@@ -234,7 +243,7 @@ def clean_df(
     cols_rename = {c: c.split(".")[-1] for c in df.columns}
     if "Feature" in cols_rename:
         cols_rename["mean"] = "FI"
-        df["Feature"] = df["Feature"].str.replace(feature_rename)
+        df["Feature"] = df["Feature"].replace(feature_rename)
     else:
         cols_rename["mean"] = "Spearman"
     df = df.rename(columns=cols_rename)
@@ -339,7 +348,7 @@ def select_top_features(
     target: str = "FI",
     threshold: float = 0.15,
 ) -> tp.List[str]:
-    if group_by_mean is None:
+    if group_by_mean is not None:
         group_by_mean = [g for g in group_by_mean if g in df.columns]
         df = df.groupby(group_by_mean + ["Feature"])[target]
         df = df.mean().reset_index()
@@ -351,7 +360,8 @@ def select_top_features(
     top_features = top_features.sort_values(ascending=False).reset_index(level=-1)
     top_features = top_features[top_features["FI"] > threshold]
 
-    return list(top_features["Feature"].unique())
+    top_features = set(top_features["Feature"])
+    return [f for f in feature_order if f in top_features]
 
 
 def smooth_fi_by_layer(

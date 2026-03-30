@@ -32,17 +32,21 @@ top_features
 n_cols = 2
 n_rows = len(pairs) // 2
 fig, axes = plt.subplots(n_rows, n_cols, figsize=(6.4, 6.0), sharex=True, sharey=True)
-feature_to_color = dict(
-    zip(top_features, sns.color_palette("tab10", n_colors=len(top_features)))
-)
+tab10 = sns.color_palette("tab10")
+feature_to_color = {
+    f: tab10[feature_order.index(f) % len(tab10)] if f in feature_order else "0.6"
+    for f in top_features
+}
 model_labels = meta.drop_duplicates("model_name").set_index("model_name")["model"]
 
 for idx, ((m_ref, l_ref), (m, l)) in enumerate(pairs):
     ax = axes[idx // n_cols, idx % n_cols]
     fi_raw = i[(i["model_name"] == m) & (i["layer"] == l)]
     fi = fi_raw.groupby("Feature")["FI"].mean()
+    fi_std = fi_raw.groupby("Feature")["FI"].std().reindex(fi.index).fillna(0)
     fi_ref_raw = i[(i["model_name"] == m_ref) & (i["layer"] == l_ref)]
     fi_ref = fi_ref_raw.groupby("Feature")["FI"].mean().loc[fi.index]
+    fi_ref_std = fi_ref_raw.groupby("Feature")["FI"].std().reindex(fi.index).fillna(0)
 
     r2_folds = (
         pd.concat(
@@ -73,6 +77,17 @@ for idx, ((m_ref, l_ref), (m, l)) in enumerate(pairs):
         linewidth=1,
         alpha=0.6,
     )
+    for f in top_features:
+        ax.add_patch(
+            mpl.patches.Ellipse(
+                (fi[f], fi_ref[f]),
+                2 * fi_std[f],
+                2 * fi_ref_std[f],
+                facecolor=feature_to_color[f],
+                edgecolor="none",
+                alpha=0.12,
+            )
+        )
     sns.scatterplot(
         x=fi.loc[top_features],
         y=fi_ref.loc[top_features],
@@ -87,13 +102,13 @@ for idx, ((m_ref, l_ref), (m, l)) in enumerate(pairs):
     ax.set(xlim=(-0.05, max_fi * 1.1), ylim=(-0.05, max_fi * 1.1))
     ax.margins(0)
     ax.text(
-        0.98,
+        1.2,
         0.04,
         f"R² = {r2_mu:.2f} ± {r2_sd:.2f}",
         transform=ax.transAxes,
         ha="right",
         va="bottom",
-        fontsize=8,
+        fontsize=9,
         color="green" if r2_mu > 0.8 else "red",
     )
     ax.spines["top"].set_visible(False)
@@ -106,6 +121,9 @@ for idx, ((m_ref, l_ref), (m, l)) in enumerate(pairs):
     ax.tick_params(axis="x", labelbottom=True)
     ax.set_xlabel(f"FI {model_labels[m]} L{l}", fontweight="bold")
     ax.xaxis.label.set_visible(True)
+
+axes[0, 0].set_title("Similar", fontweight="bold", pad=15)
+axes[0, 1].set_title("Dissimilar", fontweight="bold", pad=15)
 
 handles = [
     mpl.lines.Line2D(
