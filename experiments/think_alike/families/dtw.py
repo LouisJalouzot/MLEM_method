@@ -1,8 +1,9 @@
 # %% Load data
+from scipy.linalg import orthogonal_procrustes
+
 from mlem.viz import *
 
 i, meta = load_df(Path(__file__).parent / "0.parquet", to_keep=to_keep)
-i = smooth_fi_by_layer(i)
 i_pivot = i.pivot_table(
     index=["cv", "family", "model", "layer"],
     columns="Feature",
@@ -75,4 +76,121 @@ ax.set_yticks(family_ticks)
 ax.set_yticklabels(family_names, rotation=0)
 plt.savefig("think_alike/figures/dtw_heatmap.pdf", bbox_inches="tight")
 
+
 # %% MDS
+def fit_mds(d):
+    return MDS(
+        n_components=2, dissimilarity="precomputed", random_state=0
+    ).fit_transform(d)
+
+
+def align_to_ref(coords, ref):
+    coords = coords - coords.mean(0)
+    rotation, _ = orthogonal_procrustes(coords, ref)
+    return coords @ rotation
+
+
+dtw_sym = [d.combine_first(d.T).fillna(0.0) for d in dtw_dfs]
+ref = fit_mds(sum(dtw_sym) / len(dtw_sym))
+ref = ref - ref.mean(0)
+all_coords = [
+    pd.DataFrame(
+        align_to_ref(fit_mds(d), ref), columns=["MDS1", "MDS2"], index=d.index
+    ).assign(cv=cv)
+    for cv, d in zip(cvs, dtw_sym)
+]
+summary = (
+    pd.concat(all_coords)
+    .reset_index()
+    .groupby(["family", "model"], sort=False, observed=True)
+    .agg(
+        MDS1=("MDS1", "mean"),
+        MDS2=("MDS2", "mean"),
+        MDS1_sd=("MDS1", "std"),
+        MDS2_sd=("MDS2", "std"),
+    )
+    .fillna(0)
+    .reset_index()
+)
+
+fig, ax = plt.subplots(figsize=(10, 8))
+families = list(summary.groupby("family", sort=False, observed=True))
+xpad = 0.015 * max(np.ptp(summary["MDS1"]), 1e-3)
+ypad = 0.015 * max(np.ptp(summary["MDS2"]), 1e-3)
+handles = []
+
+for idx, (family, g) in enumerate(families):
+    g = remove_unused_categories(g)
+    colors = sns.color_palette(palettes[idx % len(palettes)], n_colors=len(g) + 2)[1:-1]
+    marker = markers[idx % len(markers)]
+    line_color = colors[-1]
+
+    for row, color in zip(g.itertuples(), colors):
+        ax.add_patch(
+            mpl.patches.Ellipse(
+                (row.MDS1, row.MDS2),
+                2 * row.MDS1_sd,
+                2 * row.MDS2_sd,
+                facecolor=color,
+                edgecolor="none",
+                alpha=0.18,
+            )
+        )
+
+    ax.plot(
+        g["MDS1"], g["MDS2"], color=line_color, linewidth=1.5, alpha=0.9, zorder=1.5
+    )
+
+    sns.scatterplot(
+        g,
+        x="MDS1",
+        y="MDS2",
+        hue="model",
+        hue_order=g["model"].tolist(),
+        palette=colors,
+        marker=marker,
+        s=70,
+        edgecolor="none",
+        legend=False,
+        ax=ax,
+    )
+
+    first = g.iloc[0]
+    ax.text(
+        first["MDS1"],
+        first["MDS2"] + ypad,
+        family,
+        color=line_color,
+        fontsize=10,
+        fontweight="bold",
+        ha="center",
+        va="bottom",
+    )
+
+    handles.append(
+        mpl.lines.Line2D(
+            [],
+            [],
+            marker=marker,
+            linestyle="-",
+            color=line_color,
+            markerfacecolor=line_color,
+            markeredgecolor="none",
+            markersize=7,
+        )
+    )
+
+ax.legend(
+    handles,
+    [family for family, _ in families],
+    title="Family",
+    frameon=False,
+    loc="center left",
+    bbox_to_anchor=(1, 0.5),
+)
+ax.set(xlabel="MDS 1", ylabel="MDS 2")
+ax.set_aspect("equal")
+ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
+for spine in ax.spines.values():
+    spine.set_visible(False)
+plt.savefig("think_alike/figures/dtw_mds.pdf", bbox_inches="tight")
