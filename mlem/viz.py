@@ -233,6 +233,17 @@ families_rename = {
     "rwkv7": "RWKV7",
 }
 
+levels_rename = {
+    "Relative clause type": {
+        "objwho": "Object relative",
+        "subjwho": "Subject relative",
+    },
+    "Verb lemma": {
+        4.59: "see",
+        4.73: "like",
+    },
+}
+
 
 def clean_df(
     df: pd.DataFrame,
@@ -246,7 +257,7 @@ def clean_df(
         df["Feature"] = df["Feature"].replace(feature_rename)
     else:
         cols_rename["mean"] = "Spearman"
-    df = df.rename(columns=cols_rename)
+    df = df.rename(columns=cols_rename | feature_rename)
     if "split" in df.columns:
         df = df[df["split"] == "test"]
     if "layer" in df.columns:
