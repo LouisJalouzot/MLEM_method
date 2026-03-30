@@ -14,7 +14,16 @@ script_dir = Path(__file__).parent
 mds, _ = load_df(script_dir / "proj.parquet")
 i, meta = load_df(script_dir / "0.parquet", to_keep=to_keep)
 gb_cols = list(meta.columns)
-max_fi = i.groupby(gb_cols + ["Feature"])["FI"].mean().max() * 1.1
+max_fi = (
+    i[
+        i.set_index(["model_name", "layer"]).index.isin(
+            [item for pair in pairs for item in pair]
+        )
+    ]
+    .groupby(gb_cols + ["Feature"])["FI"]
+    .mean()
+    .max()
+)
 top_features = select_top_features(i, n_largest=5)[:5]
 other_features = [f for f in i["Feature"].unique() if f not in top_features]
 top_features
@@ -57,8 +66,8 @@ for idx, ((m_ref, l_ref), (m, l)) in enumerate(pairs):
         color="grey",
     )
     ax.plot(
-        [0, max_fi],
-        [0, max_fi],
+        [-0.05, max_fi * 1.1],
+        [-0.05, max_fi * 1.1],
         linestyle="--",
         color="gray",
         linewidth=1,
@@ -75,6 +84,8 @@ for idx, ((m_ref, l_ref), (m, l)) in enumerate(pairs):
         legend=False,
     )
     ax.set_aspect("equal")
+    ax.set(xlim=(-0.05, max_fi * 1.1), ylim=(-0.05, max_fi * 1.1))
+    ax.margins(0)
     ax.text(
         0.98,
         0.04,
@@ -91,9 +102,9 @@ for idx, ((m_ref, l_ref), (m, l)) in enumerate(pairs):
         ax.yaxis.set_visible(False)
         ax.spines["left"].set_visible(False)
     else:
-        ax.set_ylabel(f"FI {model_labels[m_ref]} L{l_ref}")
+        ax.set_ylabel(f"FI {model_labels[m_ref]} L{l_ref}", fontweight="bold")
     ax.tick_params(axis="x", labelbottom=True)
-    ax.set_xlabel(f"FI {model_labels[m]} L{l}")
+    ax.set_xlabel(f"FI {model_labels[m]} L{l}", fontweight="bold")
     ax.xaxis.label.set_visible(True)
 
 handles = [
