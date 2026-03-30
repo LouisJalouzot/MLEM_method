@@ -26,15 +26,29 @@ fig, axes = plt.subplots(n_rows, n_cols, figsize=(6.4, 6.0), sharex=True, sharey
 feature_to_color = dict(
     zip(top_features, sns.color_palette("tab10", n_colors=len(top_features)))
 )
+model_labels = meta.drop_duplicates("model_name").set_index("model_name")["model"]
 
 for idx, ((m_ref, l_ref), (m, l)) in enumerate(pairs):
     ax = axes[idx // n_cols, idx % n_cols]
-    fi = i[(i["model_name"] == m) & (i["layer"] == l)]
-    std = fi.groupby("Feature")["FI"].std()
-    fi = fi.groupby("Feature")["FI"].mean()
-    fi_ref = i[(i["model_name"] == m_ref) & (i["layer"] == l_ref)]
-    std_ref = fi_ref.groupby("Feature")["FI"].std().loc[fi.index]
-    fi_ref = fi_ref.groupby("Feature")["FI"].mean().loc[fi.index]
+    fi_raw = i[(i["model_name"] == m) & (i["layer"] == l)]
+    fi = fi_raw.groupby("Feature")["FI"].mean()
+    fi_ref_raw = i[(i["model_name"] == m_ref) & (i["layer"] == l_ref)]
+    fi_ref = fi_ref_raw.groupby("Feature")["FI"].mean().loc[fi.index]
+
+    r2_folds = (
+        pd.concat(
+            [
+                fi_raw.groupby(["cv", "Feature"])["FI"].mean().rename("x"),
+                fi_ref_raw.groupby(["cv", "Feature"])["FI"].mean().rename("y"),
+            ],
+            axis=1,
+        )
+        .dropna()
+        .groupby(level="cv")
+        .apply(lambda d: d["x"].corr(d["y"]) ** 2)
+    )
+    r2_mu = r2_folds.mean()
+    r2_sd = r2_folds.std()
 
     ax.scatter(
         x=fi.loc[other_features],
@@ -61,17 +75,25 @@ for idx, ((m_ref, l_ref), (m, l)) in enumerate(pairs):
         legend=False,
     )
     ax.set_aspect("equal")
+    ax.text(
+        0.98,
+        0.04,
+        f"R² = {r2_mu:.2f} ± {r2_sd:.2f}",
+        transform=ax.transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=8,
+        color="green" if r2_mu > 0.8 else "red",
+    )
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     if idx % n_cols != 0:
         ax.yaxis.set_visible(False)
         ax.spines["left"].set_visible(False)
     else:
-        m_ref = meta.loc[meta["model_name"] == m_ref, "model"].iloc[0]
-        ax.set_ylabel(f"FI {m_ref} L{l_ref}")
-    m = meta.loc[meta["model_name"] == m, "model"].iloc[0]
+        ax.set_ylabel(f"FI {model_labels[m_ref]} L{l_ref}")
     ax.tick_params(axis="x", labelbottom=True)
-    ax.set_xlabel(f"FI {m} L{l}")
+    ax.set_xlabel(f"FI {model_labels[m]} L{l}")
     ax.xaxis.label.set_visible(True)
 
 handles = [
@@ -85,8 +107,7 @@ handles = [
         label=f,
     )
     for f in top_features
-]
-handles.append(
+] + [
     mpl.lines.Line2D(
         [],
         [],
@@ -96,7 +117,7 @@ handles.append(
         color="0.6",
         label="Other features",
     )
-)
+]
 
 fig.legend(
     handles=handles,
@@ -104,6 +125,8 @@ fig.legend(
     bbox_to_anchor=(0.5, 0.47),
     bbox_transform=fig.transFigure,
     ncol=3,
+    columnspacing=0.9,
+    handletextpad=0.5,
     title="Feature",
     title_fontproperties={"weight": "bold"},
     frameon=True,
