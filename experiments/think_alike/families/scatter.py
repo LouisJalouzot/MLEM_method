@@ -1,5 +1,5 @@
 # %% Load data
-from mlem.viz import *
+from mlem_method.viz import *
 
 triplets = [
     # (
@@ -50,11 +50,7 @@ for col, mapping in levels_rename.items():
 i, meta = load_df(script_dir / "0.parquet", to_keep=to_keep)
 gb_cols = list(meta.columns)
 max_fi = (
-    i[
-        i.set_index(["model_name", "layer"]).index.isin(
-            [item for triplet in triplets for item in triplet[:-1]]
-        )
-    ]
+    i[i.set_index(["model_name", "layer"]).index.isin([item for triplet in triplets for item in triplet[:-1]])]
     .groupby(gb_cols + ["Feature"])["FI"]
     .mean()
     .max()
@@ -69,8 +65,7 @@ n_rows = len(pairs) // 2
 fig, axes = plt.subplots(n_rows, n_cols, figsize=(6, 5), sharex=True, sharey=True)
 tab10 = sns.color_palette("tab10")
 feature_to_color = {
-    f: tab10[feature_order.index(f) % len(tab10)] if f in feature_order else "0.6"
-    for f in top_features
+    f: tab10[feature_order.index(f) % len(tab10)] if f in feature_order else "0.6" for f in top_features
 }
 model_labels = meta.drop_duplicates("model_name").set_index("model_name")["model"]
 
@@ -205,12 +200,8 @@ plt.savefig("think_alike/figures/scatter.pdf", bbox_inches="tight")
 # %% Plot MDS
 n_cols = 3
 n_rows = len(triplets)
-fig, axes = plt.subplots(
-    n_rows, n_cols, figsize=(8, 7), sharex=False, sharey=False, dpi=150
-)
-for row, ((m_ref, l_ref), (m_pos, l_pos), (m_neg, l_neg), feature) in enumerate(
-    triplets
-):
+fig, axes = plt.subplots(n_rows, n_cols, figsize=(8, 7), sharex=False, sharey=False, dpi=150)
+for row, ((m_ref, l_ref), (m_pos, l_pos), (m_neg, l_neg), feature) in enumerate(triplets):
     for col, (m, l) in enumerate([(m_ref, l_ref), (m_pos, l_pos), (m_neg, l_neg)]):
         ax = axes[row, col]
         df_plot = mds[(mds["model_name"] == m) & (mds["layer"] == l)]
@@ -222,9 +213,7 @@ for row, ((m_ref, l_ref), (m_pos, l_pos), (m_neg, l_neg), feature) in enumerate(
             y="coord_2",
             edgecolor=None,
             hue=feature,
-            palette=sns.light_palette(
-                feature_to_color[feature], df_plot[feature].nunique() + 1
-            )[1:],
+            palette=sns.light_palette(feature_to_color[feature], df_plot[feature].nunique() + 1)[1:],
             ax=ax,
             s=8,
             legend=col == 1,

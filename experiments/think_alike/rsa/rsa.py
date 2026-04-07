@@ -1,5 +1,5 @@
 # %% Load data
-from mlem.viz import *
+from mlem_method.viz import *
 
 rsa = load_rsa(Path(__file__).parent / "0.parquet")
 

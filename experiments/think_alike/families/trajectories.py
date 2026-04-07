@@ -1,5 +1,5 @@
 # %% Load data
-from mlem.viz import *
+from mlem_method.viz import *
 
 i, meta = load_df(Path(__file__).parent / "0.parquet", to_keep=to_keep)
 i = smooth_fi_by_layer(i)
@@ -32,10 +32,7 @@ for idx, (ax, family) in enumerate(zip(axes.flat, families)):
 
     # Plot first layer markers
     sns.scatterplot(
-        df_plot[df_plot["rel. layer"] == 0]
-        .groupby(gb_cols)
-        .mean(numeric_only=True)
-        .reset_index(),
+        df_plot[df_plot["rel. layer"] == 0].groupby(gb_cols).mean(numeric_only=True).reset_index(),
         x="PC1",
         y="PC2",
         marker=marker,

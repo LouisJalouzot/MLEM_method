@@ -1,5 +1,5 @@
 # %% Load data
-from mlem.viz import *
+from mlem_method.viz import *
 
 script_dir = Path(__file__).parent
 
@@ -7,9 +7,7 @@ i, meta = load_df(script_dir / "0.parquet", to_keep=to_keep)
 gb_cols = list(meta.columns)
 
 df = i.groupby(["Feature"] + gb_cols, observed=True)["FI"].mean().reset_index()
-df = df.pivot(
-    index=["family", "model", "layer"], columns="Feature", values="FI"
-).sort_index()
+df = df.pivot(index=["family", "model", "layer"], columns="Feature", values="FI").sort_index()
 
 sim = pairwise_distances(df, metric="euclidean")
 sim = pd.DataFrame(sim, index=df.index, columns=df.index)

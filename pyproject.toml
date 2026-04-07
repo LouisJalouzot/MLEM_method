@@ -27,6 +27,7 @@ dependencies = [
     "loguru>=0.7.3",
     "mamba-ssm",
     "matplotlib>=3.10.1",
+    "mlem",
     "mypy>=1.15.0",
     "nbformat>=5.10.4",
     "nibabel>=5.3.3",
@@ -76,6 +77,7 @@ mamba-ssm = { url = "https://github.com/state-spaces/mamba/releases/download/v2.
 # Pin to main until v5.3.0 ships with PR #44176 ("[Mamba] Fix kernel loading")
 transformers = { git = "https://github.com/huggingface/transformers.git", branch = "main" }
 torchsort = { url = "https://github.com/LouisJalouzot/torchsort/releases/download/0.0.0/torchsort-0.1.10+pt27cu12-cp313-cp313-linux_x86_64.whl" }
+mlem = { git = "https://github.com/LouisJalouzot/MLEM" }
 
 [[tool.uv.index]]
 name = "pytorch-cu12"

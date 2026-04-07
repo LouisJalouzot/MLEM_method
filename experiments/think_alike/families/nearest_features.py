@@ -6,7 +6,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from sklearn.metrics import pairwise_distances
 
-from mlem.viz import load_df, select_top_features, to_keep
+from mlem_method.viz import load_df, select_top_features, to_keep
 
 SCRIPT_DIR = Path(__file__).parent
 OUTPUT_PATH = SCRIPT_DIR / "figures" / "nearest_features.html"
@@ -28,9 +28,7 @@ def build_profiles(df: pd.DataFrame, meta_cols: list[str], n_layers: int) -> pd.
         lambda s: s.isin(sample_layers(s, keep=n_layers + 2))
     )
     profiles = profiles[sampled].copy()
-    profiles["layer_idx"] = (
-        profiles.groupby("model", observed=True)["layer"].rank(method="dense").astype(int)
-    )
+    profiles["layer_idx"] = profiles.groupby("model", observed=True)["layer"].rank(method="dense").astype(int)
     profiles = profiles[profiles["layer_idx"].between(2, n_layers + 1)].copy()
     profiles["layer_idx"] -= 1
 
@@ -45,9 +43,7 @@ def find_matches(profiles: pd.DataFrame) -> pd.DataFrame:
     )
     family = sim.index.get_level_values("family").to_numpy()
     layer_idx = sim.index.get_level_values("layer_idx").to_numpy()
-    invalid = (family[:, None] == family[None, :]) | (
-        layer_idx[:, None] != layer_idx[None, :]
-    )
+    invalid = (family[:, None] == family[None, :]) | (layer_idx[:, None] != layer_idx[None, :])
     sim = sim.mask(invalid)
 
     return pd.DataFrame(
@@ -85,9 +81,7 @@ def main() -> None:
     profiles_all = build_profiles(df, list(meta.columns), n_layers=N_INTERIOR_LAYERS)
     matches = find_matches(profiles_all)
 
-    top_features = [
-        f for f in select_top_features(df, n_largest=5) if f in profiles_all.columns
-    ]
+    top_features = [f for f in select_top_features(df, n_largest=5) if f in profiles_all.columns]
     plot_df = build_plot_df(matches, profiles_all[top_features])
     max_fi = 1.1 * plot_df[["fi_ref", "fi"]].to_numpy().max()
 

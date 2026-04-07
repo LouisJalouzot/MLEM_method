@@ -1,5 +1,5 @@
 # %% Load data
-from mlem.viz import *
+from mlem_method.viz import *
 
 s, meta = load_df(Path(__file__).parent / "1.parquet", to_keep=to_keep)
 
@@ -18,9 +18,7 @@ fig, axes = plt.subplots(
 for idx, (ax, family) in enumerate(zip(axes.flat, families)):
     df_plot = s[s["family"] == family]
     marker = markers[idx % len(markers)]
-    palette = sns.color_palette(
-        palettes[idx % len(palettes)], n_colors=df_plot["model"].nunique()
-    )
+    palette = sns.color_palette(palettes[idx % len(palettes)], n_colors=df_plot["model"].nunique())
 
     sns.lineplot(
         remove_unused_categories(df_plot),

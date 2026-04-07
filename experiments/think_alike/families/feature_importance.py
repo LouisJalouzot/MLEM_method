@@ -1,5 +1,5 @@
 # %% Load data
-from mlem.viz import *
+from mlem_method.viz import *
 
 i, meta = load_df(Path(__file__).parent / "0.parquet", to_keep=to_keep)
 

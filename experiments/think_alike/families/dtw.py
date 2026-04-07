@@ -1,7 +1,8 @@
 # %% Load data
+from mlem import MLEM
 from scipy.linalg import orthogonal_procrustes
 
-from mlem.viz import *
+from mlem_method.viz import *
 
 i, meta = load_df(Path(__file__).parent / "0.parquet", to_keep=to_keep)
 i_pivot = i.pivot_table(
@@ -30,9 +31,7 @@ with pbar:
             for family_2, model_2 in index[k:]:
                 x = i_pivot.loc[cv, family_1, model_1].values
                 y = i_pivot.loc[cv, family_2, model_2].values
-                dtw_dfs[cv].loc[(family_2, model_2), (family_1, model_1)] = dtw(
-                    x, y
-                ).normalizedDistance
+                dtw_dfs[cv].loc[(family_2, model_2), (family_1, model_1)] = dtw(x, y).normalizedDistance
                 pbar.update(1)
 
 # %% Heatmap
@@ -79,9 +78,7 @@ plt.savefig("think_alike/figures/dtw_heatmap.pdf", bbox_inches="tight")
 
 # %% MDS
 def fit_mds(d):
-    return MDS(
-        n_components=2, dissimilarity="precomputed", random_state=0
-    ).fit_transform(d)
+    return MDS(n_components=2, dissimilarity="precomputed", random_state=0).fit_transform(d)
 
 
 def align_to_ref(coords, ref):
@@ -94,9 +91,7 @@ dtw_sym = [d.combine_first(d.T).fillna(0.0) for d in dtw_dfs]
 ref = fit_mds(sum(dtw_sym) / len(dtw_sym))
 ref = ref - ref.mean(0)
 all_coords = [
-    pd.DataFrame(
-        align_to_ref(fit_mds(d), ref), columns=["MDS1", "MDS2"], index=d.index
-    ).assign(cv=cv)
+    pd.DataFrame(align_to_ref(fit_mds(d), ref), columns=["MDS1", "MDS2"], index=d.index).assign(cv=cv)
     for cv, d in zip(cvs, dtw_sym)
 ]
 summary = (
@@ -137,9 +132,7 @@ for idx, (family, g) in enumerate(families):
             )
         )
 
-    ax.plot(
-        g["MDS1"], g["MDS2"], color=line_color, linewidth=1.5, alpha=0.9, zorder=1.5
-    )
+    ax.plot(g["MDS1"], g["MDS2"], color=line_color, linewidth=1.5, alpha=0.9, zorder=1.5)
 
     sns.scatterplot(
         g,
