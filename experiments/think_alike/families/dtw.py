@@ -1,8 +1,8 @@
 # %% Load data
 import torch
+from mlem.mlem import MLEM
 from scipy.linalg import orthogonal_procrustes
 
-from mlem.mlem import MLEM
 from mlem_method.viz import *
 
 i, meta = load_df(Path(__file__).parent / "0.parquet", to_keep=to_keep)
@@ -43,6 +43,17 @@ features = features.drop(columns=["model_name", "model"]).rename(columns={"famil
 mlem = MLEM(distance="precomputed", random_seed=0, device="cuda" if torch.cuda.is_available() else "cpu")
 X = mlem._encode_df(features)
 features_dist = (X[None] - X[:, None]).abs().clip(0, 1)
+
+# %% Compute correlations
+triu_indices = np.triu_indices(features_dist.shape[0], k=1)
+df = pd.DataFrame(features_dist[*triu_indices], columns=features.columns)
+corrs = df.corr().iloc[1:, :-1]
+mask = np.triu(np.ones_like(corrs, dtype=bool), k=1)
+annot_corrs = corrs.round(2).where(corrs.abs() > 0.3, "")
+ax = sns.heatmap(corrs, cmap="RdBu", center=0, mask=mask, annot=annot_corrs, fmt="", vmax=1, vmin=-1)
+plt.xticks(rotation=45, ha="right")
+
+# %% Compute FI for each CV fold
 fis = []
 for d in tqdm(dtw_sym):
     mlem.fit(features_dist, d, feature_names=features.columns)
