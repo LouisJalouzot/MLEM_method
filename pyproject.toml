@@ -81,3 +81,6 @@ torchsort = { url = "https://github.com/LouisJalouzot/torchsort/releases/downloa
 name = "pytorch-cu12"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
+
+[tool.ruff]
+line-length = 120
