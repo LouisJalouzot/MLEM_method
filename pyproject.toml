@@ -84,5 +84,10 @@ name = "pytorch-cu12"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
+[tool.uv.workspace]
+members = [
+    "mlem",
+]
+
 [tool.ruff]
 line-length = 120

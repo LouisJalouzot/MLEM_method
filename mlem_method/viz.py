@@ -34,7 +34,7 @@ palettes = [
     "Greys",
 ]
 
-metadata = pd.read_csv(Path(__file__).parent / "model_metadata.csv")
+metadata = pd.read_csv("model_metadata.csv")
 
 to_keep = metadata.model_name.tolist()
 

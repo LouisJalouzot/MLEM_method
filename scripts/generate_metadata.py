@@ -1,93 +1,98 @@
+import json
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from huggingface_hub import model_info
+from huggingface_hub import hf_hub_download, model_info
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
-from transformers import AutoConfig
 
 
-def get_model_metadata(model_id, architecture, training_tokens_B):
+def get_first_attr(obj, *names):
+    for name in names:
+        value = obj.get(name)
+        if value is not None:
+            return value
+    raise AttributeError(f"Could not find any of {names} in config")
+
+
+def get_model_metadata(model_id, architecture, n_params_B, n_tokens_B):
     info = model_info(model_id)
-    config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
-
-    # Extract features
-    n_params = getattr(info, "safetensors", {}).get("total", 0) if hasattr(info, "safetensors") else 0
-    if n_params == 0:
-        n_params = getattr(info, "params", {}).get("total", 0)
-
-    log_n_params_B = np.log10(n_params / 1e9) if n_params > 0 else np.nan
-    release_year = info.created_at.year if info.created_at else np.nan
+    config_path = hf_hub_download(model_id, "config.json")
+    with open(config_path) as f:
+        config = json.load(f)
+    config = config.get("text_config", config)
 
     # Depth/Width/Vocab from config
-    n_layers = getattr(config, "num_hidden_layers", getattr(config, "n_layer", getattr(config, "num_layers")))
-    hidden_size = getattr(config, "hidden_size", getattr(config, "n_embd", getattr(config, "d_model")))
+    n_layers = get_first_attr(config, "num_hidden_layers", "n_layer", "num_layers")
+    hidden_size = get_first_attr(config, "hidden_size", "n_embd", "d_model")
+    vocab_size = get_first_attr(config, "vocab_size")
 
     return [
         model_id,
         architecture,
-        np.log2(log_n_params_B),
-        int(release_year) if not np.isnan(release_year) else np.nan,
+        np.log10(n_params_B),
+        int(info.created_at.year),
         np.log2(n_layers),
         np.log2(hidden_size),
-        np.log2(n_layers) / np.log2(hidden_size),
-        getattr(config, "vocab_size"),
-        np.log10(training_tokens_B) if training_tokens_B else None,
+        n_layers / hidden_size,
+        vocab_size / 1e3,
+        np.log10(n_tokens_B),
     ]
 
 
 def generate_metadata():
-    # model_id, architecture, training_tokens_B
+    # model_id, architecture, n_params_B, n_tokens_B
     models_to_fetch = [
-        ("openai-community/gpt2", "transformer", None),
-        ("openai-community/gpt2-medium", "transformer", None),
-        ("openai-community/gpt2-large", "transformer", None),
-        ("openai-community/gpt2-xl", "transformer", None),
-        ("facebook/opt-125m", "transformer", 180),
-        ("facebook/opt-1.3b", "transformer", 180),
-        ("facebook/opt-2.7b", "transformer", 180),
-        ("facebook/opt-6.7b", "transformer", 180),
-        ("facebook/opt-13b", "transformer", 180),
-        ("EleutherAI/pythia-410m-deduped", "transformer", 207),
-        ("EleutherAI/pythia-1b-deduped", "transformer", 207),
-        ("EleutherAI/pythia-1.4b-deduped", "transformer", 207),
-        ("EleutherAI/pythia-6.9b-deduped", "transformer", 207),
-        ("EleutherAI/pythia-12b-deduped", "transformer", 207),
-        ("allenai/OLMo-2-0425-1B", "transformer", 4000),
-        ("allenai/OLMo-2-1124-7B", "transformer", 4000),
-        ("allenai/OLMo-2-1124-13B", "transformer", 5000),
-        ("meta-llama/Llama-3.2-1B", "transformer", 9000),
-        ("meta-llama/Llama-3.2-3B", "transformer", 9000),
-        ("meta-llama/Llama-3.1-8B", "transformer", 15000),
-        ("mistralai/Ministral-3-3B-Base-2512", "transformer", 3000),
-        ("mistralai/Ministral-3-8B-Base-2512", "transformer", 3000),
-        ("mistralai/Ministral-3-14B-Base-2512", "transformer", 3000),
-        ("Qwen/Qwen3-0.6B-Base", "transformer", 36000),
-        ("Qwen/Qwen3-1.7B-Base", "transformer", 36000),
-        ("Qwen/Qwen3-4B-Base", "transformer", 36000),
-        ("Qwen/Qwen3-8B-Base", "transformer", 36000),
-        ("Qwen/Qwen3-14B-Base", "transformer", 36000),
-        ("state-spaces/mamba-130m-hf", "mamba", 300),
-        ("state-spaces/mamba-370m-hf", "mamba", 300),
-        ("state-spaces/mamba-790m-hf", "mamba", 300),
-        ("state-spaces/mamba-1.4b-hf", "mamba", 300),
-        ("state-spaces/mamba-2.8b-hf", "mamba", 300),
-        ("AntonV/mamba2-130m-hf", "mamba", 300),
-        ("AntonV/mamba2-370m-hf", "mamba", 300),
-        ("AntonV/mamba2-780m-hf", "mamba", 300),
-        ("AntonV/mamba2-1.3b-hf", "mamba", 300),
-        ("AntonV/mamba2-2.7b-hf", "mamba", 300),
-        ("fla-hub/rwkv7-191M-world", "rwkv", 1600),
-        ("fla-hub/rwkv7-0.4B-world", "rwkv", 3100),
-        ("fla-hub/rwkv7-1.5B-world", "rwkv", 5600),
-        ("fla-hub/rwkv7-2.9B-world", "rwkv", 5600),
-        ("fla-hub/rwkv7-7.2B-g0a", "rwkv", 5600),
+        ("openai-community/gpt2", "transformer", 0.117, 10),  # Estimated
+        ("openai-community/gpt2-medium", "transformer", 0.345, 10),  # Estimated
+        ("openai-community/gpt2-large", "transformer", 0.762, 10),  # Estimated
+        ("openai-community/gpt2-xl", "transformer", 1.5, 10),  # Estimated
+        ("facebook/opt-125m", "transformer", 0.125, 180),
+        ("facebook/opt-1.3b", "transformer", 1.3, 180),
+        ("facebook/opt-2.7b", "transformer", 2.7, 180),
+        ("facebook/opt-6.7b", "transformer", 6.7, 180),
+        ("facebook/opt-13b", "transformer", 13.0, 180),
+        ("EleutherAI/pythia-410m-deduped", "transformer", 0.410, 207),
+        ("EleutherAI/pythia-1b-deduped", "transformer", 1.0, 207),
+        ("EleutherAI/pythia-1.4b-deduped", "transformer", 1.4, 207),
+        ("EleutherAI/pythia-6.9b-deduped", "transformer", 6.9, 207),
+        ("EleutherAI/pythia-12b-deduped", "transformer", 12.0, 207),
+        ("allenai/OLMo-2-0425-1B", "transformer", 1.0, 4000),
+        ("allenai/OLMo-2-1124-7B", "transformer", 7.0, 4000),
+        ("allenai/OLMo-2-1124-13B", "transformer", 13.0, 5000),
+        ("meta-llama/Llama-3.2-1B", "transformer", 1.0, 9000),
+        ("meta-llama/Llama-3.2-3B", "transformer", 3.0, 9000),
+        ("meta-llama/Llama-3.1-8B", "transformer", 8.0, 15000),
+        ("mistralai/Ministral-3-3B-Base-2512", "transformer", 3.0, 3000),
+        ("mistralai/Ministral-3-8B-Base-2512", "transformer", 8.0, 3000),
+        ("mistralai/Ministral-3-14B-Base-2512", "transformer", 14.0, 3000),
+        ("Qwen/Qwen3-0.6B-Base", "transformer", 0.6, 36000),
+        ("Qwen/Qwen3-1.7B-Base", "transformer", 1.7, 36000),
+        ("Qwen/Qwen3-4B-Base", "transformer", 4.0, 36000),
+        ("Qwen/Qwen3-8B-Base", "transformer", 8.0, 36000),
+        ("Qwen/Qwen3-14B-Base", "transformer", 14.0, 36000),
+        ("state-spaces/mamba-130m-hf", "mamba", 0.130, 300),
+        ("state-spaces/mamba-370m-hf", "mamba", 0.370, 300),
+        ("state-spaces/mamba-790m-hf", "mamba", 0.790, 300),
+        ("state-spaces/mamba-1.4b-hf", "mamba", 1.4, 300),
+        ("state-spaces/mamba-2.8b-hf", "mamba", 2.8, 300),
+        ("AntonV/mamba2-130m-hf", "mamba", 0.130, 300),
+        ("AntonV/mamba2-370m-hf", "mamba", 0.370, 300),
+        ("AntonV/mamba2-780m-hf", "mamba", 0.780, 300),
+        ("AntonV/mamba2-1.3b-hf", "mamba", 1.3, 300),
+        ("AntonV/mamba2-2.7b-hf", "mamba", 2.7, 300),
+        ("fla-hub/rwkv7-191M-world", "rwkv", 0.191, 1600),
+        ("fla-hub/rwkv7-0.4B-world", "rwkv", 0.4, 3100),
+        ("fla-hub/rwkv7-1.5B-world", "rwkv", 1.5, 5600),
+        ("fla-hub/rwkv7-2.9B-world", "rwkv", 2.9, 5600),
+        ("fla-hub/rwkv7-7.2B-g0a", "rwkv", 7.2, 5600),
     ]
 
     results = tqdm(
         Parallel(n_jobs=-2, return_as="generator", backend="threading")(
-            delayed(get_model_metadata)(m_id, arch, tokens) for m_id, arch, tokens in models_to_fetch
+            delayed(get_model_metadata)(m_id, arch, n_params_B, n_tokens_B)
+            for m_id, arch, n_params_B, n_tokens_B in models_to_fetch
         ),
         total=len(models_to_fetch),
         desc="Fetching model metadata",
@@ -95,14 +100,14 @@ def generate_metadata():
 
     columns = [
         "model_name",
-        "architecture",
-        "log_n_params_B",
-        "release_year",
-        "log_depth",
-        "log_width",
-        "ratio",
-        "vocab_size_k",
-        "log_training_tokens_T",
+        "Architecture",
+        "#params",
+        "Release Year",
+        "Depth",
+        "Width",
+        "Depth / Width",
+        "Vocab Size",
+        "Training Tokens",
     ]
     df = pd.DataFrame(results, columns=columns)
     output_path = Path(__file__).parent.parent / "model_metadata.csv"

@@ -1,7 +1,8 @@
 # %% Load data
-from mlem import MLEM
+import torch
 from scipy.linalg import orthogonal_procrustes
 
+from mlem.mlem import MLEM
 from mlem_method.viz import *
 
 i, meta = load_df(Path(__file__).parent / "0.parquet", to_keep=to_keep)
@@ -33,6 +34,40 @@ with pbar:
                 y = i_pivot.loc[cv, family_2, model_2].values
                 dtw_dfs[cv].loc[(family_2, model_2), (family_1, model_1)] = dtw(x, y).normalizedDistance
                 pbar.update(1)
+
+# %% MLEM FI on model metadata and DTW RDMs
+dtw_sym = [d.combine_first(d.T).fillna(0.0) for d in dtw_dfs]
+features = metadata.merge(meta[["model_name", "family", "model"]].drop_duplicates())
+features = features.set_index(["family", "model"]).loc[index].reset_index()
+features = features.drop(columns=["model_name", "model"]).rename(columns={"family": "Family"})
+mlem = MLEM(distance="precomputed", random_seed=0, device="cuda" if torch.cuda.is_available() else "cpu")
+X = mlem._encode_df(features)
+features_dist = (X[None] - X[:, None]).abs().clip(0, 1)
+fis = []
+for d in tqdm(dtw_sym):
+    mlem.fit(features_dist, d, feature_names=features.columns)
+    fi, _ = mlem.score()
+    fis.append(fi.melt(var_name="Feature", value_name="Feature Importance"))
+fis = pd.concat(fis)
+
+# %% Plot
+hue_order = fis.groupby("Feature")["Feature Importance"].mean().sort_values(ascending=False).index
+_, ax = plt.subplots(figsize=(3, 3))
+sns.barplot(
+    fis,
+    x="Feature Importance",
+    y="Feature",
+    hue="Feature",
+    order=hue_order,
+    hue_order=hue_order,
+    legend=False,
+    orient="h",
+    errorbar="sd",
+    ax=ax,
+)
+sns.despine(trim=True)
+ax.set_ylabel("")
+plt.savefig("think_alike/figures/dtw_fi.pdf", bbox_inches="tight")
 
 # %% Heatmap
 df = sum(dtw_dfs) / len(dtw_dfs)
