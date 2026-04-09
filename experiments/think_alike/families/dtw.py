@@ -50,8 +50,19 @@ df = pd.DataFrame(features_dist[*triu_indices], columns=features.columns)
 corrs = df.corr().iloc[1:, :-1]
 mask = np.triu(np.ones_like(corrs, dtype=bool), k=1)
 annot_corrs = corrs.round(2).where(corrs.abs() > 0.3, "")
-ax = sns.heatmap(corrs, cmap="RdBu", center=0, mask=mask, annot=annot_corrs, fmt="", vmax=1, vmin=-1)
+ax = sns.heatmap(
+    corrs,
+    cmap="RdBu",
+    center=0,
+    mask=mask,
+    annot=annot_corrs,
+    fmt="",
+    vmax=1,
+    vmin=-1,
+    cbar_kws={"label": "Correlation"},
+)
 plt.xticks(rotation=45, ha="right")
+plt.savefig("think_alike/figures/dtw_feature_corrs.pdf", bbox_inches="tight")
 
 # %% Compute FI for each CV fold
 fis = []

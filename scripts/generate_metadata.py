@@ -26,7 +26,6 @@ def get_model_metadata(model_id, architecture, n_params_B, n_tokens_B):
     # Depth/Width/Vocab from config
     n_layers = get_first_attr(config, "num_hidden_layers", "n_layer", "num_layers")
     hidden_size = get_first_attr(config, "hidden_size", "n_embd", "d_model")
-    vocab_size = get_first_attr(config, "vocab_size")
 
     return [
         model_id,
@@ -34,9 +33,7 @@ def get_model_metadata(model_id, architecture, n_params_B, n_tokens_B):
         np.log10(n_params_B),
         int(info.created_at.year),
         np.log2(n_layers),
-        np.log2(hidden_size),
         n_layers / hidden_size,
-        vocab_size / 1e3,
         np.log10(n_tokens_B),
     ]
 
@@ -104,9 +101,7 @@ def generate_metadata():
         "#params",
         "Release Year",
         "Depth",
-        "Width",
         "Depth / Width",
-        "Vocab Size",
         "Training Tokens",
     ]
     df = pd.DataFrame(results, columns=columns)
