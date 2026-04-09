@@ -1,9 +1,10 @@
 from mlem import EstimateCorrelations, SyntMov2024Dataset
+
 from setup_figs import np, pd, plt, sns
 
 ec = EstimateCorrelations(dataset=SyntMov2024Dataset(), product=False, device="cpu")
 corrs = ec.estimate_correlations()[0]
-a = corrs.values
+a = corrs.values.copy()
 a[np.triu_indices_from(a)] = np.nan
 corrs = pd.DataFrame(a[1:, :-1], index=corrs.index[1:], columns=corrs.columns[:-1])
 

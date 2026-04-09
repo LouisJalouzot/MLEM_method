@@ -98,7 +98,7 @@ def generate_metadata():
     columns = [
         "model_name",
         "Architecture",
-        "#params",
+        "Num. Parameters",
         "Release Year",
         "Depth",
         "Depth / Width",
