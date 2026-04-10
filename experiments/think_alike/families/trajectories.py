@@ -43,7 +43,6 @@ for idx, (ax, family) in enumerate(zip(axes.flat, families)):
         legend=False,
     )
 
-    ax.set_title(family, fontweight="bold")
     ax.set_aspect("equal")
     ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
     for spine in ax.spines.values():
@@ -70,11 +69,14 @@ for idx, (ax, family) in enumerate(zip(axes.flat, families)):
     ax.legend(
         handles,
         labels,
-        title=None,
+        title=family.upper(),
         frameon=False,
         loc="center left",
         bbox_to_anchor=(1, 0.5),
+        fontsize="large",
+        title_fontsize="x-large",
     )
+    ax.get_legend().get_title().set_fontweight("bold")
 
 # Hide unused subplots
 for ax in axes.flat[len(families) :]:

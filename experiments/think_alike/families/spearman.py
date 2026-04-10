@@ -36,7 +36,10 @@ for idx, (ax, family) in enumerate(zip(axes.flat, families)):
 sns.despine(trim=True)
 
 for idx, ax in enumerate(axes.flat):
-    ax.set_title("")
+    if idx < len(families):
+        ax.set_title(families[idx].upper(), fontweight="bold", loc="right", fontsize=10, pad=10, y=0.65)
+    else:
+        ax.set_title("")
     ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(nbins=4))
 
     if idx % cols != 0:
