@@ -282,3 +282,111 @@ ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
 for spine in ax.spines.values():
     spine.set_visible(False)
 plt.savefig("think_alike/figures/dtw_mds.pdf", bbox_inches="tight")
+
+# %% MDS release date
+from sklearn.linear_model import LinearRegression
+
+fig, ax = plt.subplots(figsize=(10, 8))
+# compute projection std error across CV folds
+raw_coords = pd.concat(all_coords).reset_index()
+raw_coords = raw_coords.merge(meta[["model", "model_name"]].drop_duplicates(), on="model").merge(metadata)
+
+df = summary.merge(meta[["model", "model_name"]].drop_duplicates()).merge(metadata)
+
+# Fit linear regression to find the optimal gradient for Release Date
+X = df[["MDS1", "MDS2"]]
+y = df["Release Date"]
+reg = LinearRegression().fit(X, y)
+
+# compute CV R2 variance
+r2_list = []
+for cv, group in raw_coords.groupby("cv"):
+    r2_list.append(reg.score(group[["MDS1", "MDS2"]], group["Release Date"]))
+r2_mean = np.mean(r2_list)
+r2_std = np.std(r2_list)
+
+# Direction of steepest ascent in MDS space
+vec = reg.coef_ / np.linalg.norm(reg.coef_)
+mean_x, mean_y = X.mean()
+# Project all MDS coordinates onto this unit vector
+df["Projection"] = (df["MDS1"] - mean_x) * vec[0] + (df["MDS2"] - mean_y) * vec[1]
+raw_coords["Projection"] = (raw_coords["MDS1"] - mean_x) * vec[0] + (raw_coords["MDS2"] - mean_y) * vec[1]
+df["Projection_sd"] = (
+    raw_coords.groupby(["family", "model"])["Projection"].std().loc[df.set_index(["family", "model"]).index].values
+)
+
+p_min, p_max = df["Projection"].min(), df["Projection"].max()
+ax.plot(
+    [mean_x + p_min * vec[0], mean_x + p_max * vec[0]],
+    [mean_y + p_min * vec[1], mean_y + p_max * vec[1]],
+    color="gray",
+    linestyle="--",
+    zorder=0,
+    label="Release Date preference direction",
+)
+ax.legend(frameon=False, loc="center right", bbox_to_anchor=(1.15, 0))
+
+sns.scatterplot(
+    data=df, x="MDS1", y="MDS2", hue="Release Date", palette="viridis", edgecolor="none", s=100, legend=False, ax=ax
+)
+norm = plt.Normalize(df["Release Date"].min(), df["Release Date"].max())
+sm = plt.cm.ScalarMappable(cmap="viridis", norm=norm)
+sm.set_array([])
+cbar = fig.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
+
+unique_years = [y for y in sorted(df["Release Date"].astype(int).unique()) if y > df["Release Date"].min() + 0.1]
+cbar.set_ticks(unique_years)
+cbar.set_ticklabels([str(y) for y in unique_years])
+cbar.ax.set_title("Release Date", weight="bold", loc="center", pad=20)
+
+ax.set(xlabel="MDS 1", ylabel="MDS 2", xticks=[], yticks=[], aspect="equal")
+sns.despine(left=True, bottom=True)
+plt.savefig("think_alike/figures/dtw_mds_release_date.pdf", bbox_inches="tight")
+
+# %% Projection on the line
+fig, ax = plt.subplots(figsize=(6, 5))
+
+sns.regplot(data=df, x="Release Date", y="Projection", scatter=False, color="gray", ci=None, ax=ax)
+ax.errorbar(
+    df["Release Date"],
+    df["Projection"],
+    yerr=df["Projection_sd"],
+    fmt="none",
+    ecolor="lightgray",
+    capsize=0,
+    zorder=0,
+)
+sns.scatterplot(
+    data=df,
+    x="Release Date",
+    y="Projection",
+    hue="family",
+    palette="tab10",
+    s=100,
+    edgecolor="white",
+    ax=ax,
+)
+
+ax.text(
+    0.05,
+    0.95,
+    f"$R^2 = {r2_mean:.2f} \\pm {r2_std:.2f}$",
+    transform=ax.transAxes,
+    fontsize=14,
+    verticalalignment="top",
+)
+
+ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(integer=True))
+ax.set_xlim(right=2026.2)
+ax.set_yticks([])
+ax.set_ylabel("Projection on Release Date direction")
+
+ax.legend(
+    bbox_to_anchor=(1.05, 0.5),
+    loc="center left",
+    frameon=False,
+    title="Family",
+    title_fontproperties={"weight": "bold"},
+)
+sns.despine(trim=True, left=True)
+plt.savefig("think_alike/figures/dtw_mds_projection.pdf", bbox_inches="tight")

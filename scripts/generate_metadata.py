@@ -27,11 +27,13 @@ def get_model_metadata(model_id, architecture, n_params_B, n_tokens_B):
     n_layers = get_first_attr(config, "num_hidden_layers", "n_layer", "num_layers")
     hidden_size = get_first_attr(config, "hidden_size", "n_embd", "d_model")
 
+    release_date = info.created_at.year + (info.created_at.month - 1) / 12
+
     return [
         model_id,
         architecture,
         np.log10(n_params_B),
-        int(info.created_at.year),
+        release_date,
         np.log2(n_layers),
         n_layers / hidden_size,
         np.log10(n_tokens_B),
@@ -99,7 +101,7 @@ def generate_metadata():
         "model_name",
         "Architecture",
         "Num. Parameters",
-        "Release Year",
+        "Release Date",
         "Depth",
         "Depth / Width",
         "Training Tokens",
