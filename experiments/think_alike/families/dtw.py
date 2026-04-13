@@ -100,6 +100,10 @@ sns.barplot(
     ax=ax,
 )
 sns.despine(trim=True)
+
+ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(nbins=5))
+ax.xaxis.set_major_formatter(mpl.ticker.FormatStrFormatter("%.2g"))
+
 ax.set_ylabel("")
 plt.savefig("think_alike/figures/dtw_fi.pdf", bbox_inches="tight")
 
