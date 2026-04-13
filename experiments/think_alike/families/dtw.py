@@ -164,7 +164,8 @@ all_coords = [
     for cv, d in zip(cvs, dtw_sym)
 ]
 summary = (
-    pd.concat(all_coords)
+    pd
+    .concat(all_coords)
     .reset_index()
     .groupby(["family", "model"], sort=False, observed=True)
     .agg(
@@ -270,8 +271,8 @@ ax.legend(
     title="Family",
     title_fontproperties={"weight": "bold", "size": 12},
     frameon=False,
-    loc="center left",
-    bbox_to_anchor=(1.05, 0.5),
+    loc="lower left",
+    bbox_to_anchor=(1.05, -0.05),
     fontsize=12,
     markerscale=1.5,
 )
