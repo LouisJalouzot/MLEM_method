@@ -45,6 +45,7 @@ to_keep = [m for triplet in triplets for m, _ in triplet[:-1]]
 
 script_dir = Path(__file__).parent
 mds, _ = load_df(script_dir / "proj.parquet")
+mds = mds[mds["method"] == "mds"]
 for col, mapping in levels_rename.items():
     mds[col] = mds[col].replace(mapping)
 i, meta = load_df(script_dir / "0.parquet", to_keep=to_keep)
@@ -79,7 +80,8 @@ for idx, ((m_ref, l_ref), (m, l), feature) in enumerate(pairs):
     fi_ref_std = fi_ref_raw.groupby("Feature")["FI"].std().reindex(fi.index).fillna(0)
 
     r2_folds = (
-        pd.concat(
+        pd
+        .concat(
             [
                 fi_raw.groupby(["cv", "Feature"])["FI"].mean().rename("x"),
                 fi_ref_raw.groupby(["cv", "Feature"])["FI"].mean().rename("y"),
