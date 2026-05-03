@@ -19,9 +19,9 @@ all_coords = pd.concat(all_coords)
 
 # %% Plot trajectories
 families = meta["family"].unique()
-cols = 3
+cols = 4
 rows = (len(families) + cols - 1) // cols
-fig, axes = plt.subplots(rows, cols, figsize=(cols * 4.5, rows * 3), squeeze=False)
+fig, axes = plt.subplots(rows, cols, figsize=(cols * 4, rows * 2.5), squeeze=False)
 
 for idx, (ax, family) in enumerate(zip(axes.flat, families)):
     df_plot = all_coords[all_coords["family"] == family]
@@ -53,6 +53,7 @@ for idx, (ax, family) in enumerate(zip(axes.flat, families)):
         ax.set_xlabel("")
 
     handles, labels = ax.get_legend_handles_labels()
+    labels = [label.split("-")[-1] for label in labels]
     handles.append(
         mpl.lines.Line2D(
             [],
@@ -74,9 +75,8 @@ for idx, (ax, family) in enumerate(zip(axes.flat, families)):
         loc="center left",
         bbox_to_anchor=(1, 0.5),
         fontsize="large",
-        title_fontsize="x-large",
+        title_fontproperties={"weight": "bold", "size": "large"},
     )
-    ax.get_legend().get_title().set_fontweight("bold")
 
 # Hide unused subplots
 for ax in axes.flat[len(families) :]:
