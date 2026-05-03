@@ -64,7 +64,7 @@ all_coords = all_coords.reset_index()
 
 # %% Plot trajectories
 families = all_coords.family.unique()
-fig, axes = plt.subplots(1, len(families), figsize=(15, 5), sharex=True, sharey=True)
+fig, axes = plt.subplots(1, len(families), figsize=(11, 3), sharex=True, sharey=True)
 palettes = {"gpt2": "Reds", "opt": "Greens", "pythia": "Blues"}
 markers = {"gpt2": "o", "opt": "s", "pythia": "D"}
 
@@ -96,6 +96,7 @@ for i, (ax, family) in enumerate(zip(axes, families)):
     )
 
     handles, labels = ax.get_legend_handles_labels()
+    labels = [label.split("-")[-1] for label in labels]
     labels.append("first layer")
     handles.append(
         mpl.lines.Line2D(
@@ -111,13 +112,12 @@ for i, (ax, family) in enumerate(zip(axes, families)):
     ax.legend(
         handles,
         labels,
-        title="",
+        title=family.upper(),
         frameon=False,
         loc="center left",
         bbox_to_anchor=(1, 0.5),
+        title_fontproperties={"weight": "bold", "size": "large"},
     )
-
-    ax.set_title(family.upper(), fontsize=12, weight="bold")
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_xlabel("MDS1", visible=True)
@@ -127,5 +127,5 @@ for i, (ax, family) in enumerate(zip(axes, families)):
     for spine in ax.spines.values():
         spine.set_visible(False)
 
-plt.subplots_adjust(wspace=0.5)
+plt.subplots_adjust(wspace=0.6)
 plt.savefig("think_alike/figures/rsa_trajectories.pdf", bbox_inches="tight")
