@@ -86,7 +86,7 @@ fis = pd.concat(fis)
 
 # %% Plot
 hue_order = fis.groupby("Feature")["Feature Importance"].mean().sort_values(ascending=False).index
-_, ax = plt.subplots(figsize=(3, 3))
+_, ax = plt.subplots(figsize=(1.25, 3))
 sns.barplot(
     fis,
     x="Feature Importance",
@@ -101,10 +101,8 @@ sns.barplot(
 )
 sns.despine(trim=True)
 
-ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(nbins=5))
-ax.xaxis.set_major_formatter(mpl.ticker.FormatStrFormatter("%.2g"))
-
 ax.set_ylabel("")
+plt.subplots_adjust(right=1.1)
 plt.savefig("think_alike/figures/dtw_fi.pdf", bbox_inches="tight")
 
 # %% Heatmap
@@ -182,10 +180,10 @@ summary = (
     .reset_index()
 )
 
-fig, ax = plt.subplots(figsize=(10, 8))
+fig, ax = plt.subplots(figsize=(7, 5))
 families = list(summary.groupby("family", sort=False, observed=True))
 xpad = 0.015 * max(np.ptp(summary["MDS1"]), 1e-3)
-ypad = 0.015 * max(np.ptp(summary["MDS2"]), 1e-3)
+ypad = 0.035 * max(np.ptp(summary["MDS2"]), 1e-3)
 handles = []
 
 for idx, (family, g) in enumerate(families):
@@ -234,15 +232,43 @@ for idx, (family, g) in enumerate(families):
         zorder=3,
     )
 
+    if family == "gpt2":
+        target, ha, va = g.iloc[-1], "center", "top"
+        x, y = target["MDS1"], target["MDS2"] - 1.5 * ypad
+    elif family == "opt":
+        target, ha, va = g.iloc[-1], "right", "center"
+        x, y = target["MDS1"] - 6 * xpad, target["MDS2"]
+    elif family == "pythia":
+        target, ha, va = g.iloc[1], "right", "center"
+        x, y = target["MDS1"] - 3 * xpad, target["MDS2"]
+    elif family == "OLMo-2":
+        target, ha, va = g.iloc[0], "left", "center"
+        x, y = target["MDS1"] + 3 * xpad, target["MDS2"]
+    elif family == "Llama-3.2":
+        target, ha, va = g.iloc[-1], "right", "center"
+        x, y = target["MDS1"] - 2 * xpad, target["MDS2"] + ypad
+    elif family == "Ministral-3":
+        target, ha, va = g.iloc[0], "center", "top"
+        x, y = target["MDS1"], target["MDS2"] - 2.5 * ypad
+    elif family == "mamba":
+        target, ha, va = g.iloc[len(g) // 2], "right", "center"
+        x, y = target["MDS1"] - 3 * xpad, target["MDS2"]
+    elif family == "mamba2":
+        target, ha, va = g.iloc[1], "center", "bottom"
+        x, y = target["MDS1"], target["MDS2"] + 2 * ypad
+    else:
+        target, ha, va = g.iloc[0], "center", "bottom"
+        x, y = target["MDS1"], target["MDS2"] + 1.5 * ypad
+
     ax.text(
-        first["MDS1"],
-        first["MDS2"] + ypad,
+        x,
+        y,
         family,
         color=line_color,
         fontsize=10,
         fontweight="bold",
-        ha="center",
-        va="bottom",
+        ha=ha,
+        va=va,
     )
 
     handles.append(
@@ -258,28 +284,32 @@ for idx, (family, g) in enumerate(families):
         )
     )
 
+labels = [family for family, _ in families]
+half = (len(handles) + 1) // 2
+ordered_handles, ordered_labels = [], []
+for i in range(half):
+    ordered_handles.append(handles[i])
+    ordered_labels.append(labels[i])
+    if i + half < len(handles):
+        ordered_handles.append(handles[i + half])
+        ordered_labels.append(labels[i + half])
+
 ax.legend(
-    handles
-    + [
-        mpl.lines.Line2D(
-            [],
-            [],
-            marker="o",
-            linestyle="None",
-            markerfacecolor="white",
-            markeredgecolor="black",
-            markersize=7,
-        )
-    ],
-    [family for family, _ in families] + ["smallest model"],
+    ordered_handles,
+    ordered_labels,
     title="Family",
-    title_fontproperties={"weight": "bold", "size": 12},
+    title_fontproperties={"weight": "bold"},
     frameon=False,
-    loc="lower left",
-    bbox_to_anchor=(1.05, -0.05),
-    fontsize=12,
-    markerscale=1.5,
+    loc="lower center",
+    bbox_to_anchor=(0.5, 1),
+    ncol=5,
+    fontsize=9,
+    markerscale=1.2,
+    columnspacing=0.8,
+    handletextpad=0.5,
 )
+ax.scatter(-0.065, -0.03, s=70, facecolors="white", edgecolors="black", clip_on=False, transform=ax.transAxes)
+ax.text(0, -0.03, "smallest model", transform=ax.transAxes, va="center", ha="left", fontsize=9)
 ax.set(xlabel="MDS 1", ylabel="MDS 2")
 ax.set_aspect("equal")
 ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
