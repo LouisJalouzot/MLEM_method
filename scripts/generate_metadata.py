@@ -16,6 +16,22 @@ def get_first_attr(obj, *names):
     raise AttributeError(f"Could not find any of {names} in config")
 
 
+def get_attention_type(config, architecture):
+    if architecture != "transformer":
+        return np.nan
+
+    n_heads = config.get("num_attention_heads") or config.get("n_head")
+    n_kv_heads = config.get("num_key_value_heads") or n_heads
+
+    if n_heads is None:
+        return np.nan
+    if n_kv_heads == n_heads:
+        return "MHA"
+    if n_kv_heads == 1:
+        return "MQA"
+    return "GQA"
+
+
 def get_model_metadata(model_id, architecture, n_params_B, n_tokens_B):
     info = model_info(model_id)
     config_path = hf_hub_download(model_id, "config.json")
@@ -32,6 +48,7 @@ def get_model_metadata(model_id, architecture, n_params_B, n_tokens_B):
     return [
         model_id,
         architecture,
+        get_attention_type(config, architecture),
         np.log10(n_params_B),
         release_date,
         np.log2(n_layers),
@@ -100,6 +117,7 @@ def generate_metadata():
     columns = [
         "model_name",
         "Architecture",
+        "Attention Type",
         "Num. Parameters",
         "Release Date",
         "Depth",
