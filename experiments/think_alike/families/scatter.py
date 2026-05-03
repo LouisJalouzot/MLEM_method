@@ -2,36 +2,12 @@
 from mlem_method.viz import *
 
 triplets = [
-    # (
-    #     ("EleutherAI/pythia-1.4b-deduped", 11),
-    #     ("state-spaces/mamba-790m-hf", 21),
-    #     ("Qwen/Qwen3-4B-Base", 16),
-    #     "Relative clause type",
-    # ),
-    # (
-    #     ("EleutherAI/pythia-6.9b-deduped", 10),
-    #     ("fla-hub/rwkv7-7.2B-g0a", 10),
-    #     ("Qwen/Qwen3-4B-Base", 11),
-    #     "Relative clause type",
-    # ),
     (
         ("EleutherAI/pythia-6.9b-deduped", 14),
         ("state-spaces/mamba-790m-hf", 21),
         ("Qwen/Qwen3-4B-Base", 16),
         "Relative clause type",
     ),
-    # (
-    #     ("Qwen/Qwen3-0.6B-Base", 9),
-    #     ("fla-hub/rwkv7-1.5B-world", 8),
-    #     ("facebook/opt-125m", 4),
-    #     "Relative clause type",
-    # ),
-    # (
-    #     ("Qwen/Qwen3-1.7B-Base", 9),
-    #     ("fla-hub/rwkv7-1.5B-world", 8),
-    #     ("facebook/opt-125m", 4),
-    #     "Verb lemma",
-    # ),
     (
         ("EleutherAI/pythia-1.4b-deduped", 8),
         ("AntonV/mamba2-780m-hf", 14),
@@ -63,7 +39,7 @@ top_features
 # %% Plot scatter
 n_cols = 2
 n_rows = len(pairs) // 2
-fig, axes = plt.subplots(n_rows, n_cols, figsize=(6, 5), sharex=True, sharey=True)
+fig, axes = plt.subplots(n_rows, n_cols, figsize=(5, 4), sharex=True, sharey=True)
 tab10 = sns.color_palette("tab10")
 feature_to_color = {
     f: tab10[feature_order.index(f) % len(tab10)] if f in feature_order else "0.6" for f in top_features
@@ -144,7 +120,7 @@ for idx, ((m_ref, l_ref), (m, l), feature) in enumerate(pairs):
         transform=ax.transAxes,
         ha="left",
         va="top",
-        fontsize=9,
+        fontsize=8,
         color="green" if r2_mu > 0.8 else "red",
     )
     ax.spines["top"].set_visible(False)
@@ -187,22 +163,22 @@ handles = [
 fig.legend(
     handles=handles,
     loc="center",
-    bbox_to_anchor=(0.5, 1.05),
+    bbox_to_anchor=(0.5, 1.1),
     bbox_transform=fig.transFigure,
-    ncols=3,
+    ncols=2,
     columnspacing=0.9,
     handletextpad=0.5,
     title="Feature",
     title_fontproperties={"weight": "bold"},
     frameon=True,
 )
-plt.subplots_adjust(hspace=0.5, wspace=-0.2)
+plt.subplots_adjust(hspace=0.5, wspace=0)
 plt.savefig("think_alike/figures/scatter.pdf", bbox_inches="tight")
 
 # %% Plot MDS
 n_cols = 3
 n_rows = len(triplets)
-fig, axes = plt.subplots(n_rows, n_cols, figsize=(8, 7), sharex=False, sharey=False, dpi=150)
+fig, axes = plt.subplots(n_rows, n_cols, figsize=(7, 6), sharex=False, sharey=False, dpi=150)
 for row, ((m_ref, l_ref), (m_pos, l_pos), (m_neg, l_neg), feature) in enumerate(triplets):
     for col, (m, l) in enumerate([(m_ref, l_ref), (m_pos, l_pos), (m_neg, l_neg)]):
         ax = axes[row, col]
@@ -217,7 +193,7 @@ for row, ((m_ref, l_ref), (m_pos, l_pos), (m_neg, l_neg), feature) in enumerate(
             hue=feature,
             palette=sns.light_palette(feature_to_color[feature], df_plot[feature].nunique() + 1)[1:],
             ax=ax,
-            s=8,
+            s=4,
             legend=col == 1,
             rasterized=True,
         )
@@ -225,29 +201,25 @@ for row, ((m_ref, l_ref), (m_pos, l_pos), (m_neg, l_neg), feature) in enumerate(
             sns.move_legend(
                 ax,
                 "lower center" if row == 0 else "upper center",
-                bbox_to_anchor=(0.5, 1.4 if row == 0 else -0.1),
+                bbox_to_anchor=(0.5, 1.4 if row == 0 else 0),
                 ncols=10,
                 title=feature,
                 title_fontproperties={"weight": "bold"},
                 frameon=True,
-                markerscale=2,
+                markerscale=4,
             )
         match col:
             case 0:
-                title = f"Reference:\n{model_labels[m]} L{l}"
+                title = f"Reference\n{model_labels[m]}\nlayer {l}"
             case 1:
-                title = f"Similar:\n{model_labels[m]} L{l}"
+                title = f"Similar\n{model_labels[m]}\nlayer {l}"
             case 2:
-                title = f"Dissimilar:\n{model_labels[m]} L{l}"
-        ax.set_title(
-            title,
-            fontweight="bold",
-            pad=15,
-        )
+                title = f"Dissimilar\n{model_labels[m]}\nlayer {l}"
+        ax.set_title(title, fontweight="bold")
         ax.set_aspect("equal")
         ax.set_anchor("N")
         ax.set(xticks=[], yticks=[], xlabel="", ylabel="")
         for spine in ax.spines.values():
             spine.set_visible(False)
-plt.subplots_adjust(hspace=0, wspace=0.5)
+plt.subplots_adjust(hspace=0.25, wspace=0.1)
 plt.savefig("think_alike/figures/proj.pdf", bbox_inches="tight")
