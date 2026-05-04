@@ -32,6 +32,41 @@ def get_attention_type(config, architecture):
     return "GQA"
 
 
+def get_activation_type(config):
+    act = config.get("hidden_act") or config.get("activation_function")
+    if not act and "mamba" in config.get("model_type", "").lower():
+        act = "silu"
+
+    if act == "gelu_new":
+        act = "gelu"
+
+    return act if act else np.nan
+
+
+def get_normalization_type(config):
+    if "rms_norm_eps" in config or config.get("norm_type") == "rmsnorm":
+        return "RMSNorm"
+    if "layer_norm_epsilon" in config or "layer_norm_eps" in config or config.get("do_layer_norm_before") is not None:
+        return "LayerNorm"
+    return "LayerNorm"
+
+
+def get_positional_encoding(config, architecture):
+    if (
+        "rope_theta" in config
+        or "rope_scaling" in config
+        or "rope_parameters" in config
+        or config.get("position_embedding_type") == "rope"
+        or "rotary_emb_base" in config
+    ):
+        return "RoPE"
+    if config.get("position_embedding_type") == "alibi" or config.get("alibi"):
+        return "ALiBi"
+    if "mamba" in architecture.lower() or "rwkv" in architecture.lower():
+        return np.nan
+    return "Absolute"
+
+
 def get_model_metadata(model_id, architecture, n_params_B, n_tokens_B):
     info = model_info(model_id)
     config_path = hf_hub_download(model_id, "config.json")
@@ -49,6 +84,9 @@ def get_model_metadata(model_id, architecture, n_params_B, n_tokens_B):
         model_id,
         architecture,
         get_attention_type(config, architecture),
+        get_activation_type(config),
+        get_normalization_type(config),
+        get_positional_encoding(config, architecture),
         np.log10(n_params_B),
         release_date,
         np.log2(n_layers),
@@ -116,8 +154,11 @@ def generate_metadata():
 
     columns = [
         "model_name",
-        "Architecture",
+        "Architecture class",
         "Attention Type",
+        "Activation Type",
+        "Normalization",
+        "Positional Encoding",
         "Num. Parameters",
         "Release Date",
         "Depth",
