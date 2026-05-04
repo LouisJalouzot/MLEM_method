@@ -1,4 +1,5 @@
 # %% Load data
+# uv pip install "git+https://github.com/LouisJalouzot/MLEM.git"
 import torch
 from mlem.mlem import MLEM
 from scipy.linalg import orthogonal_procrustes
@@ -42,7 +43,7 @@ features = features.set_index(["family", "model"]).loc[index].reset_index()
 features = features.drop(columns=["model_name", "model"]).rename(columns={"family": "Family"})
 mlem = MLEM(distance="precomputed", random_seed=0, device="cuda" if torch.cuda.is_available() else "cpu")
 X = mlem._encode_df(features)
-features_dist = (X[None] - X[:, None]).abs().clip(0, 1)
+features_dist = (X[None] - X[:, None]).abs().clip(0, 1).nan_to_num(0)
 
 # %% Compute correlations
 triu_indices = np.triu_indices(features_dist.shape[0], k=1)
@@ -80,7 +81,8 @@ plt.savefig("think_alike/figures/dtw_feature_corrs.pdf", bbox_inches="tight")
 fis = []
 for d in tqdm(dtw_sym):
     mlem.fit(features_dist, d, feature_names=features.columns)
-    fi, _ = mlem.score()
+    fi, s = mlem.score()
+    print(s.mean())
     fis.append(fi.melt(var_name="Feature", value_name="Feature Importance"))
 fis = pd.concat(fis)
 
