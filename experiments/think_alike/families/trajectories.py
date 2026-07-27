@@ -1,7 +1,15 @@
 # %% Load data
+from argparse import ArgumentParser
+
 from mlem_method.viz import *
 
-i, meta = load_df(Path(__file__).parent / "0.parquet", to_keep=to_keep)
+parser = ArgumentParser()
+parser.add_argument("--input", type=Path, default=Path(__file__).parent / "0.parquet")
+parser.add_argument("--output-dir", type=Path, default=Path("think_alike/figures"))
+args = parser.parse_args()
+args.output_dir.mkdir(parents=True, exist_ok=True)
+
+i, meta = load_df(args.input, to_keep=to_keep)
 i = smooth_fi_by_layer(i)
 gb_cols = list(meta.columns)
 
@@ -83,4 +91,4 @@ for ax in axes.flat[len(families) :]:
     ax.set_axis_off()
 
 plt.subplots_adjust(wspace=0.7, hspace=0.1)
-plt.savefig("think_alike/figures/trajectories.pdf", bbox_inches="tight")
+plt.savefig(args.output_dir / "trajectories.pdf", bbox_inches="tight")

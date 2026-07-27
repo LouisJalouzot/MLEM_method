@@ -149,9 +149,7 @@ for subj_n, obj_n, embed_n in tqdm(list(product(NOUNS, repeat=3))):
             # Skip sentences with the same verb twice
             if main_verb == rc_verb:
                 continue
-            for rc_type, rel, attachment in product(
-                RC_TYPES, RELATIVIZERS, ATTACHMENTS
-            ):
+            for rc_type, rel, attachment in product(RC_TYPES, RELATIVIZERS, ATTACHMENTS):
                 _, words = build_sentence(
                     subj_n,
                     obj_n,
@@ -186,9 +184,7 @@ for subj_n, obj_n, embed_n in tqdm(list(product(NOUNS, repeat=3))):
                 )
 
 # Generate non-RC sentences
-for subj_n, obj_n, embed_n in tqdm(
-    list(product(NOUNS, repeat=3)), desc="Non-RC sentences"
-):
+for subj_n, obj_n, embed_n in tqdm(list(product(NOUNS, repeat=3)), desc="Non-RC sentences"):
     # Require all three lemmas to be distinct
     if subj_n[0] == obj_n[0] or subj_n[0] == embed_n[0] or obj_n[0] == embed_n[0]:
         continue
@@ -232,5 +228,5 @@ for subj_n, obj_n, embed_n in tqdm(
                 )
 
 df = pd.DataFrame(rows)
-df.to_csv("datasets/relative_clause_2.csv", index=False)
-print("Dataset written to datasets/relative_clause_2.csv")
+df.to_csv("datasets/relative_clause.csv", index=False)
+print("Dataset written to datasets/relative_clause.csv")

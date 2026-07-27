@@ -1,12 +1,20 @@
 # %% Load data
 # uv pip install "git+https://github.com/LouisJalouzot/MLEM.git"
+from argparse import ArgumentParser
+
 import torch
 from mlem.mlem import MLEM
 from scipy.linalg import orthogonal_procrustes
 
 from mlem_method.viz import *
 
-i, meta = load_df(Path(__file__).parent / "0.parquet", to_keep=to_keep)
+parser = ArgumentParser()
+parser.add_argument("--input", type=Path, default=Path(__file__).parent / "0.parquet")
+parser.add_argument("--output-dir", type=Path, default=Path("think_alike/figures/dtw"))
+args = parser.parse_args()
+args.output_dir.mkdir(parents=True, exist_ok=True)
+
+i, meta = load_df(args.input, to_keep=to_keep)
 i_pivot = i.pivot_table(
     index=["cv", "family", "model", "layer"],
     columns="Feature",
@@ -55,8 +63,8 @@ features_by_analysis = {
     ],
 }
 outputs = {
-    "preliminary": "think_alike/figures/dtw/preliminary_correlations.pdf",
-    "main": "think_alike/figures/dtw/main_correlations.pdf",
+    "preliminary": args.output_dir / "preliminary_correlations.pdf",
+    "main": args.output_dir / "main_correlations.pdf",
 }
 all_fis = {}
 for analysis, features in features_by_analysis.items():
@@ -126,7 +134,7 @@ sns.barplot(
 sns.despine(trim=True)
 ax.set_ylabel("")
 plt.subplots_adjust(right=1.1)
-plt.savefig("think_alike/figures/dtw/main_fi.pdf", bbox_inches="tight")
+plt.savefig(args.output_dir / "main_fi.pdf", bbox_inches="tight")
 
 # %% Heatmap
 df = sum(dtw_dfs) / len(dtw_dfs)
@@ -167,7 +175,7 @@ ax.set_xticks(family_ticks)
 ax.set_xticklabels(family_names, rotation=-45, va="top", ha="left")
 ax.set_yticks(family_ticks)
 ax.set_yticklabels(family_names, rotation=0)
-plt.savefig("think_alike/figures/dtw/heatmap.pdf", bbox_inches="tight")
+plt.savefig(args.output_dir / "heatmap.pdf", bbox_inches="tight")
 
 
 # %% MDS
@@ -337,7 +345,7 @@ ax.set_aspect("equal")
 ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
 for spine in ax.spines.values():
     spine.set_visible(False)
-plt.savefig("think_alike/figures/dtw/mds.pdf", bbox_inches="tight")
+plt.savefig(args.output_dir / "mds.pdf", bbox_inches="tight")
 
 # %% MDS release date
 from sklearn.linear_model import LinearRegression
@@ -397,7 +405,7 @@ cbar.ax.set_title("Release Date", weight="bold", loc="center", pad=20)
 
 ax.set(xlabel="MDS 1", ylabel="MDS 2", xticks=[], yticks=[], aspect="equal")
 sns.despine(left=True, bottom=True)
-plt.savefig("think_alike/figures/dtw/mds_release_date.pdf", bbox_inches="tight")
+plt.savefig(args.output_dir / "mds_release_date.pdf", bbox_inches="tight")
 
 # %% Projection on the line
 fig, ax = plt.subplots(figsize=(6, 5))
@@ -445,4 +453,4 @@ ax.legend(
     title_fontproperties={"weight": "bold"},
 )
 sns.despine(trim=True, left=True)
-plt.savefig("think_alike/figures/dtw/mds_projection.pdf", bbox_inches="tight")
+plt.savefig(args.output_dir / "mds_projection.pdf", bbox_inches="tight")
