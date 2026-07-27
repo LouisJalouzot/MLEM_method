@@ -85,9 +85,10 @@ url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [tool.uv.workspace]
-members = [
-    "mlem",
-]
+members = ["mlem"]
 
 [tool.ruff]
 line-length = 120
+
+[tool.pyright]
+typeCheckingMode = "off"

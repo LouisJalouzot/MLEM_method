@@ -36,57 +36,79 @@ with pbar:
                 dtw_dfs[cv].loc[(family_2, model_2), (family_1, model_1)] = dtw(x, y).normalizedDistance
                 pbar.update(1)
 
-# %% MLEM FI on model metadata and DTW RDMs
+# %% Model metadata analyses
 dtw_sym = [d.combine_first(d.T).fillna(0.0) for d in dtw_dfs]
-features = metadata.merge(meta[["model_name", "family", "model"]].drop_duplicates())
-features = features.set_index(["family", "model"]).loc[index].reset_index()
-features = features.drop(columns=["model_name", "model"]).rename(columns={"family": "Family"})
-mlem = MLEM(distance="precomputed", random_seed=0, device="cuda" if torch.cuda.is_available() else "cpu")
-X = mlem._encode_df(features)
-features_dist = (X[None] - X[:, None]).abs().clip(0, 1).nan_to_num(0)
+all_features = metadata.merge(meta[["model_name", "family", "model"]].drop_duplicates())
+all_features = all_features.set_index(["family", "model"]).loc[index].reset_index()
+features_by_analysis = {
+    "preliminary": all_features.drop(columns=["model_name", "family", "model"]),
+    "main": all_features[
+        [
+            "Family",
+            "Architecture",
+            "Num. Parameters",
+            "Depth",
+            "Training Tokens",
+            "Activation",
+            "Tied Embeddings",
+        ]
+    ],
+}
+outputs = {
+    "preliminary": "think_alike/figures/dtw/preliminary_correlations.pdf",
+    "main": "think_alike/figures/dtw/main_correlations.pdf",
+}
+all_fis = {}
+for analysis, features in features_by_analysis.items():
+    mlem = MLEM(distance="precomputed", random_seed=0, device="cuda" if torch.cuda.is_available() else "cpu")
+    X = mlem._encode_df(features)
+    features_dist = (X[None] - X[:, None]).abs().clip(0, 1).nan_to_num(0)
 
-# %% Compute correlations
-triu_indices = np.triu_indices(features_dist.shape[0], k=1)
-df = pd.DataFrame(features_dist[*triu_indices], columns=features.columns)
-corrs = df.corr().iloc[1:, :-1]
-mask = np.triu(np.ones_like(corrs, dtype=bool), k=1)
-annot_corrs = corrs.round(2).where(corrs.abs() > 0.3, "")
-_, ax = plt.subplots(figsize=(6, 6))
-sns.heatmap(
-    corrs,
-    cmap="RdBu_r",
-    center=0,
-    mask=mask,
-    annot=annot_corrs,
-    fmt="",
-    vmax=1,
-    vmin=-1,
-    cbar_kws={
-        "orientation": "horizontal",
-        "location": "top",
-    },
-    square=True,
-    ax=ax,
-)
-colorbar = ax.collections[0].colorbar
-ticks = colorbar.get_ticks()
-colorbar.set_ticks(ticks[::2])
-colorbar.set_label("Correlation", labelpad=10)
-colorbar.ax.xaxis.set_label_position("top")
-colorbar.ax.xaxis.set_ticks_position("top")
-plt.xticks(rotation=45, ha="right")
-plt.savefig("think_alike/figures/dtw_feature_corrs.pdf", bbox_inches="tight")
+    triu_indices = np.triu_indices(features_dist.shape[0], k=1)
+    corrs = pd.DataFrame(features_dist[*triu_indices], columns=features.columns).corr().iloc[1:, :-1]
+    mask = np.triu(np.ones_like(corrs, dtype=bool), k=1)
+    annot_corrs = corrs.round(2).where(corrs.abs() > 0.3, "")
+    _, ax = plt.subplots(figsize=(10, 8) if analysis == "preliminary" else (6, 6))
+    sns.heatmap(
+        corrs,
+        cmap="RdBu_r",
+        center=0,
+        mask=mask,
+        annot=annot_corrs,
+        fmt="",
+        vmax=1,
+        vmin=-1,
+        cbar_kws={
+            "orientation": "horizontal",
+            "location": "top",
+        },
+        square=True,
+        ax=ax,
+    )
+    colorbar = ax.collections[0].colorbar
+    ticks = colorbar.get_ticks()
+    colorbar.set_ticks(ticks[::2])
+    colorbar.set_label("Correlation", labelpad=10)
+    colorbar.ax.xaxis.set_label_position("top")
+    colorbar.ax.xaxis.set_ticks_position("top")
+    plt.xticks(rotation=45, ha="right")
+    plt.savefig(outputs[analysis], bbox_inches="tight")
+    plt.close()
 
-# %% Compute FI for each CV fold
-fis = []
-for d in tqdm(dtw_sym):
-    mlem.fit(features_dist, d, feature_names=features.columns)
-    fi, s = mlem.score()
-    print(s.mean())
-    fis.append(fi.melt(var_name="Feature", value_name="Feature Importance"))
-fis = pd.concat(fis)
+    fis = []
+    scores = []
+    for cv, d in enumerate(tqdm(dtw_sym, desc=analysis)):
+        train = np.mean([other for k, other in enumerate(dtw_sym) if k != cv], axis=0)
+        mlem = MLEM(distance="precomputed", random_seed=0, device="cuda" if torch.cuda.is_available() else "cpu")
+        mlem.fit(features_dist, train, feature_names=features.columns)
+        fi, score = mlem.score(features_dist, d)
+        scores.append(score.mean())
+        fis.append(fi.melt(var_name="Feature", value_name="Feature Importance"))
+    print(analysis, np.mean(scores), np.std(scores))
+    all_fis[analysis] = pd.concat(fis)
 
-# %% Plot
+# %% Plot main model metadata FI
+fis = all_fis["main"]
 hue_order = fis.groupby("Feature")["Feature Importance"].mean().sort_values(ascending=False).index
 _, ax = plt.subplots(figsize=(1.25, 3))
 sns.barplot(
@@ -102,10 +124,9 @@ sns.barplot(
     ax=ax,
 )
 sns.despine(trim=True)
-
 ax.set_ylabel("")
 plt.subplots_adjust(right=1.1)
-plt.savefig("think_alike/figures/dtw_fi.pdf", bbox_inches="tight")
+plt.savefig("think_alike/figures/dtw/main_fi.pdf", bbox_inches="tight")
 
 # %% Heatmap
 df = sum(dtw_dfs) / len(dtw_dfs)
@@ -146,7 +167,7 @@ ax.set_xticks(family_ticks)
 ax.set_xticklabels(family_names, rotation=-45, va="top", ha="left")
 ax.set_yticks(family_ticks)
 ax.set_yticklabels(family_names, rotation=0)
-plt.savefig("think_alike/figures/dtw_heatmap.pdf", bbox_inches="tight")
+plt.savefig("think_alike/figures/dtw/heatmap.pdf", bbox_inches="tight")
 
 
 # %% MDS
@@ -168,8 +189,7 @@ all_coords = [
     for cv, d in zip(cvs, dtw_sym)
 ]
 summary = (
-    pd
-    .concat(all_coords)
+    pd.concat(all_coords)
     .reset_index()
     .groupby(["family", "model"], sort=False, observed=True)
     .agg(
@@ -317,7 +337,7 @@ ax.set_aspect("equal")
 ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
 for spine in ax.spines.values():
     spine.set_visible(False)
-plt.savefig("think_alike/figures/dtw_mds.pdf", bbox_inches="tight")
+plt.savefig("think_alike/figures/dtw/mds.pdf", bbox_inches="tight")
 
 # %% MDS release date
 from sklearn.linear_model import LinearRegression
@@ -377,7 +397,7 @@ cbar.ax.set_title("Release Date", weight="bold", loc="center", pad=20)
 
 ax.set(xlabel="MDS 1", ylabel="MDS 2", xticks=[], yticks=[], aspect="equal")
 sns.despine(left=True, bottom=True)
-plt.savefig("think_alike/figures/dtw_mds_release_date.pdf", bbox_inches="tight")
+plt.savefig("think_alike/figures/dtw/mds_release_date.pdf", bbox_inches="tight")
 
 # %% Projection on the line
 fig, ax = plt.subplots(figsize=(6, 5))
@@ -425,4 +445,4 @@ ax.legend(
     title_fontproperties={"weight": "bold"},
 )
 sns.despine(trim=True, left=True)
-plt.savefig("think_alike/figures/dtw_mds_projection.pdf", bbox_inches="tight")
+plt.savefig("think_alike/figures/dtw/mds_projection.pdf", bbox_inches="tight")
