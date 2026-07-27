@@ -41,34 +41,26 @@ class RSA(BaseModelSharing):
     """
 
     dataset: Dataset = Field(default_factory=lambda: Dataset())
-    estimate_correlations: EstimateCorrelations = Field(
-        default_factory=lambda: EstimateCorrelations()
-    )
+    estimate_correlations: EstimateCorrelations = Field(default_factory=lambda: EstimateCorrelations())
     representations_1: tp.Annotated[
-        SentenceRepresentations
-        | WordRepresentations
-        | SimulatedRepresentations
-        | SyntMov2024Representations,
+        SentenceRepresentations | WordRepresentations | SimulatedRepresentations | SyntMov2024Representations,
         Field(discriminator="level"),
     ] = Field(default_factory=lambda: SentenceRepresentations())
     representations_2: tp.Annotated[
-        SentenceRepresentations
-        | WordRepresentations
-        | SimulatedRepresentations
-        | SyntMov2024Representations,
+        SentenceRepresentations | WordRepresentations | SimulatedRepresentations | SyntMov2024Representations,
         Field(discriminator="level"),
     ] = Field(default_factory=lambda: SentenceRepresentations())
-    dataloader_builder: PairwiseDataloaderBuilder = Field(
-        default_factory=lambda: PairwiseDataloaderBuilder()
-    )
+    dataloader_builder: PairwiseDataloaderBuilder = Field(default_factory=lambda: PairwiseDataloaderBuilder())
     n_batches: int = 5
     device: tp.Optional[str] = None
 
+    infra: TaskInfra = TaskInfra()
     map_infra: MapInfra = MapInfra(folder=".cache")
     layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
         "device",
+        "infra",
         "layers_infra",
         "map_infra",
     )
@@ -121,6 +113,13 @@ class RSA(BaseModelSharing):
         logger.debug(f"RSA done. Mean r = {sum(correlations) / len(correlations):.4f}")
         return np.array(correlations)
 
+    @infra.apply
+    def run(self) -> "pd.DataFrame":
+        """Compute RSA for the configured representations."""
+        import pandas as pd
+
+        return pd.DataFrame(self.compute(), columns=["spearman"])
+
     @map_infra.apply(
         item_uid=str,
         exclude_from_cache_uid=(
@@ -129,9 +128,7 @@ class RSA(BaseModelSharing):
         ),
         cache_type="MemmapArrayFile",
     )
-    def run_layers(
-        self, layers: tp.Iterable[tp.Tuple[int, int]]
-    ) -> tp.Iterator["pd.DataFrame"]:
+    def run_layers(self, layers: tp.Iterable[tp.Tuple[int, int]]) -> tp.Iterator["pd.DataFrame"]:
         """
         Run RSA for multiple pairs of layers using MapInfra.
 
@@ -158,9 +155,7 @@ class RSA(BaseModelSharing):
 
         return self.run_all_layers((layer_1, layer_2))
 
-    @layers_infra.apply(
-        exclude_from_cache_uid=("representations_1.layer", "representations_2.layer")
-    )
+    @layers_infra.apply(exclude_from_cache_uid=("representations_1.layer", "representations_2.layer"))
     def run_all_layers(
         self,
     ) -> "pd.DataFrame":
@@ -192,9 +187,7 @@ class RSA(BaseModelSharing):
         )
 
         all_res = []
-        for (l1, l2), res in tqdm(
-            zip(pairs, self.run_layers(pairs)), total=len(pairs), desc="RSA Layers"
-        ):
+        for (l1, l2), res in tqdm(zip(pairs, self.run_layers(pairs)), total=len(pairs), desc="RSA Layers"):
             res = pd.DataFrame(res, columns=["spearman"])
             res["model_1"] = self.representations_1.model_name
             res["layer_1"] = l1
