@@ -1,4 +1,4 @@
-target: mlem.RSA
+target: mlem_method.RSA
 infra: layers_infra
 max_workers: 10
 

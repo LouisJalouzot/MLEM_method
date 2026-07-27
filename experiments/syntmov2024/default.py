@@ -2,8 +2,8 @@
 import os
 from pathlib import Path
 
-from mlem.feature_importance import FeatureImportance
-from mlem.syntmov2024_dataset import SyntMov2024Dataset
+from mlem_method.feature_importance import FeatureImportance
+from mlem_method.syntmov2024_dataset import SyntMov2024Dataset
 
 os.chdir(Path(__file__).parent.parent.parent)
 

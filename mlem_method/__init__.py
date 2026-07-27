@@ -1,6 +1,5 @@
 import warnings
 
-from . import viz  # auxiliary plotting/data utilities
 from .baselines import DecodingBaseline, EncodingBaseline
 from .dataset import Dataset
 from .estimate_correlations import EstimateCorrelations
@@ -36,5 +35,4 @@ __all__ = [
     "Trainer",
     "UnivariateAnalysis",
     "WordRepresentations",
-    "viz",
 ]

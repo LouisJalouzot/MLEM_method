@@ -1,4 +1,4 @@
-target: mlem.FeatureImportance
+target: mlem_method.FeatureImportance
 infra: layers_infra
 
 base_config:

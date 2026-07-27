@@ -8,9 +8,9 @@ import pytest
 import torch
 from exca import TaskInfra
 
-from mlem.dataset import Dataset
-from mlem.sentence_representations import SentenceRepresentations
-from mlem.word_representations import WordRepresentations
+from mlem_method.dataset import Dataset
+from mlem_method.sentence_representations import SentenceRepresentations
+from mlem_method.word_representations import WordRepresentations
 
 # ── constants ─────────────────────────────────────────────────────────────────
 
@@ -154,9 +154,7 @@ def test_sr_normalize_diff(sentences_csv, cache_dir):
 @pytest.mark.parametrize("model_name", MODELS)
 def test_sr_normalize_by_word(model_name, sentences_csv, cache_dir):
     """normalize_by_word=True works across token positions and completes without error."""
-    normed = _sr(
-        sentences_csv, cache_dir, model_name=model_name, normalize_by_word=True
-    )()
+    normed = _sr(sentences_csv, cache_dir, model_name=model_name, normalize_by_word=True)()
     assert normed.ndim == 2 and normed.shape[0] == len(SENTENCES)
 
 
@@ -209,9 +207,7 @@ def test_wr_normalize_by_word(model_name, words_csv, cache_dir):
     words = np.array([r["word"] for r in _words_rows()])
     for w in np.unique(words):
         group_sum = out[words == w].sum(dim=0)
-        assert group_sum.abs().max().item() < 1e-4, (
-            f"Word '{w}' group sum not zero after normalize_by_word"
-        )
+        assert group_sum.abs().max().item() < 1e-4, f"Word '{w}' group sum not zero after normalize_by_word"
 
 
 def test_wr_normalize_by_word_differs(words_csv, cache_dir):

@@ -44,15 +44,11 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max
     base_infra = reduce(getattr, infra_path_split, base_class)
 
     # Create tasks and submit to job array
-    logger.info(
-        f"Submitting {n_configs} tasks to {base_class.__class__.__name__}.{infra_path}"
-    )
+    logger.info(f"Submitting {n_configs} tasks to {base_class.__class__.__name__}.{infra_path}")
     logger.trace(f"Infra config: {base_infra.model_dump_json(indent=2)}")
     with base_infra.job_array(max_workers=max_workers or n_configs) as array:
         with tqdm(total=n_configs, desc="Creating tasks") as pbar:
-            for flat_config, task in Parallel(
-                n_jobs=-2, return_as="generator", prefer="threads"
-            )(
+            for flat_config, task in Parallel(n_jobs=-2, return_as="generator", prefer="threads")(
                 delayed(
                     lambda flat_config, config: (
                         flat_config,
@@ -81,9 +77,7 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max
             exc = job.exception()
             if exc is not None:
                 has_error = True
-                logger.error(
-                    f"Config: {flat_configs[idx]} | Cache: {Path(task_infra.uid_folder()).resolve()}"
-                )
+                logger.error(f"Config: {flat_configs[idx]} | Cache: {Path(task_infra.uid_folder()).resolve()}")
                 logger.error(exc)
             if fetch_results:
                 results.append(job.result())
@@ -100,7 +94,7 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max
 
 
 def main(config: dict = {}):
-    target = config.get("target", "mlem.FeatureImportance")
+    target = config.get("target", "mlem_method.FeatureImportance")
     module_name, class_name = target.rsplit(".", 1)
     module = importlib.import_module(module_name)
     TargetClass = getattr(module, class_name)
