@@ -51,6 +51,19 @@ DESIGN = {
     "rwkv7": ("RWKV-7", "Trie", np.nan, "LayerNorm", "Multilingual"),
 }
 
+BLOCK_TYPE = {
+    "gpt2": "Ungated FFN",
+    "opt": "Ungated FFN",
+    "gpt_neox": "Ungated FFN",
+    "olmo2": "SwiGLU FFN",
+    "llama": "SwiGLU FFN",
+    "ministral3": "SwiGLU FFN",
+    "qwen3": "SwiGLU FFN",
+    "mamba": "SSM gate",
+    "mamba2": "SSM gate",
+    "rwkv7": "RWKV channel mix",
+}
+
 
 def get_first_attr(obj, *names):
     for name in names:
@@ -89,7 +102,8 @@ def get_model_metadata(model_id, architecture, n_params_B, n_tokens_B):
         "Positional Encoding": positional,
         "Attention Type": attention,
         "Normalization": normalization,
-        "Activation": activation,
+        "Non-linearity": activation,
+        "FFN / Gating Type": BLOCK_TYPE[model_type],
         "Tied Embeddings": str(config.get("tie_word_embeddings", model_type in {"gpt2", "opt"})),
     }
 

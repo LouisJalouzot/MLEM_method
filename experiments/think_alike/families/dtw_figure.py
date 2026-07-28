@@ -57,7 +57,7 @@ features_by_analysis = {
             "Num. Parameters",
             "Depth",
             "Training Tokens",
-            "Activation",
+            "Non-linearity",
             "Tied Embeddings",
         ]
     ],
@@ -111,30 +111,33 @@ for analysis, features in features_by_analysis.items():
         mlem.fit(features_dist, train, feature_names=features.columns)
         fi, score = mlem.score(features_dist, d)
         scores.append(score.mean())
-        fis.append(fi.melt(var_name="Feature", value_name="Feature Importance"))
+        fis.append(fi.melt(var_name="Feature", value_name="Feature Importance").assign(cv=cv))
     print(analysis, np.mean(scores), np.std(scores))
     all_fis[analysis] = pd.concat(fis)
 
-# %% Plot main model metadata FI
-fis = all_fis["main"]
-hue_order = fis.groupby("Feature")["Feature Importance"].mean().sort_values(ascending=False).index
-_, ax = plt.subplots(figsize=(1.25, 3))
-sns.barplot(
-    fis,
-    x="Feature Importance",
-    y="Feature",
-    hue="Feature",
-    order=hue_order,
-    hue_order=hue_order,
-    legend=False,
-    orient="h",
-    errorbar="sd",
-    ax=ax,
-)
-sns.despine(trim=True)
-ax.set_ylabel("")
-plt.subplots_adjust(right=1.1)
-plt.savefig(args.output_dir / "main_fi.pdf", bbox_inches="tight")
+# %% Plot model metadata FI
+for analysis, fis in all_fis.items():
+    fis = fis.groupby(["cv", "Feature"], as_index=False)["Feature Importance"].mean()
+    print(analysis, fis.groupby("Feature")["Feature Importance"].agg(["mean", "std"]).sort_values("mean", ascending=False))
+    hue_order = fis.groupby("Feature")["Feature Importance"].mean().sort_values(ascending=False).index
+    _, ax = plt.subplots(figsize=(2.25 if analysis == "preliminary" else 1.5, 5 if analysis == "preliminary" else 3.25))
+    sns.barplot(
+        fis,
+        x="Feature Importance",
+        y="Feature",
+        hue="Feature",
+        order=hue_order,
+        hue_order=hue_order,
+        legend=False,
+        orient="h",
+        errorbar="sd",
+        ax=ax,
+    )
+    sns.despine(trim=True)
+    ax.set_ylabel("")
+    plt.subplots_adjust(right=1.1)
+    plt.savefig(args.output_dir / f"{analysis}_fi.pdf", bbox_inches="tight")
+    plt.close()
 
 # %% Heatmap
 df = sum(dtw_dfs) / len(dtw_dfs)
