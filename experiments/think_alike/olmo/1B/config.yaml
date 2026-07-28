@@ -12,6 +12,18 @@ base_config:
       level: sentence
       token_aggregation: last
       model_name: allenai/OLMo-2-0425-1B
+  layers_infra:
+    folder: .cache
+    cluster: slurm
+    job_name: olmo_1B
+    logs: .cache/logs/olmo_1B/%j
+    cpus_per_task: 24
+    gpus_per_node: 1
+    timeout_min: 1200
+    slurm_constraint: h100
+    slurm_account: ioj@h100
+    slurm_additional_parameters:
+      hint: nomultithread
 
 grid_search:
   trainer.representations.revision:

@@ -12,7 +12,7 @@ base_config:
     token_aggregation: last
   map_infra:
     cluster: processpool
-    max_jobs: 12
+    max_jobs: 8
 
 grid_search:
   representations_1.model_name:

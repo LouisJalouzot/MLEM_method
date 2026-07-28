@@ -1,6 +1,5 @@
 target: mlem_method.RSA
 infra: layers_infra
-max_workers: 10
 
 base_config:
   dataset:
@@ -11,6 +10,21 @@ base_config:
   representations_2:
     level: sentence
     token_aggregation: last
+  map_infra:
+    cluster: processpool
+    max_jobs: 12
+  layers_infra:
+    folder: .cache
+    cluster: slurm
+    job_name: rsa
+    logs: .cache/logs/rsa_pythia/%j
+    cpus_per_task: 24
+    gpus_per_node: 1
+    timeout_min: 1200
+    slurm_constraint: h100
+    slurm_account: ioj@h100
+    slurm_additional_parameters:
+      hint: nomultithread
 
 grid_search:
   representations_1.model_name:

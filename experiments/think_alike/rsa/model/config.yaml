@@ -14,7 +14,16 @@ base_config:
     layer: null
   infra:
     folder: .cache
-    mode: retry
+    cluster: slurm
+    job_name: rsa_model
+    logs: .cache/logs/rsa_model/%j
+    cpus_per_task: 24
+    gpus_per_node: 1
+    timeout_min: 1200
+    slurm_constraint: h100
+    slurm_account: ioj@h100
+    slurm_additional_parameters:
+      hint: nomultithread
 
 grid_search:
   representations_1.model_name: &models

@@ -11,6 +11,18 @@ base_config:
     representations:
       level: sentence
       token_aggregation: last
+  layers_infra:
+    folder: .cache
+    cluster: slurm
+    job_name: families
+    logs: .cache/logs/families/%j
+    cpus_per_task: 48
+    gpus_per_node: 2
+    timeout_min: 1200
+    slurm_constraint: h100
+    slurm_account: ioj@h100
+    slurm_additional_parameters:
+      hint: nomultithread
 
 grid_search:
   trainer.representations.model_name:
@@ -111,8 +123,8 @@ grid_search:
     - EleutherAI/pythia-6.9b-deduped
     - EleutherAI/pythia-12b-deduped
 
-    - allenai/OLMo-1B-0724-hf
-    - allenai/OLMo-7B-0724-hf
+    # - allenai/OLMo-1B-0724-hf
+    # - allenai/OLMo-7B-0724-hf
 
     - allenai/OLMo-2-0425-1B
     - allenai/OLMo-2-1124-7B
@@ -167,10 +179,10 @@ grid_search:
     - RWKV/v6-Finch-7B-HF
     - RWKV/v6-Finch-14B-HF
 
-    - RWKV/RWKV7-Goose-World2.8-0.1B-HF
-    - RWKV/RWKV7-Goose-World2.9-0.4B-HF
-    - RWKV/RWKV7-Goose-World3-1.5B-HF
-    - RWKV/RWKV7-Goose-World3-2.9B-HF
+    # - RWKV/RWKV7-Goose-World2.8-0.1B-HF
+    # - RWKV/RWKV7-Goose-World2.9-0.4B-HF
+    # - RWKV/RWKV7-Goose-World3-1.5B-HF
+    # - RWKV/RWKV7-Goose-World3-2.9B-HF
 
     - fla-hub/rwkv7-191M-world
     - fla-hub/rwkv7-0.4B-world
