@@ -2,6 +2,7 @@ import argparse
 import importlib
 import math
 import sys
+from contextlib import nullcontext
 from functools import reduce
 from itertools import product
 from pathlib import Path
@@ -26,7 +27,7 @@ def yield_grid_search(grid_config):
         yield flat_config, unflatten(flat_config)
 
 
-def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max_workers=None):
+def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max_workers=None, sequential=False):
     """Run grid search with job array support.
 
     Args:
@@ -35,6 +36,7 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max
         infra_path: Dotted path to the infra to use (e.g., 'trainer.representations.infra').
         fetch_results: If True, collect and return results. If False, just wait for completion.
         max_workers: Maximum number of workers. Defaults to n_configs if not specified.
+        sequential: Run each task locally, cancelling its pending cluster job first.
     """
     flat_configs = []
     n_configs = math.prod(len(v) for v in grid_search.values())
@@ -43,10 +45,11 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max
     infra_path_split = infra_path.split(".")
     base_infra = reduce(getattr, infra_path_split, base_class)
 
-    # Create tasks and submit to job array
-    logger.info(f"Submitting {n_configs} tasks to {base_class.__class__.__name__}.{infra_path}")
+    # Create tasks and optionally submit them to a job array
+    logger.info(f"Creating {n_configs} tasks for {base_class.__class__.__name__}.{infra_path}")
     logger.trace(f"Infra config: {base_infra.model_dump_json(indent=2)}")
-    with base_infra.job_array(max_workers=max_workers or n_configs) as array:
+    context = nullcontext([]) if sequential else base_infra.job_array(max_workers=max_workers or n_configs)
+    with context as array:
         with tqdm(total=n_configs, desc="Creating tasks") as pbar:
             for flat_config, task in Parallel(n_jobs=-2, return_as="generator", prefer="threads")(
                 delayed(
@@ -60,8 +63,8 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max
                 flat_configs.append(flat_config)
                 array.append(task)
                 pbar.update(1)
-        logger.info("Submitting tasks to job array")
-    logger.info("All tasks submitted to job array")
+        if not sequential:
+            logger.info("Submitting tasks to job array")
 
     # Wait for completion and collect results if necessary
     results = []
@@ -72,6 +75,11 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max
     for idx, task in enumerate(tqdm(array, desc=desc)):
         task_infra = getattr(task, infra_path_split[-1])
         try:
+            if sequential:
+                if task_infra.status() == "running":
+                    task_infra.clear_job()
+                task = task_infra.clone_obj(**{infra_path_split[-1]: {"cluster": None}})
+                task_infra = getattr(task, infra_path_split[-1])
             job = task_infra.job()
             # Wait for completion and log exception if any
             exc = job.exception()
@@ -110,6 +118,7 @@ def main(config: dict = {}):
             infra_path=infra_prepare,
             fetch_results=False,
             max_workers=config.get("max_workers"),
+            sequential=config.get("sequential", False),
         )
 
     logger.info("Running grid search")
@@ -118,6 +127,7 @@ def main(config: dict = {}):
         config["grid_search"],
         infra_path=infra_path,
         max_workers=config.get("max_workers"),
+        sequential=config.get("sequential", False),
     )
 
     all_dfs = []
@@ -141,6 +151,7 @@ def main(config: dict = {}):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config", nargs="*", type=str, default=None)
+    parser.add_argument("--sequential", action="store_true", help="Run jobs one after another on this node.")
     parser.add_argument(
         "--log-level",
         type=str,
@@ -159,6 +170,7 @@ if __name__ == "__main__":
             config_file = Path(config_file)
             with open(config_file, "r") as f:
                 config = yaml.safe_load(f)
+            config["sequential"] = args.sequential
             for i, df in enumerate(main(config)):
                 df.to_parquet(config_file.parent / f"{i}.parquet")
     else:
