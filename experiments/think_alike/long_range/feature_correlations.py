@@ -5,8 +5,8 @@ from mlem_method import EstimateCorrelations
 from mlem_method.viz import *
 
 parser = ArgumentParser()
-parser.add_argument("--dataset", default="datasets/long_range_agreement.csv")
-parser.add_argument("--output-dir", type=Path, default=Path("think_alike/figures/long_range"))
+parser.add_argument("--dataset", default="datasets/relative_clause.csv")
+parser.add_argument("--output-dir", type=Path, default=Path("think_alike/figures"))
 args = parser.parse_args()
 args.output_dir.mkdir(parents=True, exist_ok=True)
 

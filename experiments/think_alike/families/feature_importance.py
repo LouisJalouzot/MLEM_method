@@ -1,7 +1,15 @@
 # %% Load data
+from argparse import ArgumentParser
+
 from mlem_method.viz import *
 
-i, meta = load_df(Path(__file__).parent / "0.parquet", to_keep=to_keep)
+parser = ArgumentParser()
+parser.add_argument("--input", type=Path, default=Path(__file__).parent / "0.parquet")
+parser.add_argument("--output-dir", type=Path, default=Path("think_alike/figures"))
+args = parser.parse_args()
+args.output_dir.mkdir(parents=True, exist_ok=True)
+
+i, meta = load_df(args.input, to_keep=to_keep)
 
 print("Top features:", top_features := select_top_features(i))
 df_plot = i[i["Feature"].isin(top_features)]
@@ -82,4 +90,4 @@ sns.move_legend(
     handlelength=3,
 )
 g.fig.subplots_adjust(top=0.975, wspace=0.05, hspace=0.13)
-plt.savefig("think_alike/figures/feature_importance.pdf", bbox_inches="tight")
+plt.savefig(args.output_dir / "feature_importance.pdf", bbox_inches="tight")
