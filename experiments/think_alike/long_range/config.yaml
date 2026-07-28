@@ -16,8 +16,8 @@ base_config:
     cluster: slurm
     job_name: long_range
     logs: .cache/logs/long_range/%j
-    cpus_per_task: 48
-    gpus_per_node: 2
+    cpus_per_task: 24
+    gpus_per_node: 1
     timeout_min: 1200
     slurm_constraint: h100
     slurm_account: ioj@h100
