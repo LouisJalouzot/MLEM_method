@@ -1,0 +1,72 @@
+target: mlem_method.FeatureImportance
+infra: layers_infra
+
+base_config:
+  dataset:
+    path: datasets/long_range_agreement_2.csv
+  trainer:
+    device: cuda
+    dataloader_builder:
+      cv: 5
+    representations:
+      level: sentence
+      token_aggregation: last
+  layers_infra:
+    folder: .cache
+    cluster: slurm
+    job_name: long_range_2
+    logs: .cache/logs/long_range_2/%j
+    cpus_per_task: 24
+    gpus_per_node: 1
+    timeout_min: 120
+    slurm_constraint: h100
+    slurm_account: ioj@h100
+    slurm_additional_parameters:
+      qos: qos_gpu_h100-dev
+      hint: nomultithread
+
+grid_search:
+  trainer.representations.model_name:
+    - openai-community/gpt2
+    - openai-community/gpt2-medium
+    - openai-community/gpt2-large
+    - openai-community/gpt2-xl
+    - facebook/opt-125m
+    - facebook/opt-1.3b
+    - facebook/opt-2.7b
+    - facebook/opt-6.7b
+    - facebook/opt-13b
+    - EleutherAI/pythia-410m-deduped
+    - EleutherAI/pythia-1b-deduped
+    - EleutherAI/pythia-1.4b-deduped
+    - EleutherAI/pythia-6.9b-deduped
+    - EleutherAI/pythia-12b-deduped
+    - allenai/OLMo-2-0425-1B
+    - allenai/OLMo-2-1124-7B
+    - allenai/OLMo-2-1124-13B
+    - meta-llama/Llama-3.2-1B
+    - meta-llama/Llama-3.2-3B
+    - meta-llama/Llama-3.1-8B
+    - mistralai/Ministral-3-3B-Base-2512
+    - mistralai/Ministral-3-8B-Base-2512
+    - mistralai/Ministral-3-14B-Base-2512
+    - Qwen/Qwen3-0.6B-Base
+    - Qwen/Qwen3-1.7B-Base
+    - Qwen/Qwen3-4B-Base
+    - Qwen/Qwen3-8B-Base
+    - Qwen/Qwen3-14B-Base
+    - state-spaces/mamba-130m-hf
+    - state-spaces/mamba-370m-hf
+    - state-spaces/mamba-790m-hf
+    - state-spaces/mamba-1.4b-hf
+    - state-spaces/mamba-2.8b-hf
+    - AntonV/mamba2-130m-hf
+    - AntonV/mamba2-370m-hf
+    - AntonV/mamba2-780m-hf
+    - AntonV/mamba2-1.3b-hf
+    - AntonV/mamba2-2.7b-hf
+    - fla-hub/rwkv7-191M-world
+    - fla-hub/rwkv7-0.4B-world
+    - fla-hub/rwkv7-1.5B-world
+    - fla-hub/rwkv7-2.9B-world
+    - fla-hub/rwkv7-7.2B-g0a
