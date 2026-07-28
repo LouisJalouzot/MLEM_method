@@ -193,6 +193,12 @@ def test_wr_output_shape(model_name, words_csv, cache_dir):
     assert out.ndim == 2 and out.shape[0] == len(rows)
 
 
+@pytest.mark.parametrize("agg", ["mean", "max", "min", "first", "last"])
+def test_wr_token_aggregation(agg, words_csv, cache_dir):
+    out = _wr(words_csv, cache_dir, model_name=BERT, token_aggregation=agg)()
+    assert out.shape[0] == len(_words_rows()) and out.ndim == 2
+
+
 @pytest.mark.parametrize("model_name", MODELS)
 def test_wr_normalize_by_word(model_name, words_csv, cache_dir):
     """After normalize_by_word, each word type's representations sum to ~0 per output unit."""

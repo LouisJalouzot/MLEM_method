@@ -39,6 +39,7 @@ def compute_sentence_representations(
         add_special_tokens=add_special_tokens,
         untrained=untrained,
         revision=revision,
+        token_aggregation=None if token_aggregation == "none" else token_aggregation,
     )
     if token_aggregation == "none":
         mask = hidden_states.get_mask()
@@ -53,9 +54,8 @@ def compute_sentence_representations(
         n_layers = hidden_states.shape[2]
         # (n_sentences, n_layers+1, hidden_size)
         return data.swapaxes(1, 2).reshape(n_stimuli, n_layers, -1)
-    else:
-        # (n_sentences, n_layers+1, hidden_size)
-        return aggregate_masked_tensor(hidden_states, dim=1, method=token_aggregation)
+    # (n_sentences, n_layers+1, hidden_size)
+    return hidden_states
 
 
 class SentenceRepresentations(BaseModel):

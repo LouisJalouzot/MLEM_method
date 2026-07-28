@@ -13,7 +13,7 @@ from loguru import logger
 from pydantic import ConfigDict, Field
 
 from .dataset import Dataset
-from .hidden_states import aggregate_masked_tensor, compute_hidden_states
+from .hidden_states import compute_hidden_states
 from .utils import BaseModel, get_device, seed_from_basemodel
 
 
@@ -82,57 +82,24 @@ def compute_word_representations(
         ```
     """
     import torch
-    from torch.masked import masked_tensor
 
     sentences = words.sentence.tolist()
     # (n_words)
     word_start_index = torch.tensor(words.start_idx.values, dtype=torch.long)
     word_end_index = torch.tensor(words.end_idx.values, dtype=torch.long)
 
-    # (n_words, max_seq_len, n_layers+1, hidden_size)
-    # and
-    # (n_words, max_seq_len, 2)
-    hidden_states, offsets_mapping = compute_hidden_states(
+    # (n_words, n_layers+1, hidden_size)
+    return compute_hidden_states(
         sentences,
         model_name,
         batch_size,
         device,
         add_special_tokens,
-        return_offsets_mapping=True,
         untrained=untrained,
         revision=revision,
+        token_aggregation=token_aggregation,
+        char_spans=(word_start_index, word_end_index),
     )
-    # Get rid of original attention masking
-    hidden_states = hidden_states.get_data()
-
-    # Get a flag for special tokens
-    # (n_words, max_seq_len)
-    special_tokens = offsets_mapping[:, :, 1] == 0
-
-    # Get a mask for tokens and words correspondance
-    # (n_words, max_seq_len)
-    beg_tok_in_word = word_start_index[:, None] <= offsets_mapping[:, :, 0]
-    end_tok_in_word = offsets_mapping[:, :, 1] <= word_end_index[:, None]
-
-    # Aggregate into a single mask
-    # (n_words, max_seq_len)
-    token_word_mask = beg_tok_in_word * end_tok_in_word * ~special_tokens
-
-    # Broadcast
-    # (n_words, max_seq_len, 1, 1)
-    token_word_mask = token_word_mask[:, :, None, None]
-    # (n_words, max_seq_len, n_layers+1, hidden_size)
-    token_word_mask = token_word_mask.broadcast_to(hidden_states.shape)
-    # Build new masked tensor
-    hidden_states = masked_tensor(hidden_states, token_word_mask)
-
-    # (n_words, n_layers+1, hidden_size)
-    hidden_states = aggregate_masked_tensor(
-        data=hidden_states, dim=1, method=token_aggregation
-    )
-
-    # (n_words, n_layers+1, hidden_size)
-    return hidden_states
 
 
 class WordRepresentations(BaseModel):
