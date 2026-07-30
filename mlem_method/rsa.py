@@ -38,6 +38,10 @@ class RSA(BaseModelSharing):
 
     The dataset is shared across estimate_correlations, representations_1 and
     representations_2 via BaseModelSharing._shared_fields_config.
+
+    Since RSA is symmetric, the two complete representation configurations are
+    kept in a canonical order. Reversing models (and their associated layers or
+    other settings) therefore produces the same cache UID and random seed.
     """
 
     dataset: Dataset = Field(default_factory=lambda: Dataset())
@@ -78,6 +82,12 @@ class RSA(BaseModelSharing):
 
     def model_post_init(self, context):
         super().model_post_init(context)
+        # Sort whole configurations so model-specific settings, including layers,
+        # move with their model. Exca's clone_obj runs this before computing the UID.
+        self.representations_1, self.representations_2 = sorted(
+            (self.representations_1, self.representations_2),
+            key=lambda representations: representations.model_dump_json(),
+        )
         assert self.dataloader_builder.cv is None
 
     def compute(self) -> np.ndarray:
