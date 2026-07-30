@@ -38,5 +38,5 @@ def test_rsa_job_array_canonicalizes_model_layer_pairs() -> None:
             )
             for job in jobs
         ] == [("model-a", 7, "model-b", 3)] * 2
-        assert jobs[0].layers_infra.uid() == jobs[1].layers_infra.uid()
+        assert jobs[0].infra.uid() == jobs[1].infra.uid()
         raise RuntimeError("stop")  # avoid submitting the test jobs
