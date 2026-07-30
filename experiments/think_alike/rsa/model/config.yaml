@@ -2,6 +2,7 @@ target: mlem_method.RSA
 infra: infra
 
 base_config:
+  device: cpu
   dataset:
     path: datasets/relative_clause.csv
   representations_1:
@@ -17,8 +18,8 @@ base_config:
     cluster: slurm
     job_name: rsa_model
     logs: .cache/logs/rsa_model/%j
-    cpus_per_task: 24
-    gpus_per_node: 1
+    cpus_per_task: 48
+    gpus_per_node: 2
     timeout_min: 1200
     slurm_constraint: h100
     slurm_account: ioj@h100

@@ -76,7 +76,11 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max
         task_infra = getattr(task, infra_path_split[-1])
         try:
             if sequential:
-                if task_infra.status() == "running":
+                try:
+                    cached = task_infra.status() == "completed"
+                except FileNotFoundError:
+                    cached = False
+                if not cached:
                     task_infra.clear_job()
                 task = task_infra.clone_obj(**{infra_path_split[-1]: {"cluster": None}})
                 task_infra = getattr(task, infra_path_split[-1])
