@@ -48,7 +48,11 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max
     # Create tasks and optionally submit them to a job array
     logger.info(f"Creating {n_configs} tasks for {base_class.__class__.__name__}.{infra_path}")
     logger.trace(f"Infra config: {base_infra.model_dump_json(indent=2)}")
-    context = nullcontext([]) if sequential else base_infra.job_array(max_workers=max_workers or n_configs)
+    if sequential:
+        context = nullcontext([])
+    else:
+        context = base_infra.job_array(max_workers=max_workers or n_configs, allow_repeated_tasks=True)
+
     with context as array:
         with tqdm(total=n_configs, desc="Creating tasks") as pbar:
             for flat_config, task in Parallel(n_jobs=-2, return_as="generator", prefer="threads")(
