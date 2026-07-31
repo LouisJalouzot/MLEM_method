@@ -14,78 +14,143 @@ parser.add_argument("--output-dir", type=Path, default=Path("think_alike/figures
 args = parser.parse_args()
 args.output_dir.mkdir(parents=True, exist_ok=True)
 
-i, meta = load_df(args.input, to_keep=to_keep)
-i_pivot = i.pivot_table(
-    index=["cv", "family", "model", "layer"],
-    columns="Feature",
-    values="FI",
-)
+raw = pd.read_parquet(args.input)
+model_columns = [column for column in raw if column.endswith("model_name")]
+rsa_input = "spearman" in raw and len(model_columns) == 2
 
-# %% Compute DTW distance per CV fold
-cvs = i_pivot.index.get_level_values("cv").unique().tolist()
-index = meta[["family", "model"]].drop_duplicates()
-index = pd.MultiIndex.from_frame(index)
-
-dtw_dfs = [
-    pd.DataFrame(
-        np.full((len(index), len(index)), fill_value=np.nan),
-        index=index,
-        columns=index,
+if rsa_input:
+    left, right = model_columns
+    models = raw[left].drop_duplicates()
+    _, meta = clean_df(pd.DataFrame({"model_name": models}), meta_cols=["model_name"])
+    index = pd.MultiIndex.from_frame(meta[["family", "model"]])
+    raw["cv"] = raw.groupby([left, right]).cumcount()
+    cvs = raw["cv"].unique().tolist()
+    dtw_dfs = []
+    for _, batch in raw.groupby("cv"):
+        correlations = batch.pivot(index=left, columns=right, values="spearman").loc[models, models]
+        correlations = ((correlations + correlations.T) / 2).clip(-1, 1)
+        dtw_dfs.append(pd.DataFrame(np.sqrt(2 * (1 - correlations.to_numpy())), index=index, columns=index))
+else:
+    i, meta = load_df(args.input, to_keep=to_keep)
+    i_pivot = i.pivot_table(
+        index=["cv", "family", "model", "layer"],
+        columns="Feature",
+        values="FI",
     )
-    for _ in cvs
-]
-pbar = tqdm(total=len(cvs) * len(index) * (len(index) + 1) // 2, desc="Computing DTW")
-with pbar:
-    for cv in cvs:
-        for k, (family_1, model_1) in enumerate(index):
-            for family_2, model_2 in index[k:]:
-                x = i_pivot.loc[cv, family_1, model_1].values
-                y = i_pivot.loc[cv, family_2, model_2].values
-                dtw_dfs[cv].loc[(family_2, model_2), (family_1, model_1)] = dtw(x, y).normalizedDistance
-                pbar.update(1)
+    cvs = i_pivot.index.get_level_values("cv").unique().tolist()
+    index = pd.MultiIndex.from_frame(meta[["family", "model"]].drop_duplicates())
+    dtw_dfs = [
+        pd.DataFrame(
+            np.full((len(index), len(index)), fill_value=np.nan),
+            index=index,
+            columns=index,
+        )
+        for _ in cvs
+    ]
+    pbar = tqdm(total=len(cvs) * len(index) * (len(index) + 1) // 2, desc="Computing DTW")
+    with pbar:
+        for cv in cvs:
+            for k, (family_1, model_1) in enumerate(index):
+                for family_2, model_2 in index[k:]:
+                    x = i_pivot.loc[cv, family_1, model_1].values
+                    y = i_pivot.loc[cv, family_2, model_2].values
+                    dtw_dfs[cv].loc[(family_2, model_2), (family_1, model_1)] = dtw(x, y).normalizedDistance
+                    pbar.update(1)
+
+
+def largest_correlation(left, right):
+    correlations = np.corrcoef(left.T, right.T)[: left.shape[1], left.shape[1] :]
+    return correlations.flat[np.abs(correlations).argmax()]
+
+
+def grouped_model_importance(mlem, X, Y, groups, n_permutations=100, seed=0):
+    """Jointly permute grouped metadata at the model, rather than model-pair, level."""
+    device = mlem.device
+    X = X.to(device)
+    Y = torch.as_tensor(np.asarray(Y), dtype=torch.float32, device=device)
+    rows, columns = torch.triu_indices(len(X), len(X), offset=1, device=device)
+    X_pairs = X[rows, columns]
+    Y_pairs = Y[rows, columns]
+    model = mlem.model_.to(device)
+    baseline = model.spearman(model(X_pairs), Y_pairs).item()
+    generator = torch.Generator(device=device).manual_seed(seed)
+    importances = {}
+    for group, members in groups.items():
+        indices = torch.tensor([mlem.feature_names.index(member) for member in members], device=device)
+        values = []
+        for _ in range(n_permutations):
+            order = torch.randperm(len(X), device=device, generator=generator)
+            permuted = X_pairs.clone()
+            permuted[:, indices] = X[order[rows], order[columns]][:, indices]
+            values.append(baseline - model.spearman(model(permuted), Y_pairs).item())
+        importances[group] = values
+    return pd.DataFrame(importances), pd.Series([baseline] * n_permutations, name="spearman")
+
 
 # %% Model metadata analyses
 dtw_sym = [d.combine_first(d.T).fillna(0.0) for d in dtw_dfs]
 all_features = metadata.merge(meta[["model_name", "family", "model"]].drop_duplicates())
 all_features = all_features.set_index(["family", "model"]).loc[index].reset_index()
+preliminary = all_features.drop(columns=["model_name", "family", "model"])
+# Release Date is a proxy, Depth / Width is derived, and Attention Type and FFN / Gating Type cross the correlation threshold.
+main_groups = {
+    "Family": ["Family", "Normalization", "Non-linearity"],
+    "Architecture": ["Architecture", "Positional Encoding", "Tokenizer Type"],
+    "Model Size": ["Num. Parameters", "Width"],
+    "Depth": ["Depth"],
+    "Data Scale": ["Training Tokens", "Vocabulary Size", "Language Focus"],
+    "Tied Embeddings": ["Tied Embeddings"],
+}
 features_by_analysis = {
-    "preliminary": all_features.drop(columns=["model_name", "family", "model"]),
-    "main": all_features[
-        [
-            "Family",
-            "Architecture",
-            "Num. Parameters",
-            "Depth",
-            "Training Tokens",
-            "Non-linearity",
-            "Tied Embeddings",
-        ]
-    ],
+    "preliminary": preliminary,
+    "main": all_features[[feature for members in main_groups.values() for feature in members]],
+}
+groups_by_analysis = {
+    "preliminary": {feature: [feature] for feature in preliminary.columns},
+    "main": main_groups,
 }
 outputs = {
     "preliminary": args.output_dir / "preliminary_correlations.pdf",
     "main": args.output_dir / "main_correlations.pdf",
 }
 all_fis = {}
-for analysis, features in features_by_analysis.items():
+analyses = ["main"] if rsa_input else ["preliminary", "main"]
+for analysis in analyses:
+    features = features_by_analysis[analysis]
+    groups = groups_by_analysis[analysis]
+    features = features.copy()
+    categorical = features.select_dtypes(exclude="number").columns
+    features[categorical] = features[categorical].fillna("None")
     mlem = MLEM(distance="precomputed", random_seed=0, device="cuda" if torch.cuda.is_available() else "cpu")
     X = mlem._encode_df(features)
     features_dist = (X[None] - X[:, None]).abs().clip(0, 1).nan_to_num(0)
-
     triu_indices = np.triu_indices(features_dist.shape[0], k=1)
-    corrs = pd.DataFrame(features_dist[*triu_indices], columns=features.columns).corr().iloc[1:, :-1]
-    mask = np.triu(np.ones_like(corrs, dtype=bool), k=1)
-    annot_corrs = corrs.round(2).where(corrs.abs() > 0.3, "")
+    vectors = pd.DataFrame(features_dist[*triu_indices], columns=features.columns)
+    if analysis == "main":
+        corrs = pd.DataFrame(np.eye(len(groups)), index=groups, columns=groups)
+        for left, left_members in groups.items():
+            for right, right_members in groups.items():
+                if left != right:
+                    corrs.loc[left, right] = largest_correlation(
+                        vectors[left_members].to_numpy(), vectors[right_members].to_numpy()
+                    )
+        label = "Largest Correlation"
+    else:
+        corrs = vectors.corr()
+        label = "Correlation"
+    cmap, vmin = "RdBu_r", -1
+    mask = np.triu(np.ones_like(corrs, dtype=bool))
+    annot_corrs = corrs.round(2).where((corrs.abs() > 0.3) & ~mask, "")
     _, ax = plt.subplots(figsize=(10, 8) if analysis == "preliminary" else (6, 6))
     sns.heatmap(
         corrs,
-        cmap="RdBu_r",
+        cmap=cmap,
         center=0,
         mask=mask,
         annot=annot_corrs,
         fmt="",
         vmax=1,
-        vmin=-1,
+        vmin=vmin,
         cbar_kws={
             "orientation": "horizontal",
             "location": "top",
@@ -96,23 +161,33 @@ for analysis, features in features_by_analysis.items():
     colorbar = ax.collections[0].colorbar
     ticks = colorbar.get_ticks()
     colorbar.set_ticks(ticks[::2])
-    colorbar.set_label("Correlation", labelpad=10)
+    colorbar.set_label(label, labelpad=10)
     colorbar.ax.xaxis.set_label_position("top")
     colorbar.ax.xaxis.set_ticks_position("top")
     plt.xticks(rotation=45, ha="right")
-    plt.savefig(outputs[analysis], bbox_inches="tight")
+    plt.savefig(outputs[analysis], metadata={"CreationDate": None})
     plt.close()
 
     fis = []
     scores = []
-    for cv, d in enumerate(tqdm(dtw_sym, desc=analysis)):
-        train = np.mean([other for k, other in enumerate(dtw_sym) if k != cv], axis=0)
+    targets = (
+        [(0, np.mean(dtw_sym, axis=0), np.mean(dtw_sym, axis=0))]
+        if rsa_input
+        else [
+            (cv, np.mean([other for k, other in enumerate(dtw_sym) if k != cv], axis=0), d)
+            for cv, d in enumerate(dtw_sym)
+        ]
+    )
+    for cv, train, test in tqdm(targets, desc=analysis):
         mlem = MLEM(distance="precomputed", random_seed=0, device="cuda" if torch.cuda.is_available() else "cpu")
         mlem.fit(features_dist, train, feature_names=features.columns)
-        fi, score = mlem.score(features_dist, d)
+        if analysis == "main":
+            fi, score = grouped_model_importance(mlem, features_dist, test, groups, seed=cv)
+        else:
+            fi, score = mlem.score(features_dist, test)
         scores.append(score.mean())
         fis.append(fi.melt(var_name="Feature", value_name="Feature Importance").assign(cv=cv))
-    print(analysis, np.mean(scores), np.std(scores))
+    print(analysis, scores[0] if rsa_input else (np.mean(scores), np.std(scores)))
     all_fis[analysis] = pd.concat(fis)
 
 # %% Plot model metadata FI
@@ -132,13 +207,13 @@ for analysis, fis in all_fis.items():
         hue_order=hue_order,
         legend=False,
         orient="h",
-        errorbar="sd",
+        errorbar=None if rsa_input else "sd",
         ax=ax,
     )
     sns.despine(trim=True)
     ax.set_ylabel("")
     plt.subplots_adjust(right=1.1)
-    plt.savefig(args.output_dir / f"{analysis}_fi.pdf", bbox_inches="tight")
+    plt.savefig(args.output_dir / f"{analysis}_fi.pdf", metadata={"CreationDate": None})
     plt.close()
 
 # %% Heatmap
@@ -163,7 +238,7 @@ sns.heatmap(
         "shrink": 0.5,
         "orientation": "horizontal",
         "pad": 0.1,
-        "label": "DTW distance between FI profiles across layers",
+        "label": "Raw RSA distance between models" if rsa_input else "DTW distance between FI profiles across layers",
     },
     ax=ax,
 )
@@ -180,12 +255,12 @@ ax.set_xticks(family_ticks)
 ax.set_xticklabels(family_names, rotation=-45, va="top", ha="left")
 ax.set_yticks(family_ticks)
 ax.set_yticklabels(family_names, rotation=0)
-plt.savefig(args.output_dir / "heatmap.pdf", bbox_inches="tight")
+plt.savefig(args.output_dir / "heatmap.pdf", metadata={"CreationDate": None})
 
 
 # %% MDS
 def fit_mds(d):
-    return MDS(n_components=2, dissimilarity="precomputed", random_state=0).fit_transform(d)
+    return MDS(metric="precomputed", init="random", random_state=0).fit_transform(d)
 
 
 def align_to_ref(coords, ref):
@@ -350,4 +425,4 @@ ax.set_aspect("equal")
 ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
 for spine in ax.spines.values():
     spine.set_visible(False)
-plt.savefig(args.output_dir / "mds.pdf", bbox_inches="tight")
+plt.savefig(args.output_dir / "mds.pdf", metadata={"CreationDate": None})
