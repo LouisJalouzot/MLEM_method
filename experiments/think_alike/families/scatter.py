@@ -173,7 +173,7 @@ fig.legend(
     frameon=True,
 )
 plt.subplots_adjust(hspace=0.5, wspace=0)
-plt.savefig("think_alike/figures/scatter.pdf", bbox_inches="tight")
+plt.savefig("think_alike/figures/scatter.pdf", metadata={"CreationDate": None})
 
 # %% Plot MDS
 n_cols = 3
@@ -222,4 +222,4 @@ for row, ((m_ref, l_ref), (m_pos, l_pos), (m_neg, l_neg), feature) in enumerate(
         for spine in ax.spines.values():
             spine.set_visible(False)
 plt.subplots_adjust(hspace=0.25, wspace=0.1)
-plt.savefig("think_alike/figures/proj.pdf", bbox_inches="tight")
+plt.savefig("think_alike/figures/proj.pdf", metadata={"CreationDate": None})

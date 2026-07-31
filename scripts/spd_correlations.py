@@ -45,5 +45,5 @@ plt.suptitle(
     "Distribution of Correlations Between Random SPD Matrices", fontsize=14, y=1.02
 )
 plt.tight_layout()
-plt.savefig("spd_correlations.png", dpi=150, bbox_inches="tight")
+plt.savefig("spd_correlations.png", dpi=150, metadata={"CreationDate": None})
 plt.show()

@@ -74,4 +74,4 @@ for ax in axes.flat[len(families) :]:
     ax.set_axis_off()
 
 plt.subplots_adjust(right=0.75, wspace=0.9, hspace=-0.1)
-plt.savefig(args.output_dir / "spearman.pdf", bbox_inches="tight")
+plt.savefig(args.output_dir / "spearman.pdf", metadata={"CreationDate": None})

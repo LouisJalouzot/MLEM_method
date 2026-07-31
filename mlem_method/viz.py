@@ -23,6 +23,7 @@ from tqdm.auto import tqdm
 
 plt.rcParams["font.serif"] = ["Times New Roman", "DejaVu Serif", "serif"]
 plt.rcParams["font.family"] = "serif"
+plt.rcParams["savefig.bbox"] = "tight"
 pio.templates.default = "simple_white"
 markers = ["o", "s", "^", "v", "D", "p"]
 palettes = [

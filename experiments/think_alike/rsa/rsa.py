@@ -50,7 +50,7 @@ ax.set_xticks(family_ticks_x)
 ax.set_xticklabels(family_names, rotation=-45, va="top", ha="left")
 ax.set_yticks(family_ticks_y)
 ax.set_yticklabels(family_names, rotation=0)
-plt.savefig("think_alike/figures/rsa_heatmap.pdf", bbox_inches="tight")
+plt.savefig("think_alike/figures/rsa_heatmap.pdf", metadata={"CreationDate": None})
 
 # %% Compute MDS
 all_coords = []
@@ -128,4 +128,4 @@ for i, (ax, family) in enumerate(zip(axes, families)):
         spine.set_visible(False)
 
 plt.subplots_adjust(wspace=0.6)
-plt.savefig("think_alike/figures/rsa_trajectories.pdf", bbox_inches="tight")
+plt.savefig("think_alike/figures/rsa_trajectories.pdf", metadata={"CreationDate": None})

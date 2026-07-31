@@ -90,4 +90,4 @@ sns.move_legend(
     handlelength=3,
 )
 g.fig.subplots_adjust(top=0.975, wspace=0.05, hspace=0.13)
-plt.savefig(args.output_dir / "feature_importance.pdf", bbox_inches="tight")
+plt.savefig(args.output_dir / "feature_importance.pdf", metadata={"CreationDate": None})

@@ -48,5 +48,5 @@ plt.suptitle(
     "Distribution of Correlations Between RDMs of Random Vectors", fontsize=14, y=1.02
 )
 plt.tight_layout()
-plt.savefig("rdm_correlations.png", dpi=150, bbox_inches="tight")
+plt.savefig("rdm_correlations.png", dpi=150, metadata={"CreationDate": None})
 plt.show()
