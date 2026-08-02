@@ -86,6 +86,68 @@ def get_model_metadata(model_id, architecture, n_params_B, n_tokens_B):
     attention = np.nan if architecture != "transformer" else "Grouped-query" if kv_heads < heads else "Multi-head"
     activation = get_first_attr(config, "hidden_act", "activation_function").lower()
     activation = {"gelu_new": "GELU", "gelu": "GELU", "relu": "ReLU", "silu": "SiLU", "sqrelu": "SqReLU"}[activation]
+    distilled = model_id.startswith(("meta-llama/Llama-3.2", "mistralai/Ministral-3"))
+    provenance = "Pruned teacher" if distilled else "Converted predecessor" if model_type == "rwkv7" else "From scratch"
+
+    checkpoint_averaging = np.nan
+    if model_type in {"gpt2", "opt", "gpt_neox", "mamba"}:
+        checkpoint_averaging = "False"
+    elif model_type == "olmo2":
+        checkpoint_averaging = str("1B" not in model_id)
+
+    lr_schedule = {
+        "gpt2": "Cosine",
+        "opt": "Polynomial",
+        "gpt_neox": "Cosine",
+        "olmo2": "Cosine then linear",
+        "mamba": "Cosine",
+    }.get(model_type, np.nan)
+
+    warmup_fraction = np.nan
+    if model_type == "gpt2":
+        warmup_fraction = 2_000 * 512 * 1_024 / (n_tokens_B * 1e9)
+    elif model_type == "opt":
+        batch = 2e6 if "13b" in model_id else 1e6 if "6.7b" in model_id else 0.5e6
+        warmup_fraction = 500 * batch / (n_tokens_B * 1e9)
+    elif model_type == "gpt_neox":
+        warmup_fraction = 0.01
+    elif model_type == "olmo2":
+        warmup_fraction = 8.388608 / n_tokens_B
+    elif model_type == "mamba":
+        warmup_fraction = 0.1
+
+    training_sequence_length = {
+        "gpt2": 1_024,
+        "opt": 2_048,
+        "gpt_neox": 2_048,
+        "olmo2": 4_096,
+        "mamba": 2_048,
+        "ministral3": 262_144,
+        "qwen3": 32_768,
+        "rwkv7": 4_096,
+    }.get(model_type, np.nan)
+    staged_training = (
+        "True"
+        if model_type in {"olmo2", "ministral3", "qwen3", "rwkv7"}
+        else "False"
+        if model_type in {"gpt2", "opt", "gpt_neox", "mamba"}
+        else np.nan
+    )
+    long_context_extension = (
+        "True"
+        if model_type in {"ministral3", "qwen3"}
+        else "False"
+        if model_type in {"gpt2", "opt", "gpt_neox", "olmo2", "mamba", "rwkv7"}
+        else np.nan
+    )
+    training_precision = {
+        "opt": "FP16",
+        "gpt_neox": "BF16" if "pythia-1b-" in model_id else "FP16",
+        "olmo2": "BF16",
+        "mamba": "BF16",
+        "rwkv7": "BF16",
+    }.get(model_type, np.nan)
+
     return {
         "model_name": model_id,
         "Family": family,
@@ -96,6 +158,15 @@ def get_model_metadata(model_id, architecture, n_params_B, n_tokens_B):
         "Width": np.log2(width),
         "Depth / Width": depth / width,
         "Training Tokens": np.log10(n_tokens_B),
+        "Weight Provenance": provenance,
+        "Distillation Objective": str(distilled),
+        "Checkpoint Averaging": checkpoint_averaging,
+        "Learning Rate Schedule": lr_schedule,
+        "Warmup Fraction": warmup_fraction,
+        "Training Sequence Length": np.log2(training_sequence_length),
+        "Staged Training": staged_training,
+        "Long-context Extension": long_context_extension,
+        "Training Precision": training_precision,
         "Vocabulary Size": np.log2(config["vocab_size"]),
         "Tokenizer Type": tokenizer,
         "Language Focus": language_focus,

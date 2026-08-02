@@ -92,14 +92,26 @@ dtw_sym = [d.combine_first(d.T).fillna(0.0) for d in dtw_dfs]
 all_features = metadata.merge(meta[["model_name", "family", "model"]].drop_duplicates())
 all_features = all_features.set_index(["family", "model"]).loc[index].reset_index()
 preliminary = all_features.drop(columns=["model_name", "family", "model"])
-# Release Date is a proxy, Depth / Width is derived, and Attention Type and FFN / Gating Type cross the correlation threshold.
+preliminary = preliminary.loc[:, preliminary.notna().mean() > 0.5]
+# Family and Release Date are proxies, Depth / Width is derived, and Tokenizer Type and FFN / Gating Type are redundant here.
 main_groups = {
-    "Family": ["Family", "Normalization", "Non-linearity"],
-    "Architecture": ["Architecture", "Positional Encoding", "Tokenizer Type"],
-    "Model Size": ["Num. Parameters", "Width"],
-    "Depth": ["Depth"],
-    "Data Scale": ["Training Tokens", "Vocabulary Size", "Language Focus"],
-    "Tied Embeddings": ["Tied Embeddings"],
+    "Training Procedure": [
+        "Weight Provenance",
+        "Distillation Objective",
+        "Learning Rate Schedule",
+        "Warmup Fraction",
+        "Training Precision",
+    ],
+    "Architecture Type": [
+        "Architecture",
+        "Normalization",
+        "Non-linearity",
+        "Positional Encoding",
+        "Attention Type",
+        "Tied Embeddings",
+    ],
+    "Model Scale and Shape": ["Num. Parameters", "Width", "Depth"],
+    "Pretraining Data": ["Training Tokens", "Vocabulary Size", "Language Focus"],
 }
 features_by_analysis = {
     "preliminary": preliminary,
@@ -119,13 +131,17 @@ for analysis in analyses:
     features = features_by_analysis[analysis]
     groups = groups_by_analysis[analysis]
     features = features.copy()
+    present = features.notna()
     categorical = features.select_dtypes(exclude="number").columns
     features[categorical] = features[categorical].fillna("None")
-    mlem = MLEM(distance="precomputed", random_seed=0, device="cuda" if torch.cuda.is_available() else "cpu")
+    mlem = MLEM(distance="precomputed", random_seed=0, device="cpu")
     X = mlem._encode_df(features)
-    features_dist = (X[None] - X[:, None]).abs().clip(0, 1).nan_to_num(0)
+    missing = torch.as_tensor(~present.to_numpy(), device=X.device)
+    missing_pairs = missing[None] | missing[:, None]
+    features_dist = (X[None] - X[:, None]).abs().clip(0, 1).nan_to_num(0).masked_fill(missing_pairs, 0)
     triu_indices = np.triu_indices(features_dist.shape[0], k=1)
-    vectors = pd.DataFrame(features_dist[*triu_indices], columns=features.columns)
+    vectors = pd.DataFrame(features_dist[*triu_indices].cpu().numpy(), columns=features.columns)
+    correlation_vectors = vectors.mask(missing_pairs[*triu_indices].cpu().numpy())
     if analysis == "main":
         corrs = pd.DataFrame(np.eye(len(groups)), index=groups, columns=groups)
         for left, left_members in groups.items():
@@ -136,7 +152,7 @@ for analysis in analyses:
                     )
         label = "Largest Correlation"
     else:
-        corrs = vectors.corr()
+        corrs = correlation_vectors.corr()
         label = "Correlation"
     cmap, vmin = "RdBu_r", -1
     mask = np.triu(np.ones_like(corrs, dtype=bool))
@@ -179,7 +195,7 @@ for analysis in analyses:
         ]
     )
     for cv, train, test in tqdm(targets, desc=analysis):
-        mlem = MLEM(distance="precomputed", random_seed=0, device="cuda" if torch.cuda.is_available() else "cpu")
+        mlem = MLEM(distance="precomputed", random_seed=0, device="cpu")
         mlem.fit(features_dist, train, feature_names=features.columns)
         if analysis == "main":
             fi, score = grouped_model_importance(mlem, features_dist, test, groups, seed=cv)
