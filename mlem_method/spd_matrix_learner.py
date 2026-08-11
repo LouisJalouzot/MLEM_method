@@ -11,7 +11,7 @@ if tp.TYPE_CHECKING:
 
 
 class SPDMatrixLearnerBuilder(BaseModel):
-    param: tp.Literal["none", "diagonal", "sym", "triu", "exp", "cholesky"] = "cholesky"
+    param: tp.Literal["none", "diagonal", "sym", "triu", "exp", "cholesky", "dnn"] = "cholesky"
     fro_norm: bool = True
     loss: tp.Literal["spearman", "mse"] = "spearman"
     scoring: tp.Literal["spearman", "mse"] = "spearman"

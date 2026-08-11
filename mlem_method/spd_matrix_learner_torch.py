@@ -43,6 +43,19 @@ class CholeskyParam(nn.Module):
         return self.param.reals1d_to_params(W[*self.indices])
 
 
+class DNNParam(nn.Module):
+    def __init__(self, dim, eps=1e-3):
+        super().__init__()
+        self.eps = eps
+        self.register_buffer("eye", torch.eye(dim))
+
+    def forward(self, W):
+        upper = W.triu().square()
+        W = upper + upper.triu(1).T
+        shift = (-torch.linalg.eigvalsh(W)[0]).clamp_min(0)
+        return W + (shift + self.eps) * self.eye
+
+
 class NormFroParam(nn.Module):
     def forward(self, X):
         return X / X.norm(p="fro")
@@ -64,7 +77,7 @@ class SPDMatrixLearner(nn.Module):
 
         Args:
             n_features: Number of features in the input
-            param: Parametrization type ("exp", "cholesky", "diagonal", "sym", "triu", or "none")
+            param: Parametrization type ("exp", "cholesky", "dnn", "diagonal", "sym", "triu", or "none")
             fro_norm: Whether to apply Frobenius norm normalization
             loss: Loss function to use ("spearman" or "mse")
             scoring: Scoring method to use ("spearman" or "mse")
@@ -99,6 +112,10 @@ class SPDMatrixLearner(nn.Module):
                 parametrize.register_parametrization(
                     self.W, "weight", CholeskyParam(n_features)
                 )
+            case "dnn":
+                parametrize.register_parametrization(
+                    self.W, "weight", DNNParam(n_features)
+                )
             case "diagonal":
                 parametrize.register_parametrization(self.W, "weight", DiagonalParam())
             case "sym":
@@ -109,7 +126,7 @@ class SPDMatrixLearner(nn.Module):
                 pass
             case _:
                 raise ValueError(
-                    f"Invalid parametrization: {self.param}. Choose from 'exp', 'cholesky', 'diagonal', 'sym', 'triu', or 'none'."
+                    f"Invalid parametrization: {self.param}. Choose from 'exp', 'cholesky', 'dnn', 'diagonal', 'sym', 'triu', or 'none'."
                 )
 
         # Add normalization if requested
