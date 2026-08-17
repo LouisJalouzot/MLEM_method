@@ -14,27 +14,38 @@ from pydantic import ConfigDict
 from .utils import BaseModel, encode_df, seed_from_basemodel
 
 
+def _pair_names(names: np.ndarray) -> np.ndarray:
+    indices = np.triu_indices(len(names))
+    return np.array(
+        [f"({names[i]} x {names[j]})" if names[i] != names[j] else names[i] for i, j in zip(*indices)],
+        dtype=str,
+    )
+
+
 class Dataset(BaseModel):
     path: str = "datasets/short_sentence.csv"
     seed: int = 0
     n_features_simu: int = 16
     n_samples_simu: int = 256
     noise_level: float = 0.1
-    _features: tp.List[str] = None
-    _triu_indices: tp.Tuple[np.ndarray, np.ndarray] = None
-    _pfeatures: tp.List[str] = None
+    mahalanobis: bool = False
+    _features: list[str] = None
+    _triu_indices: tuple[np.ndarray, np.ndarray] = None
+    _pfeatures: list[str] = None
+    _coordinate_groups: pd.Series = None
+    _pcoordinates: list[str] = None
     _level: str = None
     _df: pd.DataFrame = None
     _df_features: pd.DataFrame = None
-    _sentences: tp.List[str] = None
-    _words: tp.List[str] = None
-    _sentence_id: tp.List[tp.Any] = None
+    _sentences: list[str] = None
+    _words: list[str] = None
+    _sentence_id: list[tp.Any] = None
 
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
-    def model_post_init(self, __context):
-        self.features
+    def model_post_init(self, __context, /):
+        _ = self.features
 
     def read(self, only_columns=False) -> pd.DataFrame:
         import pandas as pd
@@ -71,9 +82,7 @@ class Dataset(BaseModel):
         else:
             features = self.read(only_columns=True)
             if "word" in features:
-                features = features[
-                    ~np.isin(features, ["word", "start_idx", "end_idx", "sentence"])
-                ]
+                features = features[~np.isin(features, ["word", "start_idx", "end_idx", "sentence"])]
                 self._level = "word"
             elif "sentence" in features:
                 self._level = "sentence"
@@ -82,36 +91,21 @@ class Dataset(BaseModel):
                 self._level = "simulated"
             self._features = np.array(features, dtype=str)
             self._triu_indices = np.triu_indices(len(features))
-            self._pfeatures = np.array(
-                [
-                    f"({features[i]} x {features[j]})" if i != j else features[i]
-                    for i, j in zip(*self._triu_indices)
-                ],
-                dtype=str,
-            )
+            self._pfeatures = _pair_names(features)
 
             return self._features
 
     @property
-    def triu_indices(self) -> tp.Tuple[np.ndarray, np.ndarray]:
+    def triu_indices(self) -> tuple[np.ndarray, np.ndarray]:
         if self._triu_indices is None:
-            self.features  # Ensure features are computed
+            _ = self.features  # Ensure features are computed
             self._triu_indices = np.triu_indices(len(self._features))
         return self._triu_indices
 
     @property
-    def pfeatures(self) -> tp.List[str]:
+    def pfeatures(self) -> list[str]:
         if self._pfeatures is None:
-            self.triu_indices  # Ensure features and triu_indices are computed
-            self._pfeatures = np.array(
-                [
-                    f"({self._features[i]} x {self._features[j]})"
-                    if i != j
-                    else self._features[i]
-                    for i, j in zip(*self._triu_indices)
-                ],
-                dtype=str,
-            )
+            self._pfeatures = _pair_names(self.features)
         return self._pfeatures
 
     @property
@@ -143,18 +137,47 @@ class Dataset(BaseModel):
         return len(self.features)
 
     @property
+    def coordinates(self) -> np.ndarray:
+        if self._coordinate_groups is None:
+            _, self._coordinate_groups = self.encode()
+        return self._coordinate_groups.index.to_numpy(dtype=str)
+
+    @property
+    def coordinate_groups(self) -> np.ndarray:
+        if self._coordinate_groups is None:
+            _, self._coordinate_groups = self.encode()
+        return self._coordinate_groups.to_numpy(dtype=str)
+
+    @property
+    def n_coordinates(self) -> int:
+        return len(self.coordinates)
+
+    @property
+    def pcoordinates(self) -> np.ndarray:
+        if self._pcoordinates is None:
+            self._pcoordinates = _pair_names(self.coordinates)
+        return self._pcoordinates
+
+    @property
+    def pcoordinate_groups(self) -> np.ndarray:
+        return _pair_names(self.coordinate_groups)
+
+    @property
     def level(self) -> str:
-        self.features
+        _ = self.features
         return self._level
 
     @property
-    def sentences(self) -> tp.List[str]:
+    def sentences(self) -> list[str]:
         return self.df.sentence.to_list()
 
     @property
     def words_df(self) -> pd.DataFrame:
         return self.df[["word", "sentence", "start_idx", "end_idx"]]
 
+    def encode(self) -> tuple[torch.Tensor, pd.Series]:
+        return self._encode()
+
     @infra.apply
-    def encode(self) -> torch.Tensor:
-        return encode_df(self.df_features)
+    def _encode(self) -> tuple[torch.Tensor, pd.Series]:
+        return encode_df(self.df_features, simplex=self.mahalanobis)

@@ -32,50 +32,39 @@ if tp.TYPE_CHECKING:
 
 class Trainer(BaseModelSharing):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
-    estimate_correlations: EstimateCorrelations = Field(
-        default_factory=lambda: EstimateCorrelations()
-    )
+    estimate_correlations: EstimateCorrelations = Field(default_factory=lambda: EstimateCorrelations())
     representations: tp.Annotated[
-        SentenceRepresentations
-        | WordRepresentations
-        | SimulatedRepresentations
-        | SyntMov2024Representations,
+        SentenceRepresentations | WordRepresentations | SimulatedRepresentations | SyntMov2024Representations,
         Field(discriminator="level"),
     ] = Field(default_factory=lambda: SentenceRepresentations())
-    dataloader_builder: PairwiseDataloaderBuilder = Field(
-        default_factory=lambda: PairwiseDataloaderBuilder()
-    )
+    dataloader_builder: PairwiseDataloaderBuilder = Field(default_factory=lambda: PairwiseDataloaderBuilder())
     gamma: float = 1
-    model_builder: SPDMatrixLearnerBuilder = Field(
-        default_factory=lambda: SPDMatrixLearnerBuilder()
-    )
+    model_builder: SPDMatrixLearnerBuilder = Field(default_factory=lambda: SPDMatrixLearnerBuilder())
     lr: float = 0.1
     weight_decay: float = 0
     max_epochs: int = 1000
-    monitor: tp.Literal[
-        "grad_norm", "diff_norm", "train_score", "test_score", "loss"
-    ] = "loss"
+    monitor: tp.Literal["grad_norm", "diff_norm", "train_score", "test_score", "loss"] = "loss"
     patience: int = 50
     eps: float = 1e-3
 
     device: str | None = "cpu"
-    unit_indices: tp.List[int] | None = None
+    unit_indices: list[int] | None = None
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="1")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
-    _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
+    _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {
         "dataset": ["estimate_correlations", "representations"],
     }
 
-    def model_post_init(self, __context: tp.Any) -> None:
+    def model_post_init(self, __context: tp.Any, /) -> None:
         assert self.dataset.level == self.representations.level, (
-            f"Dataset level {self.dataset.level} does not match "
-            f"representations level {self.representations.level}"
+            f"Dataset level {self.dataset.level} does not match representations level {self.representations.level}"
         )
 
     def get_model(self, state_dict=None, device=None) -> SPDMatrixLearner:
-        model = self.model_builder.build(n_features=self.dataset.n_features)
+        n_features = self.dataset.n_coordinates
+        model = self.model_builder.build(n_features=n_features)
         if state_dict is not None:
             model.load_state_dict(state_dict=state_dict)
 
@@ -87,7 +76,7 @@ class Trainer(BaseModelSharing):
         # Estimate number of pairs for acceptable variability
         _, n_pairs = self.estimate_correlations.estimate_correlations()
 
-        X = self.dataset.encode().to(device)
+        X = self.dataset.encode()[0].to(device)
         Y = self.representations().to(device)
 
         # Apply unit selection if specified
@@ -95,11 +84,16 @@ class Trainer(BaseModelSharing):
             Y = Y[:, self.unit_indices]
 
         return self.dataloader_builder.build(
-            X=X, Y=Y, gamma=self.gamma, n_pairs=n_pairs, seed=seed_from_basemodel(self)
+            X=X,
+            Y=Y,
+            gamma=self.gamma,
+            n_pairs=n_pairs,
+            seed=seed_from_basemodel(self),
+            signed=self.dataset.mahalanobis,
         )
 
     @infra.apply(exclude_from_cache_uid=["device"])
-    def _train_cached(self) -> tp.Tuple[tp.List[torch.Tensor], pd.DataFrame]:
+    def _train_cached(self) -> tuple[list[torch.Tensor], pd.DataFrame]:
         from .trainer_torch import train
 
         seed_everything(seed_from_basemodel(self))
@@ -129,7 +123,7 @@ class Trainer(BaseModelSharing):
 
         return all_state_dicts, all_logs
 
-    def train(self) -> tp.Tuple[tp.List[SPDMatrixLearner], pd.DataFrame]:
+    def train(self) -> tuple[list[SPDMatrixLearner], pd.DataFrame]:
         all_state_dicts, all_logs = self._train_cached()
 
         all_models = [self.get_model(state_dict=sd) for sd in all_state_dicts]

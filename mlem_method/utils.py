@@ -38,18 +38,14 @@ def get_device():
     if torch.cuda.is_available():
         # Get GPU id with the most free memory, select at random if there are multiple
         try:
-            gpus = subprocess.check_output(
-                ["nvidia-smi", "--format=csv", "--query-gpu=memory.free"]
-            )
+            gpus = subprocess.check_output(["nvidia-smi", "--format=csv", "--query-gpu=memory.free"])
             gpus = gpus.decode("utf-8").split("\n")
-            free_rams = tuple(map(lambda x: float(x.rstrip(" [MiB]")), gpus[1:-1]))
+            free_rams = tuple(float(x.rstrip(" [MiB]")) for x in gpus[1:-1])
             max_free = max(free_rams)
-            max_free_idxs = tuple(
-                i for i in range(len(free_rams)) if abs(max_free - free_rams[i]) <= 200
-            )
+            max_free_idxs = tuple(i for i in range(len(free_rams)) if abs(max_free - free_rams[i]) <= 200)
             gpu_id = random.choice(max_free_idxs)
             return f"cuda:{gpu_id}"
-        except:
+        except (OSError, subprocess.SubprocessError, ValueError, IndexError):
             return "cuda"
     else:
         return "cpu"
@@ -63,7 +59,7 @@ def _get_layers_from_config(config) -> int | None:
     return None
 
 
-def get_n_layers(model_name: str, revision: tp.Optional[str] = None) -> int:
+def get_n_layers(model_name: str, revision: str | None = None) -> int:
     """Get the number of hidden layers from a HuggingFace model config.
 
     Handles different config attribute names across model architectures:
@@ -86,9 +82,7 @@ def get_n_layers(model_name: str, revision: tp.Optional[str] = None) -> int:
     """
     from transformers import AutoConfig
 
-    config = AutoConfig.from_pretrained(
-        model_name, trust_remote_code=True, revision=revision
-    )
+    config = AutoConfig.from_pretrained(model_name, trust_remote_code=True, revision=revision)
 
     # Try top-level config
     if (layers := _get_layers_from_config(config)) is not None:
@@ -101,10 +95,7 @@ def get_n_layers(model_name: str, revision: tp.Optional[str] = None) -> int:
         getattr(config, "text_config", None),
     )
     for sub_config in sub_configs:
-        if (
-            sub_config is not None
-            and (layers := _get_layers_from_config(sub_config)) is not None
-        ):
+        if sub_config is not None and (layers := _get_layers_from_config(sub_config)) is not None:
             return layers
 
     raise ValueError(
@@ -124,16 +115,16 @@ def seed_everything(seed: int):
         torch.cuda.manual_seed_all(seed)
 
 
-def encode_df(df: pd.DataFrame) -> torch.Tensor:
+def encode_df(df: pd.DataFrame, simplex: bool = False) -> tuple[torch.Tensor, pd.Series]:
     import pandas as pd
     import torch
     from sklearn.preprocessing import MinMaxScaler
 
-    if df.empty:
-        # Return an empty tensor with the correct number of columns but 0 rows
-        return torch.empty((0, df.shape[1]), dtype=torch.float32)
+    coordinates = [str(column) for column in df.columns]
+    if df.empty and not simplex:
+        X = torch.empty((0, df.shape[1]), dtype=torch.float32)
+        return X, pd.Series(coordinates, index=coordinates, name="Group", dtype=str)
 
-    X = np.zeros(df.shape, dtype=np.float32)
     number_cols = np.array(
         [
             (
@@ -144,6 +135,37 @@ def encode_df(df: pd.DataFrame) -> torch.Tensor:
             for t in df.dtypes
         ]
     )
+    if simplex:
+        from scipy.linalg import helmert
+
+        columns = []
+        coordinates = []
+        groups = []
+        for is_number, (feature, s) in zip(number_cols, df.items()):
+            feature = str(feature)
+            if is_number:
+                z = s.to_numpy(dtype=np.float32)[:, None]
+                if len(s):
+                    z = MinMaxScaler().fit_transform(z)
+                names = [feature]
+            else:
+                categorical = s.astype("category")
+                codes = categorical.cat.codes.to_numpy()
+                n_levels = len(categorical.cat.categories)
+                if n_levels > 1:
+                    z = (helmert(n_levels).T[codes] / np.sqrt(2)).astype(np.float32)
+                    z[codes < 0] = np.nan
+                else:
+                    z = np.empty((len(s), 0), dtype=np.float32)
+                names = [f"{feature}_{i}" for i in range(z.shape[1])]
+            columns.append(z)
+            coordinates.extend(names)
+            groups.extend([feature] * len(names))
+
+        X = np.hstack(columns) if columns else np.empty((len(df), 0), dtype=np.float32)
+        return torch.from_numpy(X), pd.Series(groups, index=coordinates, name="Group", dtype=str)
+
+    X = np.zeros(df.shape, dtype=np.float32)
     for i in range(df.shape[1]):
         s = df.iloc[:, i]
         if number_cols[i]:
@@ -157,11 +179,11 @@ def encode_df(df: pd.DataFrame) -> torch.Tensor:
     if np.any(number_cols):
         X[:, number_cols] = MinMaxScaler().fit_transform(X[:, number_cols])
 
-    return torch.from_numpy(X)
+    return torch.from_numpy(X), pd.Series(coordinates, index=coordinates, name="Group", dtype=str)
 
 
 class BaseModel(_BaseModel):
-    def __eq__(self, other: tp.Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, self.__class__):
             return NotImplemented
 
@@ -179,7 +201,7 @@ class BaseModelSharing(BaseModel):
     3. Define the actual fields corresponding to the names used in the config.
     """
 
-    _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {}
+    _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {}
 
     @model_validator(mode="before")
     @classmethod
@@ -203,10 +225,7 @@ class BaseModelSharing(BaseModel):
                 )
 
             shared_field_type = cls.model_fields[shared_field_name].annotation
-            if not (
-                isinstance(shared_field_type, type)
-                and issubclass(shared_field_type, _BaseModel)
-            ):
+            if not (isinstance(shared_field_type, type) and issubclass(shared_field_type, _BaseModel)):
                 raise TypeError(
                     f"Config Error: Shared field '{shared_field_name}' in {cls.__name__} "
                     f"must be a Pydantic BaseModel subclass, got {shared_field_type}."
@@ -215,10 +234,7 @@ class BaseModelSharing(BaseModel):
             # Retrieve data for the shared field, defaulting to {} for default instantiation
             shared_data = data.get(shared_field_name, {})
 
-            if not (
-                isinstance(shared_data, shared_field_type)
-                or isinstance(shared_data, dict)
-            ):
+            if not isinstance(shared_data, (shared_field_type, dict)):
                 raise TypeError(
                     f"Invalid data for shared field '{shared_field_name}'. "
                     f"Expected a {shared_field_type.__name__} instance or a dict, "
@@ -240,7 +256,7 @@ class BaseModelSharing(BaseModel):
                 dependent_data = data.get(dependent_field_name, {})
 
                 if isinstance(dependent_data, _BaseModel):
-                    raise ValueError(
+                    raise TypeError(
                         f"Injection Error: Cannot inject shared field '{shared_field_name}'. "
                         f"Data for dependent field '{dependent_field_name}' is already an instance "
                         f"of {type(dependent_data).__name__}, not a dict for initialization."
@@ -255,9 +271,7 @@ class BaseModelSharing(BaseModel):
                 # Skip injection for discriminated union fields with empty data,
                 # allowing them to use their default factories with proper discriminators.
                 # For regular fields, always inject even when data is empty.
-                is_discriminated_union = (
-                    getattr(dependent_field, "discriminator", None) is not None
-                )
+                is_discriminated_union = getattr(dependent_field, "discriminator", None) is not None
                 if is_discriminated_union and not dependent_data:
                     continue
 
@@ -271,13 +285,18 @@ def compute_stats(data, alpha=0.01):
     """Compute descriptive statistics with confidence intervals"""
     from statsmodels.stats.descriptivestats import describe
 
-    return describe(
-        data, stats=["mean", "std", "std_err", "ci"], use_t=True, alpha=alpha
-    ).T
+    return describe(data, stats=["mean", "std", "std_err", "ci"], use_t=True, alpha=alpha).T
 
 
 def seed_from_basemodel(model: BaseModel):
-    config_dict = model.model_dump()
+    def strip_mahalanobis(value):
+        if isinstance(value, dict):
+            return {key: strip_mahalanobis(item) for key, item in value.items() if key != "mahalanobis"}
+        if isinstance(value, (list, tuple)):
+            return [strip_mahalanobis(item) for item in value]
+        return value
+
+    config_dict = strip_mahalanobis(model.model_dump())
     config_dict.pop("infra", None)
     config_str = json.dumps(config_dict, sort_keys=True, default=str)
     config_hash = hashlib.sha256(config_str.encode()).hexdigest()

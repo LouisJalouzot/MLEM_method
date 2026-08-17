@@ -109,13 +109,9 @@ class SPDMatrixLearner(nn.Module):
             case "exp":
                 parametrize.register_parametrization(self.W, "weight", SPDExpParam())
             case "cholesky":
-                parametrize.register_parametrization(
-                    self.W, "weight", CholeskyParam(n_features)
-                )
+                parametrize.register_parametrization(self.W, "weight", CholeskyParam(n_features))
             case "dnn":
-                parametrize.register_parametrization(
-                    self.W, "weight", DNNParam(n_features)
-                )
+                parametrize.register_parametrization(self.W, "weight", DNNParam(n_features))
             case "diagonal":
                 parametrize.register_parametrization(self.W, "weight", DiagonalParam())
             case "sym":
@@ -147,9 +143,7 @@ class SPDMatrixLearner(nn.Module):
         return W[*self.triu_indices]
 
     def get_flat_forwatted_W(self, pfeatures) -> pd.DataFrame:
-        return pd.DataFrame(
-            {"Feature": pfeatures, "Weight": self.get_flat_W().cpu().detach()}
-        )
+        return pd.DataFrame({"Feature": pfeatures, "Weight": self.get_flat_W().cpu().detach()})
 
     def get_formatted_W(self, features=None) -> pd.DataFrame:
         """Get the weight matrix as a pandas DataFrame with feature names"""
@@ -169,24 +163,18 @@ class SPDMatrixLearner(nn.Module):
         eigenvalues = torch.linalg.eigvalsh(W)
         return eigenvalues.min().item()
 
-    def check_spd(self) -> None:
+    def check_spd(self) -> bool:
         try:
             norm_diff = self.norm_diff()
             if norm_diff > 1e-5:
-                logger.warning(
-                    f"Matrix is not symmetric: Max |W - W^T| = {norm_diff:.2g} > 1e-5"
-                )
+                logger.warning(f"Matrix is not symmetric: Max |W - W^T| = {norm_diff:.2g} > 1e-5")
                 return False
             min_lambda = self.min_eigenvalue()
             if min_lambda <= 0:
-                logger.warning(
-                    f"Matrix is not positive definite: Min λ(W) {min_lambda:.2g} <= 0"
-                )
+                logger.warning(f"Matrix is not positive definite: Min λ(W) {min_lambda:.2g} <= 0")
                 return False
-            logger.info(
-                f"SPD check: Max |W - W^T| = {norm_diff:.2g} - Min λ(W) = {min_lambda:.2g}"
-            )
-        except Exception as e:
+            logger.info(f"SPD check: Max |W - W^T| = {norm_diff:.2g} - Min λ(W) = {min_lambda:.2g}")
+        except RuntimeError as e:
             logger.error(f"SPD check failed: {e}.\n")
             return False
         return True
@@ -229,11 +217,11 @@ class SPDMatrixLearner(nn.Module):
         return F.mse_loss(x, y)
 
     @torch.no_grad()
-    def score(self, x, y):
-        if x.shape[1] == self.n_features:
-            pred = self.forward(x)
-        else:
+    def score(self, x, y, flat=False):
+        if flat or x.shape[1] != self.n_features:
             pred = self.flat_forward(x)
+        else:
+            pred = self.forward(x)
 
         if self.scoring == "spearman":
             return spearman(pred, y).item()

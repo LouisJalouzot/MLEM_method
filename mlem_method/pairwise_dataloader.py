@@ -25,6 +25,7 @@ class PairwiseDataloader:
         nan_to_num=0,
         min_max_scale=True,
         seed=None,
+        signed: bool = False,
     ):
         import torch
         from torch.nn import functional as F
@@ -60,11 +61,10 @@ class PairwiseDataloader:
         self.min2 = torch.inf
         self.max2 = -torch.inf
         self.min_max_scale = min_max_scale
+        self.signed = signed
         self.logged_debug = False
         self.seed = seed
-        self.generator = torch.Generator(
-            device=self.device if hasattr(self, "device") else "cpu"
-        )
+        self.generator = torch.Generator(device=self.device if hasattr(self, "device") else "cpu")
         if seed is not None:
             self.generator.manual_seed(seed)
 
@@ -96,24 +96,21 @@ class PairwiseDataloader:
 
         n_pairs *= n_trials
 
-        ind_1 = torch.randint(
-            0, self.n, (n_pairs,), device=self.device, generator=self.generator
-        )
-        ind_2 = torch.randint(
-            0, self.n, (n_pairs,), device=self.device, generator=self.generator
-        )
+        ind_1 = torch.randint(0, self.n, (n_pairs,), device=self.device, generator=self.generator)
+        ind_2 = torch.randint(0, self.n, (n_pairs,), device=self.device, generator=self.generator)
         if only_valid:
             valid = ind_1 != ind_2
             ind_1 = ind_1[valid]
             ind_2 = ind_2[valid]
 
-        out = tuple()
+        out = ()
 
         if self.X is not None:
             X_1 = self.X[ind_1]
             X_2 = self.X[ind_2]
-            X_dist = (X_1 - X_2).nan_to_num(self.nan_to_num).abs().clip(0, 1)
-            X_dist = X_dist.reshape(n_trials, -1, self.n_features).squeeze()
+            delta = (X_1 - X_2).nan_to_num(self.nan_to_num)
+            X_dist = delta if self.signed else delta.abs().clip(0, 1)
+            X_dist = X_dist.reshape(n_trials, -1, self.n_features)
             out = (X_dist,)
 
         if self.Y is not None:
@@ -124,7 +121,7 @@ class PairwiseDataloader:
                 self.min = min(self.min, Y_dist.min())
                 self.max = max(self.max, Y_dist.max())
                 Y_dist = (Y_dist - self.min) / (self.max - self.min)
-            Y_dist = Y_dist.reshape(n_trials, -1).squeeze()
+            Y_dist = Y_dist.reshape(n_trials, -1)
             out = (*out, Y_dist)
 
         if self.Y2 is not None:
@@ -135,8 +132,11 @@ class PairwiseDataloader:
                 self.min2 = min(self.min2, Y2_dist.min())
                 self.max2 = max(self.max2, Y2_dist.max())
                 Y2_dist = (Y2_dist - self.min2) / (self.max2 - self.min2)
-            Y2_dist = Y2_dist.reshape(n_trials, -1).squeeze()
+            Y2_dist = Y2_dist.reshape(n_trials, -1)
             out = (*out, Y2_dist)
+
+        if n_trials == 1:
+            out = tuple(value[0] for value in out)
 
         if get_idx:
             out = (ind_1, ind_2, *out)
@@ -150,9 +150,7 @@ class PairwiseDataloader:
         return self.sample(int(self.n_pairs * (self.gamma**idx)))
 
 
-PairwiseDataLoaderGenerator = tp.Generator[
-    tp.Tuple[PairwiseDataloader, PairwiseDataloader], None, None
-]
+PairwiseDataLoaderGenerator = tp.Generator[tuple[PairwiseDataloader, PairwiseDataloader]]
 
 
 class PairwiseDataloaderBuilder(BaseModel):
@@ -169,12 +167,13 @@ class PairwiseDataloaderBuilder(BaseModel):
         elif isinstance(self.cv, float):
             assert 0 < self.cv < 1, "if cv is a float, it needs to be between 0 and 1"
 
-    def build_for_estimation(self, X, seed=None) -> PairwiseDataloader:
+    def build_for_estimation(self, X, seed=None, signed=False) -> PairwiseDataloader:
         return PairwiseDataloader(
             X=X,
             distance=self.distance,
             nan_to_num=self.nan_to_num,
             min_max_scale=self.min_max_scale,
+            signed=signed,
             seed=seed,
         )
 
@@ -186,6 +185,7 @@ class PairwiseDataloaderBuilder(BaseModel):
         n_pairs=None,
         gamma=1,
         seed=None,
+        signed=False,
     ) -> PairwiseDataLoaderGenerator:
         build_dl = lambda x, y, y2=None: PairwiseDataloader(
             X=x,
@@ -196,6 +196,7 @@ class PairwiseDataloaderBuilder(BaseModel):
             distance=self.distance,
             nan_to_num=self.nan_to_num,
             min_max_scale=self.min_max_scale,
+            signed=signed,
             seed=seed,
         )
         assert X is not None or Y is not None, "X or Y must be provided"

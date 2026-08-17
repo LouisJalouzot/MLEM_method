@@ -19,9 +19,7 @@ from .word_representations import WordRepresentations
 
 
 def compute_encoding_baseline(X, Y, n_estimators=10, n_jobs=-2, verbose=False):
-    model = RandomForestRegressor(
-        n_estimators=n_estimators, n_jobs=n_jobs, verbose=verbose, random_state=0
-    )
+    model = RandomForestRegressor(n_estimators=n_estimators, n_jobs=n_jobs, verbose=verbose, random_state=0)
     model.fit(X, Y)
     importances = [tree.feature_importances_ for tree in model.estimators_]
 
@@ -44,22 +42,18 @@ class EncodingBaseline(BaseModelSharing):
     verbose: bool = False
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
-    _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
-        "dataset": ["representations"]
-    }
+    _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {"dataset": ["representations"]}
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("n_jobs", "verbose")
 
     @infra.apply
     def compute(
         self,
-    ) -> tp.Tuple[np.ndarray, np.ndarray]:
-        X = self.dataset.encode()
+    ) -> tuple[np.ndarray, np.ndarray]:
+        X = self.dataset.encode()[0]
         Y = self.representations()
 
-        importances = compute_encoding_baseline(
-            X, Y, self.n_estimators, self.n_jobs, self.verbose
-        )
-        importances["Feature"] = self.dataset.features
+        importances = compute_encoding_baseline(X, Y, self.n_estimators, self.n_jobs, self.verbose)
+        importances["Feature"] = self.dataset.coordinates
 
         return importances.sort_values("mean", ascending=False)
 
@@ -69,18 +63,14 @@ def compute_decoding_baseline(X, Y, n_splits=5):
     model = LogisticRegression()
     with tqdm(total=Y.shape[1] * n_splits, desc="Computing decoding baseline") as pbar:
         for i in range(Y.shape[1]):
-            y = Y[:, i].int()
+            y = torch.unique(Y[:, i], return_inverse=True)[1]
             scores = []
-            for train, test in StratifiedKFold(
-                n_splits=n_splits, shuffle=True, random_state=0
-            ).split(X, y):
+            for train, test in StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=0).split(X, y):
                 model.fit(X[train], y[train])
                 pred_prob = model.predict_proba(X[test])
                 if pred_prob.shape[1] == 2:
                     pred_prob = pred_prob[:, 1]
-                score = roc_auc_score(
-                    y[test], pred_prob, multi_class="ovr", average="weighted"
-                )
+                score = roc_auc_score(y[test], pred_prob, multi_class="ovr", average="weighted")
                 scores.append(score)
                 pbar.update(1)
             all_scores.append(scores)
@@ -103,19 +93,17 @@ class DecodingBaseline(BaseModelSharing):
 
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
-    _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
-        "dataset": ["representations"]
-    }
+    _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {"dataset": ["representations"]}
 
     @infra.apply
     def compute(
         self,
-    ) -> tp.Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         X = self.representations()
-        Y = self.dataset.encode()
+        Y = self.dataset.encode()[0]
         Y = torch.nan_to_num(Y, nan=-1)
 
         scores = compute_decoding_baseline(X, Y, self.n_splits)
-        scores["Feature"] = self.dataset.features
+        scores["Feature"] = self.dataset.coordinates
 
         return scores.sort_values("mean", ascending=False)

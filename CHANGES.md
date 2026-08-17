@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-08-17
+- Added `Dataset.mahalanobis` for simplex categorical encoding and signed coordinate differences with the existing SPD learner.
+- Added model `coordinates`/`pcoordinates` alongside theoretical `features`/`pfeatures`, plus grouped or coordinate-level PFI via `pfi_grouping`.
+- `Dataset.encode()` now returns `(X, groups)`.
+
 ## 2026-03-05
 - Added `revision` support to load HuggingFace checkpoints (Pythia/OLMo steps).
 
