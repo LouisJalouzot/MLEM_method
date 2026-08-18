@@ -1,8 +1,9 @@
-target: src.feature_importance.FeatureImportance
+target: mlem_method.FeatureImportance
 
 base_config:
   dataset:
-    path: simulated
+    simulation:
+      kind: mds
   trainer:
     dataloader_builder:
       cv: 0.2
@@ -10,13 +11,13 @@ base_config:
       level: simulated
 
 grid_search:
-  trainer.dataset.seed:
+  dataset.seed:
     - 0
     - 1
     - 2
     - 3
     - 4
-  trainer.dataset.noise_level:
+  dataset.simulation.noise_level:
     - 1
     - 2
     - 3

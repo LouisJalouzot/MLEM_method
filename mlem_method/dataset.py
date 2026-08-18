@@ -11,6 +11,7 @@ if tp.TYPE_CHECKING:
 from exca import TaskInfra
 from pydantic import ConfigDict
 
+from .simulation import Simulation
 from .utils import BaseModel, encode_df, seed_from_basemodel
 
 
@@ -25,10 +26,8 @@ def _pair_names(names: np.ndarray) -> np.ndarray:
 class Dataset(BaseModel):
     path: str = "datasets/short_sentence.csv"
     seed: int = 0
-    n_features_simu: int = 16
-    n_samples_simu: int = 256
-    noise_level: float = 0.1
     mahalanobis: bool = False
+    simulation: Simulation | None = None
     _features: list[str] = None
     _triu_indices: tuple[np.ndarray, np.ndarray] = None
     _pfeatures: list[str] = None
@@ -44,24 +43,19 @@ class Dataset(BaseModel):
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
+    def _exclude_from_cls_uid(self) -> tuple[str, ...]:
+        return ("path",) if self.simulation is not None else ()
+
     def model_post_init(self, __context, /):
         _ = self.features
 
     def read(self, only_columns=False) -> pd.DataFrame:
         import pandas as pd
 
-        if self.path == "simulated":
-            features = np.array([f"Feat. {i + 1}" for i in range(self.n_features_simu)])
+        if self.simulation is not None:
             if only_columns:
-                return features
-            else:
-                rng = np.random.default_rng(seed_from_basemodel(self))
-                df = pd.DataFrame(
-                    rng.choice(["A", "B"], size=(self.n_samples_simu, len(features))),
-                    columns=features,
-                )
-
-                return df
+                return self.simulation.feature_names()
+            return self.simulation.make_df(seed_from_basemodel(self))
         elif self.path.endswith(".csv"):
             data = pd.read_csv(self.path, nrows=0 if only_columns else None)
             if only_columns:
@@ -87,7 +81,7 @@ class Dataset(BaseModel):
             elif "sentence" in features:
                 self._level = "sentence"
                 features = features[features != "sentence"]
-            elif "simulated" in self.path:
+            elif self.simulation is not None:
                 self._level = "simulated"
             self._features = np.array(features, dtype=str)
             self._triu_indices = np.triu_indices(len(features))

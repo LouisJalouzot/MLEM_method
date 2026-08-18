@@ -13,7 +13,7 @@ from .dataset import Dataset
 from .estimate_correlations import EstimateCorrelations
 from .pairwise_dataloader import PairwiseDataloaderBuilder
 from .sentence_representations import SentenceRepresentations
-from .simulated_representations import SimulatedRepresentations
+from .simulation import SimulatedRepresentations
 from .syntmov2024_representations import SyntMov2024Representations
 from .utils import (
     BaseModelSharing,

@@ -13,7 +13,7 @@ from tqdm.auto import tqdm
 
 from .dataset import Dataset
 from .sentence_representations import SentenceRepresentations
-from .simulated_representations import SimulatedRepresentations
+from .simulation import SimulatedRepresentations
 from .utils import BaseModelSharing, compute_stats
 from .word_representations import WordRepresentations
 

@@ -240,8 +240,9 @@ class FeatureImportance(BaseModelSharing):
             weights["spd"] = False if logs.empty else logs.spd.iloc[0]
             weights["training_duration"] = 0 if logs.empty else logs["Step Duration"].sum()
             weights["n_epochs"] = len(logs)
-            if hasattr(self.trainer.representations, "gt_weights"):
-                weights = weights.merge(self.trainer.representations.gt_weights)
+            gt_weights = getattr(self.trainer.representations, "gt_weights", None)
+            if gt_weights is not None:
+                weights = weights.merge(gt_weights)
                 weights["L2"] = np.linalg.norm(weights.GTWeight - weights.Weight)
             all_weights.append(weights)
             for dl, split in [(train_dl, "train"), (test_dl, "test")]:

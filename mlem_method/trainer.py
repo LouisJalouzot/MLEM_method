@@ -12,7 +12,7 @@ from .pairwise_dataloader import (
     PairwiseDataLoaderGenerator,
 )
 from .sentence_representations import SentenceRepresentations
-from .simulated_representations import SimulatedRepresentations
+from .simulation import SimulatedRepresentations
 from .spd_matrix_learner import SPDMatrixLearnerBuilder
 from .syntmov2024_representations import SyntMov2024Representations
 from .utils import (

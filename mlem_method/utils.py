@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import random
 import subprocess
@@ -289,19 +288,10 @@ def compute_stats(data, alpha=0.01):
 
 
 def seed_from_basemodel(model: BaseModel):
-    def strip_mahalanobis(value):
-        if isinstance(value, dict):
-            return {key: strip_mahalanobis(item) for key, item in value.items() if key != "mahalanobis"}
-        if isinstance(value, (list, tuple)):
-            return [strip_mahalanobis(item) for item in value]
-        return value
+    from exca.confdict import ConfDict
 
-    config_dict = strip_mahalanobis(model.model_dump())
-    config_dict.pop("infra", None)
-    config_str = json.dumps(config_dict, sort_keys=True, default=str)
-    config_hash = hashlib.sha256(config_str.encode()).hexdigest()
-
-    return int(config_hash, 16) % (2**32)
+    uid = ConfDict.from_model(model, uid=True, exclude_defaults=True).to_uid()
+    return int(hashlib.sha256(uid.encode()).hexdigest(), 16) % (2**32)
 
 
 def corrcoef(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
