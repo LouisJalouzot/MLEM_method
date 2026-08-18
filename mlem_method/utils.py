@@ -232,8 +232,9 @@ class BaseModelSharing(BaseModel):
 
             # Retrieve data for the shared field, defaulting to {} for default instantiation
             shared_data = data.get(shared_field_name, {})
-
-            if not isinstance(shared_data, (shared_field_type, dict)):
+            if isinstance(shared_data, dict):
+                shared_data = shared_field_type.model_validate(shared_data)
+            elif not isinstance(shared_data, shared_field_type):
                 raise TypeError(
                     f"Invalid data for shared field '{shared_field_name}'. "
                     f"Expected a {shared_field_type.__name__} instance or a dict, "
@@ -255,11 +256,9 @@ class BaseModelSharing(BaseModel):
                 dependent_data = data.get(dependent_field_name, {})
 
                 if isinstance(dependent_data, _BaseModel):
-                    raise TypeError(
-                        f"Injection Error: Cannot inject shared field '{shared_field_name}'. "
-                        f"Data for dependent field '{dependent_field_name}' is already an instance "
-                        f"of {type(dependent_data).__name__}, not a dict for initialization."
-                    )
+                    # Already constructed (e.g. a shared field we just model_validate'd).
+                    setattr(dependent_data, shared_field_name, shared_data)
+                    continue
 
                 if not isinstance(dependent_data, dict):
                     raise TypeError(
