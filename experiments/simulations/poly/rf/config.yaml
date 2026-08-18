@@ -1,0 +1,21 @@
+target: mlem_method.EncodingBaseline
+
+base_config:
+  dataset:
+    mahalanobis: true
+    simulation:
+      kind: poly
+  representations:
+      level: simulated
+
+grid_search:
+  dataset.seed:
+    - 0
+    - 1
+    - 2
+  dataset.simulation.noise:
+    - 0.1
+    - 0.2
+    - 0.5
+    - 1.0
+    - 2.0

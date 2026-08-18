@@ -1,0 +1,22 @@
+base_config:
+  dataset:
+    simulation:
+      kind: poly
+  trainer:
+    kind: mlem
+    dataloader_builder:
+      cv: 0.2
+    representations:
+      level: simulated
+
+grid_search:
+  dataset.seed:
+    - 0
+    - 1
+    - 2
+  dataset.simulation.noise:
+    - 0.1
+    - 0.2
+    - 0.5
+    - 1.0
+    - 2.0

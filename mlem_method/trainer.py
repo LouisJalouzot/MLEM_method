@@ -47,7 +47,7 @@ class Trainer(BaseModelSharing):
     patience: int = 50
     eps: float = 1e-3
 
-    device: str | None = "cpu"
+    device: str | None = None
     unit_indices: list[int] | None = None
 
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="1")

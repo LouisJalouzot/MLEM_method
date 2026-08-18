@@ -27,15 +27,12 @@ def compute_encoding_baseline(X, Y, n_estimators=10, n_jobs=-2, verbose=False):
 
 class EncodingBaseline(BaseModelSharing):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
-    representations: (
-        tp.Annotated[
-            SentenceRepresentations | WordRepresentations | SimulatedRepresentations,
-            Field(discriminator="level"),
-        ]  # Use sentence or word representations based on the specified level
-        | SentenceRepresentations  # Fallback to sentence representations if not specified
-    ) = Field(default_factory=lambda: SentenceRepresentations())
+    representations: tp.Annotated[
+        SentenceRepresentations | WordRepresentations | SimulatedRepresentations,
+        Field(discriminator="level"),
+    ] = Field(default_factory=lambda: SentenceRepresentations())
 
-    n_estimators: int = 10
+    n_estimators: int = 100
 
     n_jobs: int = -2
     verbose: bool = False
@@ -81,13 +78,10 @@ def compute_decoding_baseline(X, Y, n_splits=5):
 
 class DecodingBaseline(BaseModelSharing):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
-    representations: (
-        tp.Annotated[
-            SentenceRepresentations | WordRepresentations | SimulatedRepresentations,
-            Field(discriminator="level"),
-        ]  # Use sentence or word representations based on the specified level
-        | SentenceRepresentations  # Fallback to sentence representations if not specified
-    ) = Field(default_factory=lambda: SentenceRepresentations())
+    representations: tp.Annotated[
+        SentenceRepresentations | WordRepresentations | SimulatedRepresentations,
+        Field(discriminator="level"),
+    ] = Field(default_factory=lambda: SentenceRepresentations())
     n_splits: int = 5
 
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
