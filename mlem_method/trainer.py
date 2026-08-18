@@ -5,14 +5,13 @@ import typing as tp
 from exca import TaskInfra
 from pydantic import ConfigDict, Field
 
-from .dataset import Dataset
+from .dataset import Dataset, SimulatedRepresentations
 from .estimate_correlations import EstimateCorrelations
 from .pairwise_dataloader import (
     PairwiseDataloaderBuilder,
     PairwiseDataLoaderGenerator,
 )
 from .sentence_representations import SentenceRepresentations
-from .simulation import SimulatedRepresentations
 from .spd_matrix_learner import SPDMatrixLearnerBuilder
 from .syntmov2024_representations import SyntMov2024Representations
 from .utils import (
@@ -31,6 +30,7 @@ if tp.TYPE_CHECKING:
 
 
 class Trainer(BaseModelSharing):
+    kind: tp.Literal["mlem"] = "mlem"
     dataset: Dataset = Field(default_factory=lambda: Dataset())
     estimate_correlations: EstimateCorrelations = Field(default_factory=lambda: EstimateCorrelations())
     representations: tp.Annotated[
@@ -133,3 +133,54 @@ class Trainer(BaseModelSharing):
     def one_log(self) -> pd.DataFrame:
         _, all_logs = self._train_cached()
         return all_logs[0]
+
+    def fi_groups(self) -> pd.DataFrame:
+        import pandas as pd
+
+        return pd.DataFrame(
+            {
+                "Feature": self.dataset.pcoordinates,
+                "Group": self.dataset.pcoordinate_groups,
+            }
+        )
+
+
+class OracleTrainer(Trainer):
+    kind: tp.Literal["oracle"] = "oracle"
+
+    def get_model(self, state_dict=None, device=None):
+        from .simulation import OracleLearner
+
+        device = device or self.device or get_device()
+        self.representations()
+        Z = self.dataset.encode()[0].to(device)
+        _, n_pairs = self.estimate_correlations.estimate_correlations()
+        model = OracleLearner(n_features=Z.shape[1])
+        model.bind(self.representations.dataset.simulation.transform, Z, n_pairs)
+        return model
+
+    def get_folds(self, device=None) -> PairwiseDataLoaderGenerator:
+        device = device or self.device or get_device()
+        _, n_pairs = self.estimate_correlations.estimate_correlations()
+        X = self.dataset.encode()[0].to(device)
+        self.representations()
+        Y = self.representations.dataset.simulation.transform(X)
+        return self.dataloader_builder.build(
+            X=X,
+            Y=Y,
+            gamma=self.gamma,
+            n_pairs=n_pairs,
+            seed=seed_from_basemodel(self),
+            signed=self.dataset.mahalanobis,
+        )
+
+    def train(self):
+        import pandas as pd
+
+        return [self.get_model()], [pd.DataFrame()]
+
+    def fi_groups(self):
+        import pandas as pd
+
+        gser = self.dataset.encode()[1]
+        return pd.DataFrame({"Feature": gser.index, "Group": gser.to_numpy()})

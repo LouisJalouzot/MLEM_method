@@ -175,3 +175,25 @@ class Dataset(BaseModel):
     @infra.apply
     def _encode(self) -> tuple[torch.Tensor, pd.Series]:
         return encode_df(self.df_features, simplex=self.mahalanobis)
+
+
+class SimulatedRepresentations(BaseModel):
+    dataset: Dataset
+    level: tp.Literal["simulated"] = "simulated"
+    model_config: ConfigDict = ConfigDict(extra="forbid")
+
+    @property
+    def W(self):
+        return None if self.dataset.simulation is None else getattr(self.dataset.simulation, "W", None)
+
+    @property
+    def gt_weights(self):
+        return None if self.dataset.simulation is None else getattr(self.dataset.simulation, "gt_weights", None)
+
+    def __call__(self):
+        if self.dataset.simulation is None:
+            raise ValueError("SimulatedRepresentations requires dataset.simulation")
+        Z, groups = self.dataset.encode()
+        return self.dataset.simulation.make_Y(
+            Z, groups, seed_from_basemodel(self.dataset), signed=self.dataset.mahalanobis
+        )

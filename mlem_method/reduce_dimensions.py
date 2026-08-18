@@ -6,9 +6,8 @@ from exca import TaskInfra
 from pydantic import ConfigDict, Field
 from tqdm.auto import tqdm
 
-from .dataset import Dataset
+from .dataset import Dataset, SimulatedRepresentations
 from .sentence_representations import SentenceRepresentations
-from .simulation import SimulatedRepresentations
 from .utils import BaseModelSharing
 from .word_representations import WordRepresentations
 

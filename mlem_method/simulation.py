@@ -91,6 +91,10 @@ class PolynomialSimulation(BaseModel):
     outlier_scale: float = 10
     _strength: pd.Series = None
     _Y: torch.Tensor = None
+    _powers: np.ndarray = None
+    _mean: np.ndarray = None
+    _scale: np.ndarray = None
+    _A: np.ndarray = None
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def feature_names(self) -> np.ndarray:
@@ -132,18 +136,19 @@ class PolynomialSimulation(BaseModel):
         # columns belong to the same feature (two simplex axes of one categorical).
         term_features = [tuple(np.unique(coord_feature[p])) for p in powers]
         keep = np.array([len(f) == p.sum() for f, p in zip(term_features, powers)])
-        groups = pd.Series([f for f, k in zip(term_features, keep) if k])
-        H = StandardScaler().fit_transform(H[:, keep])
+        term_groups = pd.Series([f for f, k in zip(term_features, keep) if k])
+        scaler = StandardScaler()
+        H = scaler.fit_transform(H[:, keep])
 
         # Sparse, heavy-tailed strength for each theoretical main effect/interaction.
-        unique = groups.drop_duplicates()
+        unique = term_groups.drop_duplicates()
         prob = np.array([self.p_main if len(g) == 1 else self.p_inter for g in unique])
         strength = pd.Series(
             (rng.random(len(unique)) < prob) * rng.lognormal(size=len(unique)), index=unique, name="strength"
         )
 
         # Random distributed encoding; normalize for number of coordinates per group.
-        scale = groups.map(strength / np.sqrt(groups.value_counts())).to_numpy()
+        scale = term_groups.map(strength / np.sqrt(term_groups.value_counts())).to_numpy()
         A = normalize(rng.normal(size=(H.shape[1], self.d)), axis=1) * scale[:, None]
 
         Y = H @ A
@@ -153,30 +158,101 @@ class PolynomialSimulation(BaseModel):
         eps[rng.random(len(Y)) < self.outliers] *= self.outlier_scale
         eps *= self.noise * Y.std() / eps.std()
         self._strength = strength
+        self._powers = poly.powers_[keep]
+        self._mean = scaler.mean_
+        self._scale = scaler.scale_
+        self._A = A
         self._Y = torch.from_numpy((Y + eps).astype(np.float32))
         return self._Y
+
+    def transform(self, Z: torch.Tensor) -> torch.Tensor:
+        import torch
+
+        if self._A is None:
+            raise RuntimeError("call make_Y first")
+        Z = torch.as_tensor(Z, dtype=torch.float32)
+        powers = torch.as_tensor(self._powers, dtype=Z.dtype, device=Z.device)
+        mean = torch.as_tensor(self._mean, dtype=Z.dtype, device=Z.device)
+        std = torch.as_tensor(self._scale, dtype=Z.dtype, device=Z.device)
+        A = torch.as_tensor(self._A, dtype=Z.dtype, device=Z.device)
+        H = Z[:, None, :].pow(powers).prod(2)
+        return ((H - mean) / std) @ A
 
 
 Simulation = tp.Annotated[MdsSimulation | PolynomialSimulation, Field(discriminator="kind")]
 
 
-class SimulatedRepresentations(BaseModel):
-    dataset: Dataset
-    level: tp.Literal["simulated"] = "simulated"
-    model_config: ConfigDict = ConfigDict(extra="forbid")
+class OracleLearner:
+    """Dummy model: PFI permutes Z, score is Spearman of G-distances."""
 
-    @property
-    def W(self):
-        return None if self.dataset.simulation is None else getattr(self.dataset.simulation, "W", None)
+    maximize = True
 
-    @property
-    def gt_weights(self) -> pd.DataFrame | None:
-        return None if self.dataset.simulation is None else getattr(self.dataset.simulation, "gt_weights", None)
+    def __init__(self, n_features: int, **kwargs):
+        import torch
 
-    def __call__(self) -> torch.Tensor:
-        if self.dataset.simulation is None:
-            raise ValueError("SimulatedRepresentations requires dataset.simulation")
-        Z, groups = self.dataset.encode()
-        return self.dataset.simulation.make_Y(
-            Z, groups, seed_from_basemodel(self.dataset), signed=self.dataset.mahalanobis
-        )
+        self.n_features = n_features
+        self.triu_indices = torch.triu_indices(n_features, n_features)
+        self.transform = None
+        self.Z = None
+        self.Y = None
+        self.n_pairs = 4096
+        self.i = self.j = self.D = None
+
+    def parameters(self):
+        return iter(())
+
+    def bind(self, transform, Z, n_pairs: int):
+        self.transform = transform
+        self.Z = Z
+        self.Y = transform(Z)
+        self.n_pairs = n_pairs
+        self.resample_pairs()
+
+    def resample_pairs(self):
+        import torch
+
+        n = len(self.Z)
+        self.i = torch.randint(n, (self.n_pairs,), device=self.Z.device)
+        self.j = torch.randint(n, (self.n_pairs,), device=self.Z.device)
+        self.D = (self.Y[self.i] - self.Y[self.j]).norm(dim=1)
+
+    def forward_score(self, Zp):
+        from .utils import spearman
+
+        Yp = self.transform(Zp)
+        return spearman((Yp[self.i] - Yp[self.j]).norm(dim=1), self.D)
+
+    def batch_importance(self, mask):
+        from captum.attr import FeaturePermutation
+
+        self.resample_pairs()
+        mask = mask.to(self.Z.device)
+        attr = FeaturePermutation(self.forward_score).attribute(self.Z, feature_mask=mask[None])
+        imp = attr.reshape(-1, attr.shape[-1]).mean(0).cpu().double().numpy()
+        return imp, self.forward_score(self.Z).item()
+
+    def score(self, *args, **kwargs):
+        return self.forward_score(self.Z).item()
+
+    def get_W(self):
+        import torch
+
+        return torch.zeros(self.n_features, self.n_features)
+
+    def get_flat_forwatted_W(self, pfeatures):
+        import pandas as pd
+
+        return pd.DataFrame({"Feature": pfeatures, "Weight": 0.0})
+
+    def to(self, device):
+        if self.Z is not None:
+            self.Z = self.Z.to(device)
+            self.Y = self.Y.to(device)
+            self.resample_pairs()
+        return self
+
+    def load_state_dict(self, state_dict):
+        return self
+
+    def state_dict(self):
+        return {}

@@ -11,9 +11,8 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 from tqdm.auto import tqdm
 
-from .dataset import Dataset
+from .dataset import Dataset, SimulatedRepresentations
 from .sentence_representations import SentenceRepresentations
-from .simulation import SimulatedRepresentations
 from .utils import BaseModelSharing, compute_stats
 from .word_representations import WordRepresentations
 

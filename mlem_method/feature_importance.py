@@ -10,7 +10,7 @@ from tqdm.auto import tqdm
 from .dataset import Dataset
 from .estimate_correlations import EstimateCorrelations
 from .pairwise_dataloader import PairwiseDataloader
-from .trainer import Trainer
+from .trainer import OracleTrainer, Trainer
 from .utils import BaseModelSharing, compute_stats, get_n_layers
 
 if tp.TYPE_CHECKING:
@@ -50,23 +50,24 @@ def compute_feature_importance(
         disable=True,
     ):
         t = time()
-        X_batch, Y_batch = dataloader[i]
-        mask = mask.to(X_batch.device)
+        if hasattr(model, "batch_importance"):
+            batch_importances, s = model.batch_importance(mask)
+        else:
+            X_batch, Y_batch = dataloader[i]
+            mask = mask.to(X_batch.device)
 
-        # Create flattened feature interactions
-        X_batch_flat = X_batch[:, None] * X_batch[:, :, None]
-        X_batch_flat = X_batch_flat[:, *model.triu_indices]
+            # Create flattened feature interactions
+            X_batch_flat = X_batch[:, None] * X_batch[:, :, None]
+            X_batch_flat = X_batch_flat[:, *model.triu_indices]
 
-        # Calculate feature importance
-        feature_perm = FeaturePermutation(lambda x, Y_batch=Y_batch: model.score(x, Y_batch, flat=True))
-        batch_importances = feature_perm.attribute(X_batch_flat, feature_mask=mask[None]).cpu()
-        batch_importances = batch_importances.double().numpy().squeeze()
+            # Calculate feature importance
+            feature_perm = FeaturePermutation(lambda x, Y_batch=Y_batch: model.score(x, Y_batch, flat=True))
+            batch_importances = feature_perm.attribute(X_batch_flat, feature_mask=mask[None]).cpu()
+            batch_importances = batch_importances.double().numpy().squeeze()
+            s = model.score(X_batch, Y_batch)
         if not model.maximize:
             batch_importances *= -1
         importances.append(batch_importances)
-
-        # Calculate baseline performance
-        s = model.score(X_batch, Y_batch)
         score.append(s)
 
         logger.debug(f"Batch {i:<3} / {n_perm} - Duration: {time() - t:<8.3f}s - Score: {s:<8.3g}")
@@ -151,7 +152,9 @@ def compute_cv_stats_per_split(df, alpha=0.01):
 class FeatureImportance(BaseModelSharing):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
     estimate_correlations: EstimateCorrelations = Field(default_factory=lambda: EstimateCorrelations())
-    trainer: Trainer = Field(default_factory=lambda: Trainer())
+    trainer: tp.Annotated[Trainer | OracleTrainer, Field(discriminator="kind")] = Field(
+        default_factory=lambda: Trainer()
+    )
 
     n_perm: int = 5
     monitor: tp.Literal["std", "ci_width"] = "std"
@@ -213,13 +216,7 @@ class FeatureImportance(BaseModelSharing):
     def compute(self) -> tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]:
         import pandas as pd
 
-        groups = pd.DataFrame(
-            {
-                "Feature": self.dataset.pcoordinates,
-                "Group": self.dataset.pcoordinate_groups,
-            }
-        )
-
+        groups = self.trainer.fi_groups()
         all_models, all_logs = self.trainer.train()
 
         n_groups = len(groups) if self.pfi_grouping == "coordinate" else groups.Group.nunique()
