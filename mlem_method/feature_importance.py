@@ -162,7 +162,7 @@ class FeatureImportance(BaseModelSharing):
     alpha: float = 0.01
     pfi_grouping: tp.Literal["feature", "coordinate"] = "feature"
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="2")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
     layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
     map_infra: MapInfra = MapInfra(version="2")
     model_config: ConfigDict = ConfigDict(extra="forbid")

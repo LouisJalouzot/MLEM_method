@@ -148,23 +148,30 @@ class Trainer(BaseModelSharing):
 class OracleTrainer(Trainer):
     kind: tp.Literal["oracle"] = "oracle"
 
+    def model_post_init(self, __context: tp.Any, /) -> None:
+        super().model_post_init(__context)
+        if self.dataloader_builder.cv is not None:
+            raise ValueError("OracleTrainer requires dataloader_builder.cv=None")
+
     def get_model(self, state_dict=None, device=None):
         from .simulation import OracleLearner
 
         device = device or self.device or get_device()
         self.representations()
-        Z = self.dataset.encode()[0].to(device)
+        simulation = self.representations.dataset.simulation
+        Z = simulation.terms.to(device) if simulation.kind == "poly" else self.dataset.encode()[0].to(device)
         _, n_pairs = self.estimate_correlations.estimate_correlations()
         model = OracleLearner(n_features=Z.shape[1])
-        model.bind(self.representations.dataset.simulation.transform, Z, n_pairs)
+        model.bind(simulation.transform, Z, n_pairs)
         return model
 
     def get_folds(self, device=None) -> PairwiseDataLoaderGenerator:
         device = device or self.device or get_device()
-        _, n_pairs = self.estimate_correlations.estimate_correlations()
-        X = self.dataset.encode()[0].to(device)
         self.representations()
-        Y = self.representations.dataset.simulation.transform(X)
+        simulation = self.representations.dataset.simulation
+        X = simulation.terms.to(device) if simulation.kind == "poly" else self.dataset.encode()[0].to(device)
+        Y = simulation.transform(X)
+        _, n_pairs = self.estimate_correlations.estimate_correlations()
         return self.dataloader_builder.build(
             X=X,
             Y=Y,
@@ -180,7 +187,9 @@ class OracleTrainer(Trainer):
         return [self.get_model()], [pd.DataFrame()]
 
     def fi_groups(self):
-        import pandas as pd
-
-        gser = self.dataset.encode()[1]
-        return pd.DataFrame({"Feature": gser.index, "Group": gser.to_numpy()})
+        self.representations()
+        simulation = self.representations.dataset.simulation
+        if simulation.kind == "poly":
+            return simulation.term_groups.copy()
+        groups = self.dataset.encode()[1]
+        return groups.rename_axis("Feature").rename("Group").reset_index()

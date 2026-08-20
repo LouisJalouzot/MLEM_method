@@ -91,9 +91,8 @@ class PolynomialSimulation(BaseModel):
     outlier_scale: float = 10
     _strength: pd.Series = None
     _Y: torch.Tensor = None
-    _powers: np.ndarray = None
-    _mean: np.ndarray = None
-    _scale: np.ndarray = None
+    _terms: torch.Tensor = None
+    _term_groups: pd.DataFrame = None
     _A: np.ndarray = None
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
@@ -137,6 +136,17 @@ class PolynomialSimulation(BaseModel):
         term_features = [tuple(np.unique(coord_feature[p])) for p in powers]
         keep = np.array([len(f) == p.sum() for f, p in zip(term_features, powers)])
         term_groups = pd.Series([f for f, k in zip(term_features, keep) if k])
+        term_powers = poly.powers_[keep].astype(bool)
+        coordinates = groups.index.to_numpy(dtype=str)
+        term_names = [
+            coordinates[power].item()
+            if power.sum() == 1
+            else f"({coordinates[power][0]} x {coordinates[power][1]})"
+            for power in term_powers
+        ]
+        group_names = [
+            group[0] if len(group) == 1 else f"({group[0]} x {group[1]})" for group in term_groups
+        ]
         scaler = StandardScaler()
         H = scaler.fit_transform(H[:, keep])
 
@@ -158,32 +168,37 @@ class PolynomialSimulation(BaseModel):
         eps[rng.random(len(Y)) < self.outliers] *= self.outlier_scale
         eps *= self.noise * Y.std() / eps.std()
         self._strength = strength
-        self._powers = poly.powers_[keep]
-        self._mean = scaler.mean_
-        self._scale = scaler.scale_
+        self._terms = torch.from_numpy(H.astype(np.float32))
+        self._term_groups = pd.DataFrame({"Feature": term_names, "Group": group_names})
         self._A = A
         self._Y = torch.from_numpy((Y + eps).astype(np.float32))
         return self._Y
 
-    def transform(self, Z: torch.Tensor) -> torch.Tensor:
+    @property
+    def terms(self) -> torch.Tensor:
+        if self._terms is None:
+            raise RuntimeError("call make_Y first")
+        return self._terms
+
+    @property
+    def term_groups(self) -> pd.DataFrame:
+        if self._term_groups is None:
+            raise RuntimeError("call make_Y first")
+        return self._term_groups
+
+    def transform(self, H: torch.Tensor) -> torch.Tensor:
         import torch
 
         if self._A is None:
             raise RuntimeError("call make_Y first")
-        Z = torch.as_tensor(Z, dtype=torch.float32)
-        powers = torch.as_tensor(self._powers, dtype=Z.dtype, device=Z.device)
-        mean = torch.as_tensor(self._mean, dtype=Z.dtype, device=Z.device)
-        std = torch.as_tensor(self._scale, dtype=Z.dtype, device=Z.device)
-        A = torch.as_tensor(self._A, dtype=Z.dtype, device=Z.device)
-        H = Z[:, None, :].pow(powers).prod(2)
-        return ((H - mean) / std) @ A
+        return H @ torch.as_tensor(self._A, dtype=H.dtype, device=H.device)
 
 
 Simulation = tp.Annotated[MdsSimulation | PolynomialSimulation, Field(discriminator="kind")]
 
 
 class OracleLearner:
-    """Dummy model: PFI permutes Z, score is Spearman of G-distances."""
+    """Dummy model: PFI permutes oracle input terms, score is Spearman of distances."""
 
     maximize = True
 
