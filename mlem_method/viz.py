@@ -90,7 +90,7 @@ families_rename = {
     "Llama": "Llama-3.2",
     "Ministral": "Ministral-3",
     "OLMo": "OLMo-2",
-    "rwkv7": "RWKV7",
+    "rwkv": "RWKV4",
 }
 
 levels_rename = {
