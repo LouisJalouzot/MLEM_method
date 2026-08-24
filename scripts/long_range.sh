@@ -14,6 +14,6 @@ python experiments/think_alike/families/trajectories.py \
     --input experiments/think_alike/long_range_2/0.parquet \
     --output-dir think_alike/figures/long_range_2
 
-python experiments/think_alike/families/dtw_figure.py \
-    --input experiments/think_alike/long_range_2/0.parquet \
-    --output-dir think_alike/figures/long_range_2
+python experiments/think_alike/dtw/fi_figure.py --long-range
+python experiments/think_alike/dtw/mds_figure.py --long-range
+python experiments/think_alike/dtw/metadata_figures.py

@@ -44,9 +44,7 @@ with tqdm(total=total_iters, desc="Computing correlations") as pbar:
         ax.legend(loc="upper right", fontsize=9)
         ax.spines[["top", "right"]].set_visible(False)
 
-plt.suptitle(
-    "Distribution of Correlations Between RDMs of Random Vectors", fontsize=14, y=1.02
-)
+plt.suptitle("Distribution of Correlations Between RDMs of Random Vectors", fontsize=14, y=1.02)
 plt.tight_layout()
 plt.savefig("rdm_correlations.png", dpi=150, metadata={"CreationDate": None})
 plt.show()

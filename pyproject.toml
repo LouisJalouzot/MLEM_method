@@ -75,7 +75,7 @@ captum = { git = "https://github.com/meta-pytorch/captum" }
 causal-conv1d = { url = "https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.6.0/causal_conv1d-1.6.0+cu12torch2.7cxx11abiTRUE-cp313-cp313-linux_x86_64.whl" }
 mamba-ssm = { url = "https://github.com/state-spaces/mamba/releases/download/v2.3.0/mamba_ssm-2.3.0+cu12torch2.7cxx11abiTRUE-cp313-cp313-linux_x86_64.whl" }
 torchsort = { url = "https://github.com/LouisJalouzot/torchsort/releases/download/0.0.0/torchsort-0.1.10+pt27cu12-cp313-cp313-linux_x86_64.whl" }
-mlem = { git = "https://github.com/LouisJalouzot/MLEM" }
+mlem = { git = "https://github.com/LouisJalouzot/MLEM.git" }
 
 [[tool.uv.index]]
 name = "pytorch-cu12"

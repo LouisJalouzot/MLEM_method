@@ -12,7 +12,7 @@ import plotly.io as pio
 import seaborn as sns
 from dtw import dtw
 from huggingface_hub import model_info
-from joblib import Parallel, delayed
+from joblib import Memory, Parallel, delayed
 from mlem.mlem import MLEM
 from plotly.colors import sample_colorscale
 from scipy.ndimage import gaussian_filter
@@ -41,6 +41,8 @@ metadata = pd.read_csv("model_metadata.csv")
 to_keep = metadata.model_name.tolist()
 
 ROOT = Path(__file__).resolve().parents[1]
+FIGURE_DIR = ROOT / "think_alike/figures"
+MEMORY = Memory(ROOT / ".cache/joblib", verbose=0)
 MAIN_COHORT_SIZE = 44
 MAIN_GROUPS = {
     "Model size": ["Num. Parameters", "Active Parameters", "Depth", "Width"],
@@ -49,6 +51,7 @@ MAIN_GROUPS = {
     "Sequence computation": ["Positional Encoding", "Token Mixer"],
     "Block transformation": ["Normalization", "Non-linearity"],
 }
+GROUP_COLORS = {group: mpl.colormaps[palettes[i]](0.7) for i, group in enumerate(MAIN_GROUPS)}
 
 feature_rename = {
     "subj_NUM": "Subject number",
@@ -374,6 +377,7 @@ def load_cohort():
     return model_metadata, index, features, features_dist
 
 
+@MEMORY.cache
 def load_distance_folds(condition):
     """Per-fold symmetric model-distance matrices for one condition, from the canonical parquets.
 
@@ -425,7 +429,9 @@ def load_distance_folds(condition):
                 raise ValueError(f"{input_path} must contain five cross-validation folds")
             local_index = pd.MultiIndex.from_frame(meta_i[["family", "model"]].drop_duplicates())
             distance_dfs = [pd.DataFrame(np.nan, index=local_index, columns=local_index) for _ in cvs]
-            pbar = tqdm(total=len(cvs) * len(local_index) * (len(local_index) + 1) // 2, desc=f"Computing {condition} DTW")
+            pbar = tqdm(
+                total=len(cvs) * len(local_index) * (len(local_index) + 1) // 2, desc=f"Computing {condition} DTW"
+            )
             with pbar:
                 for fold, cv in enumerate(cvs):
                     for k, (family_1, model_1) in enumerate(local_index):

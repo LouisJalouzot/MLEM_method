@@ -98,10 +98,18 @@ def get_model_metadata(model_id, architecture, n_params_B, n_tokens_B):
     width = get_first_attr(config, "hidden_size", "n_embd", "d_model")
     heads = config.get("num_attention_heads", config.get("n_head"))
     kv_heads = config.get("num_key_value_heads", heads)
-    attention = np.nan if architecture != "transformer" else (
-        "Multi-query" if kv_heads == 1 else "Grouped-query" if kv_heads < heads else "Multi-head"
+    attention = (
+        np.nan
+        if architecture != "transformer"
+        else ("Multi-query" if kv_heads == 1 else "Grouped-query" if kv_heads < heads else "Multi-head")
     )
-    activation = get_first_attr(config, "hidden_act", "activation_function").lower()
+    # RWKV-4 configs omit the activation field; HF RwkvFeedForward uses squared ReLU
+    # (torch.square(torch.relu(x)) in modeling_rwkv.py).
+    if "hidden_act" in config or "activation_function" in config:
+        activation = get_first_attr(config, "hidden_act", "activation_function").lower()
+    else:
+        assert model_type == "rwkv", f"No activation field in {model_id} ({model_type})"
+        activation = "square_relu"
     activation = {
         "gelu_new": "GELU",
         "gelu": "GELU",
@@ -156,50 +164,50 @@ def get_model_metadata(model_id, architecture, n_params_B, n_tokens_B):
 def generate_metadata():
     # model_id, architecture, n_params_B, n_tokens_B
     models_to_fetch = [
-        ("openai-community/gpt2", "transformer", 0.117, 10),  # Estimated
-        ("openai-community/gpt2-medium", "transformer", 0.345, 10),  # Estimated
-        ("openai-community/gpt2-large", "transformer", 0.762, 10),  # Estimated
-        ("openai-community/gpt2-xl", "transformer", 1.5, 10),  # Estimated
+        ("openai-community/gpt2", "transformer", 0.124, 10),  # Estimated
+        ("openai-community/gpt2-medium", "transformer", 0.355, 10),  # Estimated
+        ("openai-community/gpt2-large", "transformer", 0.774, 10),  # Estimated
+        ("openai-community/gpt2-xl", "transformer", 1.558, 10),  # Estimated
         ("facebook/opt-125m", "transformer", 0.125, 180),
-        ("facebook/opt-1.3b", "transformer", 1.3, 180),
-        ("facebook/opt-2.7b", "transformer", 2.7, 180),
-        ("facebook/opt-6.7b", "transformer", 6.7, 180),
-        ("facebook/opt-13b", "transformer", 13.0, 180),
-        ("EleutherAI/pythia-410m-deduped", "transformer", 0.410, 207),
-        ("EleutherAI/pythia-1b-deduped", "transformer", 1.0, 207),
-        ("EleutherAI/pythia-1.4b-deduped", "transformer", 1.4, 207),
-        ("EleutherAI/pythia-6.9b-deduped", "transformer", 6.9, 207),
-        ("EleutherAI/pythia-12b-deduped", "transformer", 12.0, 207),
-        ("allenai/OLMo-2-0425-1B", "transformer", 1.0, 4000),
-        ("allenai/OLMo-2-1124-7B", "transformer", 7.0, 4000),
-        ("allenai/OLMo-2-1124-13B", "transformer", 13.0, 5000),
-        ("meta-llama/Llama-3.2-1B", "transformer", 1.0, 9000),
-        ("meta-llama/Llama-3.2-3B", "transformer", 3.0, 9000),
-        ("meta-llama/Llama-3.1-8B", "transformer", 8.0, 15000),
-        ("mistralai/Ministral-3-3B-Base-2512", "transformer", 3.0, 3000),
-        ("mistralai/Ministral-3-8B-Base-2512", "transformer", 8.0, 3000),
-        ("mistralai/Ministral-3-14B-Base-2512", "transformer", 14.0, 3000),
-        ("Qwen/Qwen3-0.6B-Base", "transformer", 0.6, 36000),
-        ("Qwen/Qwen3-1.7B-Base", "transformer", 1.7, 36000),
-        ("Qwen/Qwen3-4B-Base", "transformer", 4.0, 36000),
-        ("Qwen/Qwen3-8B-Base", "transformer", 8.0, 36000),
-        ("Qwen/Qwen3-14B-Base", "transformer", 14.0, 36000),
-        ("state-spaces/mamba-130m-hf", "mamba", 0.130, 300),
-        ("state-spaces/mamba-370m-hf", "mamba", 0.370, 300),
-        ("state-spaces/mamba-790m-hf", "mamba", 0.790, 300),
-        ("state-spaces/mamba-1.4b-hf", "mamba", 1.4, 300),
-        ("state-spaces/mamba-2.8b-hf", "mamba", 2.8, 300),
-        ("AntonV/mamba2-130m-hf", "mamba", 0.130, 300),
-        ("AntonV/mamba2-370m-hf", "mamba", 0.370, 300),
-        ("AntonV/mamba2-780m-hf", "mamba", 0.780, 300),
-        ("AntonV/mamba2-1.3b-hf", "mamba", 1.3, 300),
-        ("AntonV/mamba2-2.7b-hf", "mamba", 2.7, 300),
+        ("facebook/opt-1.3b", "transformer", 1.316, 180),
+        ("facebook/opt-2.7b", "transformer", 2.652, 180),
+        ("facebook/opt-6.7b", "transformer", 6.659, 180),
+        ("facebook/opt-13b", "transformer", 12.853, 180),
+        ("EleutherAI/pythia-410m-deduped", "transformer", 0.405, 207),
+        ("EleutherAI/pythia-1b-deduped", "transformer", 1.012, 207),
+        ("EleutherAI/pythia-1.4b-deduped", "transformer", 1.415, 207),
+        ("EleutherAI/pythia-6.9b-deduped", "transformer", 6.857, 207),
+        ("EleutherAI/pythia-12b-deduped", "transformer", 11.846, 207),
+        ("allenai/OLMo-2-0425-1B", "transformer", 1.485, 4000),
+        ("allenai/OLMo-2-1124-7B", "transformer", 7.299, 4000),
+        ("allenai/OLMo-2-1124-13B", "transformer", 13.716, 5000),
+        ("meta-llama/Llama-3.2-1B", "transformer", 1.236, 9000),
+        ("meta-llama/Llama-3.2-3B", "transformer", 3.213, 9000),
+        ("meta-llama/Llama-3.1-8B", "transformer", 8.03, 15000),
+        ("mistralai/Ministral-3-3B-Base-2512", "transformer", 3.429, 3000),
+        ("mistralai/Ministral-3-8B-Base-2512", "transformer", 8.49, 3000),
+        ("mistralai/Ministral-3-14B-Base-2512", "transformer", 13.506, 3000),
+        ("Qwen/Qwen3-0.6B-Base", "transformer", 0.596, 36000),
+        ("Qwen/Qwen3-1.7B-Base", "transformer", 1.721, 36000),
+        ("Qwen/Qwen3-4B-Base", "transformer", 4.022, 36000),
+        ("Qwen/Qwen3-8B-Base", "transformer", 8.191, 36000),
+        ("Qwen/Qwen3-14B-Base", "transformer", 14.768, 36000),
+        ("state-spaces/mamba-130m-hf", "mamba", 0.129, 300),
+        ("state-spaces/mamba-370m-hf", "mamba", 0.372, 300),
+        ("state-spaces/mamba-790m-hf", "mamba", 0.793, 300),
+        ("state-spaces/mamba-1.4b-hf", "mamba", 1.372, 300),
+        ("state-spaces/mamba-2.8b-hf", "mamba", 2.768, 300),
+        ("AntonV/mamba2-130m-hf", "mamba", 0.129, 300),
+        ("AntonV/mamba2-370m-hf", "mamba", 0.368, 300),
+        ("AntonV/mamba2-780m-hf", "mamba", 0.78, 300),
+        ("AntonV/mamba2-1.3b-hf", "mamba", 1.344, 300),
+        ("AntonV/mamba2-2.7b-hf", "mamba", 2.703, 300),
         ("RWKV/rwkv-4-169m-pile", "rwkv", 0.169, 330),
-        ("RWKV/rwkv-4-430m-pile", "rwkv", 0.430, 330),
+        ("RWKV/rwkv-4-430m-pile", "rwkv", 0.43, 330),
         ("RWKV/rwkv-4-1b5-pile", "rwkv", 1.515, 330),
         ("RWKV/rwkv-4-3b-pile", "rwkv", 2.985, 330),
-        ("RWKV/rwkv-4-7b-pile", "rwkv", 7.396, 330),
-        ("RWKV/rwkv-4-14b-pile", "rwkv", 14.15, 330),
+        ("RWKV/rwkv-4-7b-pile", "rwkv", 7.393, 330),
+        ("RWKV/rwkv-4-14b-pile", "rwkv", 14.149, 330),
     ]
 
     results = tqdm(

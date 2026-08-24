@@ -1,19 +1,28 @@
-# Grouped permutation feature importance for one condition (MLEM and RSA).
+# %% Grouped permutation feature importance for one condition (MLEM and RSA).
 from argparse import ArgumentParser
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import torch
 from mlem.mlem import MLEM
-from mlem_method.viz import MAIN_GROUPS, load_cohort, load_distance_folds, plt, sns, tqdm
 
-OUTPUT_DIR = Path("think_alike/figures/dtw")
+from mlem_method.viz import (
+    FIGURE_DIR,
+    GROUP_COLORS,
+    MAIN_GROUPS,
+    MEMORY,
+    load_cohort,
+    load_distance_folds,
+    plt,
+    sns,
+    tqdm,
+)
 
 parser = ArgumentParser()
 parser.add_argument("--long-range", action="store_true")
 args = parser.parse_args()
 condition = "long_range" if args.long_range else "rc"
+OUTPUT_DIR = FIGURE_DIR / "dtw" / condition
 
 _, _, features, features_dist = load_cohort()
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -44,23 +53,33 @@ def grouped_model_importance(mlem, X, Y, groups, n_permutations=100, seed=0):
     return pd.DataFrame(importances), baseline
 
 
+# Cached MLEM fit + grouped permutation importance for one fold.
+# ponytail: features_dist/features are closure globals, not hashed; refresh cache if the cohort changes.
+@MEMORY.cache
+def fold_importance(train, test, seed):
+    mlem = MLEM(distance="precomputed", random_seed=0, device="cuda" if torch.cuda.is_available() else "cpu")
+    mlem.fit(features_dist, train, feature_names=features.columns)
+    fi, score = grouped_model_importance(mlem, features_dist, test, MAIN_GROUPS, seed=seed)
+    return fi.melt(var_name="Feature", value_name="Feature Importance"), score
+
+
+# %%
 for method in ("mlem", "rsa"):
     folds = folds_by_method[method]
     fis = []
     scores = []
     for cv, test in enumerate(tqdm(folds, desc=f"{condition} {method}")):
         train = np.mean([distance for fold, distance in enumerate(folds) if fold != cv], axis=0)
-        mlem = MLEM(distance="precomputed", random_seed=0, device="cpu")
-        mlem.fit(features_dist, train, feature_names=features.columns)
-        fi, score = grouped_model_importance(mlem, features_dist, test, MAIN_GROUPS, seed=cv)
+        fi, score = fold_importance(train, test, seed=cv)
         scores.append(score)
-        fis.append(fi.melt(var_name="Feature", value_name="Feature Importance").assign(cv=cv))
+        fis.append(fi.assign(cv=cv))
     print(condition, method, (np.mean(scores), np.std(scores)))
 
     fis = pd.concat(fis).groupby(["cv", "Feature"], as_index=False)["Feature Importance"].mean()
     print(fis.groupby("Feature")["Feature Importance"].agg(["mean", "std"]).sort_values("mean", ascending=False))
     hue_order = fis.groupby("Feature")["Feature Importance"].mean().sort_values(ascending=False).index
-    fig, ax = plt.subplots(figsize=(4.7, 3.25))
+
+    fig, ax = plt.subplots(figsize=(1.5, 3.25))
     sns.barplot(
         fis,
         x="Feature Importance",
@@ -68,6 +87,7 @@ for method in ("mlem", "rsa"):
         hue="Feature",
         order=hue_order,
         hue_order=hue_order,
+        palette=GROUP_COLORS,
         legend=False,
         orient="h",
         errorbar="sd",
@@ -75,8 +95,8 @@ for method in ("mlem", "rsa"):
     )
     sns.despine(trim=True)
     ax.set_ylabel("")
+    ax.set_xlabel("Feature Importance    ")
     fig.tight_layout()
-    stem = f"{'long_range_' if args.long_range else ''}{method}_group_fi"
+    stem = f"{method}_group_fi"
     fig.savefig(OUTPUT_DIR / f"{stem}.pdf", metadata={"CreationDate": None}, bbox_inches="tight")
-    fig.savefig(OUTPUT_DIR / f"{stem}.png", dpi=220, bbox_inches="tight")
     plt.close(fig)

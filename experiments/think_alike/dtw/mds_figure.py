@@ -1,10 +1,13 @@
 # MDS projection of the per-fold model distances for one condition (MLEM and RSA).
 from argparse import ArgumentParser
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from scipy.linalg import orthogonal_procrustes
+from sklearn.manifold import MDS
+
 from mlem_method.viz import (
+    FIGURE_DIR,
     load_cohort,
     load_distance_folds,
     markers,
@@ -14,15 +17,12 @@ from mlem_method.viz import (
     remove_unused_categories,
     sns,
 )
-from scipy.linalg import orthogonal_procrustes
-from sklearn.manifold import MDS
-
-OUTPUT_DIR = Path("think_alike/figures/dtw")
 
 parser = ArgumentParser()
 parser.add_argument("--long-range", action="store_true")
 args = parser.parse_args()
 condition = "long_range" if args.long_range else "rc"
+OUTPUT_DIR = FIGURE_DIR / "dtw" / condition
 
 _, index, _, _ = load_cohort()
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -176,7 +176,6 @@ for method in ("mlem", "rsa"):
     ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
     for spine in ax.spines.values():
         spine.set_visible(False)
-    stem = f"{condition}_{method}_mds"
+    stem = f"{method}_mds"
     fig.savefig(OUTPUT_DIR / f"{stem}.pdf", metadata={"CreationDate": None})
-    fig.savefig(OUTPUT_DIR / f"{stem}.png", dpi=220)
     plt.close(fig)
