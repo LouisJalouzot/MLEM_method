@@ -4,7 +4,7 @@ infra: infra
 base_config:
   device: cpu
   dataset:
-    path: datasets/relative_clause.csv
+    path: datasets/long_range_agreement_2.csv
   representations_1:
     level: sentence
     token_aggregation: last
@@ -16,8 +16,8 @@ base_config:
   infra:
     folder: .cache
     cluster: slurm
-    job_name: rsa_model
-    logs: .cache/logs/rsa_model/%j
+    job_name: rsa_model_long_range_2
+    logs: .cache/logs/rsa_model_long_range_2/%j
     cpus_per_task: 48
     gpus_per_node: 2
     timeout_min: 1200

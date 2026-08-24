@@ -26,4 +26,4 @@ grid_search:
     - facebook/opt-1.3b
     - google/t5gemma-b-b-ul2 # 0.6B
     - AntonV/mamba2-780m-hf  
-    - fla-hub/rwkv7-0.4B-world
+    - RWKV/rwkv-4-430m-pile

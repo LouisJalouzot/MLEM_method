@@ -13,6 +13,7 @@ import seaborn as sns
 from dtw import dtw
 from huggingface_hub import model_info
 from joblib import Parallel, delayed
+from mlem.mlem import MLEM
 from plotly.colors import sample_colorscale
 from scipy.ndimage import gaussian_filter
 from scipy.stats import weightedtau
@@ -38,6 +39,16 @@ palettes = [
 metadata = pd.read_csv("model_metadata.csv")
 
 to_keep = metadata.model_name.tolist()
+
+ROOT = Path(__file__).resolve().parents[1]
+MAIN_COHORT_SIZE = 44
+MAIN_GROUPS = {
+    "Model size": ["Num. Parameters", "Active Parameters", "Depth", "Width"],
+    "Training data": ["Training Tokens", "Training Context Length", "Vocabulary Size", "Language Focus"],
+    "Input/output interface": ["Tokenizer Type", "Tied Embeddings"],
+    "Sequence computation": ["Positional Encoding", "Token Mixer"],
+    "Block transformation": ["Normalization", "Non-linearity"],
+}
 
 feature_rename = {
     "subj_NUM": "Subject number",
@@ -349,3 +360,86 @@ def pca_lineplot2d(
         ax=ax,
         **kwargs,
     )
+
+
+def load_cohort():
+    if len(metadata) != MAIN_COHORT_SIZE:
+        raise ValueError(f"Expected {MAIN_COHORT_SIZE} main-cohort models in model_metadata.csv, found {len(metadata)}")
+    model_metadata = metadata.copy()
+    _, meta = clean_df(model_metadata[["model_name"]], meta_cols=["model_name"])
+    index = pd.MultiIndex.from_frame(meta[["family", "model"]])
+    features = model_metadata[[feature for members in MAIN_GROUPS.values() for feature in members]]
+    X = MLEM(distance="precomputed", device="cpu")._encode_df(features)
+    features_dist = (X[None] - X[:, None]).abs().clip(0, 1).nan_to_num(0)
+    return model_metadata, index, features, features_dist
+
+
+def load_distance_folds(condition):
+    """Per-fold symmetric model-distance matrices for one condition, from the canonical parquets.
+
+    Returns {"mlem": [fold_df, ...], "rsa": [fold_df, ...]}.
+    """
+    long_range = condition == "long_range"
+    inputs = {
+        "mlem": ROOT / "experiments/think_alike" / ("long_range_2/0.parquet" if long_range else "families/0.parquet"),
+        "rsa": ROOT
+        / "experiments/think_alike"
+        / ("rsa/model_long_range_2/0.parquet" if long_range else "rsa/model/0.parquet"),
+    }
+    _, index, _, _ = load_cohort()
+
+    folds_by_method = {}
+    for method, input_path in inputs.items():
+        if method == "rsa":
+            raw = pd.read_parquet(input_path)
+            left, right = [column for column in raw if column.endswith("model_name")]
+            if len({left, right}) != 2 or "spearman" not in raw:
+                raise ValueError(f"Unexpected RSA input schema: {input_path}")
+            raw = raw[raw[left].isin(to_keep) & raw[right].isin(to_keep)]
+            models = raw[left].drop_duplicates().tolist()
+            pair_counts = raw.groupby([left, right]).size()
+            if len(pair_counts) != MAIN_COHORT_SIZE**2 or not pair_counts.eq(5).all():
+                raise ValueError(
+                    f"{input_path} does not contain five observations for all {MAIN_COHORT_SIZE**2} ordered model pairs"
+                )
+            raw["cv"] = raw.groupby([left, right]).cumcount()
+            distance_dfs = []
+            for cv in sorted(raw["cv"].unique()):
+                correlations = raw[raw["cv"] == cv].pivot(index=left, columns=right, values="spearman")
+                correlations = correlations.loc[models, models]
+                correlations = ((correlations + correlations.T) / 2).clip(-1, 1)
+                distance_dfs.append(
+                    pd.DataFrame(np.sqrt(2 * (1 - correlations.to_numpy())), index=index, columns=index)
+                )
+        else:
+            i, meta_i = load_df(input_path, to_keep=to_keep)
+            if i["model_name"].nunique() != MAIN_COHORT_SIZE:
+                raise ValueError(f"{input_path} does not contain the complete {MAIN_COHORT_SIZE}-model main cohort")
+            i_pivot = i.pivot_table(
+                index=["cv", "family", "model", "layer"],
+                columns="Feature",
+                values="FI",
+            )
+            cvs = sorted(i_pivot.index.get_level_values("cv").unique())
+            if len(cvs) != 5:
+                raise ValueError(f"{input_path} must contain five cross-validation folds")
+            local_index = pd.MultiIndex.from_frame(meta_i[["family", "model"]].drop_duplicates())
+            distance_dfs = [pd.DataFrame(np.nan, index=local_index, columns=local_index) for _ in cvs]
+            pbar = tqdm(total=len(cvs) * len(local_index) * (len(local_index) + 1) // 2, desc=f"Computing {condition} DTW")
+            with pbar:
+                for fold, cv in enumerate(cvs):
+                    for k, (family_1, model_1) in enumerate(local_index):
+                        for family_2, model_2 in local_index[k:]:
+                            x = i_pivot.loc[cv, family_1, model_1].values
+                            y = i_pivot.loc[cv, family_2, model_2].values
+                            distance_dfs[fold].loc[(family_2, model_2), (family_1, model_1)] = dtw(
+                                x, y
+                            ).normalizedDistance
+                            pbar.update(1)
+
+        # Align every fold onto the canonical cohort index.
+        folds_by_method[method] = [
+            distance.combine_first(distance.T).fillna(0.0).reindex(index=index, columns=index).fillna(0.0)
+            for distance in distance_dfs
+        ]
+    return folds_by_method

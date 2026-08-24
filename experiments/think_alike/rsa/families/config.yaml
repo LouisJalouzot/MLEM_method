@@ -40,8 +40,8 @@ grid_search:
     - state-spaces/mamba-130m-hf
     - AntonV/mamba2-130m-hf
     # 5. RNNs
-    - fla-hub/rwkv7-1.5B-world
-    - fla-hub/rwkv7-2.9B-world
+    - RWKV/rwkv-4-1b5-pile
+    - RWKV/rwkv-4-3b-pile
   representations_2.model_name:
     - openai-community/gpt2 # 0.1B
     - openai-community/gpt2-medium # 0.4B
@@ -55,5 +55,5 @@ grid_search:
     - state-spaces/mamba-130m-hf
     - AntonV/mamba2-130m-hf
     # 5. RNNs
-    - fla-hub/rwkv7-1.5B-world
-    - fla-hub/rwkv7-2.9B-world
+    - RWKV/rwkv-4-1b5-pile
+    - RWKV/rwkv-4-3b-pile

@@ -31,10 +31,23 @@ RELEASE_DATES = {
     **{f"Qwen/Qwen3-{size}B-Base": date(2025, 4) for size in ["0.6", "1.7", "4", "8", "14"]},
     **{f"state-spaces/mamba-{size}-hf": date(2023, 12) for size in ["130m", "370m", "790m", "1.4b", "2.8b"]},
     **{f"AntonV/mamba2-{size}-hf": date(2024, 5) for size in ["130m", "370m", "780m", "1.3b", "2.7b"]},
-    **{
-        f"fla-hub/{model}": date(2025, 3)
-        for model in ["rwkv7-191M-world", "rwkv7-0.4B-world", "rwkv7-1.5B-world", "rwkv7-2.9B-world", "rwkv7-7.2B-g0a"]
-    },
+    **{f"RWKV/rwkv-4-{size}-pile": date(2023, 5) for size in ["169m", "430m", "1b5", "3b", "7b", "14b"]},
+}
+
+# Training context window in tokens.
+CONTEXT_LENGTHS = {
+    **{f"openai-community/gpt2{suffix}": 1024 for suffix in ["", "-medium", "-large", "-xl"]},
+    **{f"facebook/opt-{size}": 2048 for size in ["125m", "1.3b", "2.7b", "6.7b", "13b"]},
+    **{f"EleutherAI/pythia-{size}-deduped": 2048 for size in ["410m", "1b", "1.4b", "6.9b", "12b"]},
+    **{f"allenai/OLMo-2-{version}-{size}B": 4096 for version, size in [("0425", 1), ("1124", 7), ("1124", 13)]},
+    "meta-llama/Llama-3.2-1B": 131072,
+    "meta-llama/Llama-3.2-3B": 131072,
+    "meta-llama/Llama-3.1-8B": 131072,
+    **{f"mistralai/Ministral-3-{size}B-Base-2512": 262144 for size in [3, 8, 14]},
+    **{f"Qwen/Qwen3-{size}B-Base": 32768 for size in ["0.6", "1.7", "4", "8", "14"]},
+    **{f"state-spaces/mamba-{size}-hf": 2048 for size in ["130m", "370m", "790m", "1.4b", "2.8b"]},
+    **{f"AntonV/mamba2-{size}-hf": 2048 for size in ["130m", "370m", "780m", "1.3b", "2.7b"]},
+    **{f"RWKV/rwkv-4-{size}-pile": 1024 for size in ["169m", "430m", "1b5", "3b", "7b", "14b"]},
 }
 
 # family, tokenizer, positional encoding, normalization, language focus
@@ -46,9 +59,10 @@ DESIGN = {
     "llama": ("Llama-3", "Byte-level BPE", "RoPE", "RMSNorm", "Multilingual"),
     "ministral3": ("Ministral-3", "Byte-level BPE", "RoPE", "RMSNorm", "Multilingual"),
     "qwen3": ("Qwen3", "Byte-level BPE", "RoPE", "RMSNorm", "Multilingual"),
+    "gemma": ("Gemma", "Byte-level BPE", "RoPE", "RMSNorm", "English-centric"),
     "mamba": ("Mamba", "Byte-level BPE", np.nan, "RMSNorm", "English-centric"),
     "mamba2": ("Mamba-2", "Byte-level BPE", np.nan, "RMSNorm", "English-centric"),
-    "rwkv7": ("RWKV-7", "Trie", np.nan, "LayerNorm", "Multilingual"),
+    "rwkv": ("RWKV-4", "Byte-level BPE", np.nan, "LayerNorm", "English-centric"),
 }
 
 BLOCK_TYPE = {
@@ -59,9 +73,10 @@ BLOCK_TYPE = {
     "llama": "SwiGLU FFN",
     "ministral3": "SwiGLU FFN",
     "qwen3": "SwiGLU FFN",
+    "gemma": "GeGLU FFN",
     "mamba": "SSM gate",
     "mamba2": "SSM gate",
-    "rwkv7": "RWKV channel mix",
+    "rwkv": "RWKV channel mix",
 }
 
 
@@ -83,28 +98,58 @@ def get_model_metadata(model_id, architecture, n_params_B, n_tokens_B):
     width = get_first_attr(config, "hidden_size", "n_embd", "d_model")
     heads = config.get("num_attention_heads", config.get("n_head"))
     kv_heads = config.get("num_key_value_heads", heads)
-    attention = np.nan if architecture != "transformer" else "Grouped-query" if kv_heads < heads else "Multi-head"
+    attention = np.nan if architecture != "transformer" else (
+        "Multi-query" if kv_heads == 1 else "Grouped-query" if kv_heads < heads else "Multi-head"
+    )
     activation = get_first_attr(config, "hidden_act", "activation_function").lower()
-    activation = {"gelu_new": "GELU", "gelu": "GELU", "relu": "ReLU", "silu": "SiLU", "sqrelu": "SqReLU"}[activation]
+    activation = {
+        "gelu_new": "GELU",
+        "gelu": "GELU",
+        "relu": "ReLU",
+        "silu": "SiLU",
+        "sqrelu": "SqReLU",
+        "square_relu": "SqReLU",
+    }[activation]
+    token_mixer = {
+        "transformer": "Causal self-attention",
+        "mamba": "Selective state-space",
+        "rwkv": "Recurrent time-mix",
+    }[architecture]
+    ssm_variant = "Not an SSM"
+    if architecture == "mamba":
+        ssm_variant = "Mamba-2" if family == "Mamba-2" else "Mamba-1"
     return {
         "model_name": model_id,
         "Family": family,
         "Architecture": architecture,
         "Num. Parameters": np.log10(n_params_B),
+        "Active Parameters": np.log10(n_params_B),
         "Release Date": RELEASE_DATES[model_id],
         "Depth": depth,
         "Width": np.log2(width),
         "Depth / Width": depth / width,
         "Training Tokens": np.log10(n_tokens_B),
+        "Training Context Length": np.log2(CONTEXT_LENGTHS[model_id]),
+        "Training Lineage": "Pretraining",
         "Vocabulary Size": np.log2(config["vocab_size"]),
         "Tokenizer Type": tokenizer,
         "Language Focus": language_focus,
-        "Positional Encoding": positional,
-        "Attention Type": attention,
+        "Positional Encoding": positional if architecture == "transformer" else "No positional encoding",
+        "Attention Type": attention if architecture == "transformer" else "No attention",
+        "Attention Pattern": "Global" if architecture == "transformer" else "No attention",
+        "Attention Window": "Global" if architecture == "transformer" else "No window",
+        "KV Head Ratio": kv_heads / heads if architecture == "transformer" else 0.0,
+        "Attention Layer Fraction": float(architecture == "transformer"),
         "Normalization": normalization,
         "Non-linearity": activation,
         "FFN / Gating Type": BLOCK_TYPE[model_type],
+        "Num. Experts": 0,
+        "Active Experts": 0,
+        "MoE Layer Fraction": 0.0,
         "Tied Embeddings": str(config.get("tie_word_embeddings", model_type in {"gpt2", "opt"})),
+        "Token Mixer": token_mixer,
+        "Mixer Schedule": {"transformer": "Attention-only", "mamba": "Mamba-only", "rwkv": "RWKV-only"}[architecture],
+        "SSM Variant": ssm_variant,
     }
 
 
@@ -149,11 +194,12 @@ def generate_metadata():
         ("AntonV/mamba2-780m-hf", "mamba", 0.780, 300),
         ("AntonV/mamba2-1.3b-hf", "mamba", 1.3, 300),
         ("AntonV/mamba2-2.7b-hf", "mamba", 2.7, 300),
-        ("fla-hub/rwkv7-191M-world", "rwkv", 0.191, 1600),
-        ("fla-hub/rwkv7-0.4B-world", "rwkv", 0.4, 3100),
-        ("fla-hub/rwkv7-1.5B-world", "rwkv", 1.5, 5600),
-        ("fla-hub/rwkv7-2.9B-world", "rwkv", 2.9, 5600),
-        ("fla-hub/rwkv7-7.2B-g0a", "rwkv", 7.2, 5600),
+        ("RWKV/rwkv-4-169m-pile", "rwkv", 0.169, 330),
+        ("RWKV/rwkv-4-430m-pile", "rwkv", 0.430, 330),
+        ("RWKV/rwkv-4-1b5-pile", "rwkv", 1.515, 330),
+        ("RWKV/rwkv-4-3b-pile", "rwkv", 2.985, 330),
+        ("RWKV/rwkv-4-7b-pile", "rwkv", 7.396, 330),
+        ("RWKV/rwkv-4-14b-pile", "rwkv", 14.15, 330),
     ]
 
     results = tqdm(

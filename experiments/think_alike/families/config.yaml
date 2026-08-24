@@ -174,6 +174,13 @@ grid_search:
     - AntonV/mamba2-2.7b-hf
     
     # 5. RNNs
+    - RWKV/rwkv-4-169m-pile
+    - RWKV/rwkv-4-430m-pile
+    - RWKV/rwkv-4-1b5-pile
+    - RWKV/rwkv-4-3b-pile
+    - RWKV/rwkv-4-7b-pile
+    - RWKV/rwkv-4-14b-pile
+
     - RWKV/v6-Finch-1B6-HF
     - RWKV/v6-Finch-3B-HF
     - RWKV/v6-Finch-7B-HF
