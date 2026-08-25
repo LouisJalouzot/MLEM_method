@@ -52,7 +52,7 @@ Download fMRI betas, MEG epochs and concept annotations into `data/things`
 ```bash
 ./scripts/download_things.sh annotations
 ./scripts/download_things.sh fmri --dest data/things 01 02 03
-./scripts/download_things.sh meg   --dest data/things 01 02 03 04
+./scripts/download_things.sh meg --dest data/things 01 02 03 04
 ```
 
 Layout:
