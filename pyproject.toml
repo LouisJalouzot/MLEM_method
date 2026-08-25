@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
   "antspyx>=0.6.2; platform_machine == 'x86_64'",
+  "awscli>=1.46.0",
   "bitsandbytes>=0.49.2",                            # For RWKV/v6-Finch-*-HF
   "captum>=0.8.0",
   "causal-conv1d; platform_machine == 'x86_64'",
@@ -54,13 +55,13 @@ dependencies = [
   "statsmodels>=0.14.4",
   "tabulate>=0.9.0",
   "torch>=2.7.0,<2.8.0",
-  "triton==3.3.1; platform_machine == 'aarch64'",
   "torchsort>=0.1.10; platform_machine == 'x86_64'",
   "torchvision>=0.22.1",
   "tqdm>=4.67.1",
   # "transformers<5.0.0",    # For EuroBERT
   # "transformers>=4.53.0", # For T5Gemma
   "transformers>=5.3.0", # For mistralai/Ministral-3-*B-Base-2512 and "[Mamba] Fix kernel loading" (PR #44176)
+  "triton==3.3.1; platform_machine == 'aarch64'",
   "unflatten>=0.2.0",
   "wordfreq>=3.1.1",
 ]
@@ -70,14 +71,14 @@ where = ["."]
 include = ["mlem*"]
 
 [tool.uv.sources]
-torch = { index = "pytorch-cu12" }
-torchvision = { index = "pytorch-cu12" }
-triton = { index = "pytorch-cu12", marker = "platform_machine == 'aarch64'" }
 captum = { git = "https://github.com/meta-pytorch/captum" }
 causal-conv1d = { url = "https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.6.0/causal_conv1d-1.6.0+cu12torch2.7cxx11abiTRUE-cp313-cp313-linux_x86_64.whl", marker = "platform_machine == 'x86_64'" }
 mamba-ssm = { url = "https://github.com/state-spaces/mamba/releases/download/v2.3.0/mamba_ssm-2.3.0+cu12torch2.7cxx11abiTRUE-cp313-cp313-linux_x86_64.whl", marker = "platform_machine == 'x86_64'" }
-torchsort = { url = "https://github.com/LouisJalouzot/torchsort/releases/download/0.0.0/torchsort-0.1.10+pt27cu12-cp313-cp313-linux_x86_64.whl", marker = "platform_machine == 'x86_64'" }
 mlem = { git = "https://github.com/LouisJalouzot/MLEM" }
+torch = { index = "pytorch-cu12" }
+torchsort = { url = "https://github.com/LouisJalouzot/torchsort/releases/download/0.0.0/torchsort-0.1.10+pt27cu12-cp313-cp313-linux_x86_64.whl", marker = "platform_machine == 'x86_64'" }
+torchvision = { index = "pytorch-cu12" }
+triton = { index = "pytorch-cu12", marker = "platform_machine == 'aarch64'" }
 
 [[tool.uv.index]]
 name = "pytorch-cu12"
