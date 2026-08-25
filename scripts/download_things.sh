@@ -31,13 +31,13 @@ do_annotations() {
   local out="$DEST/annotations/property-ratings.tsv"
   mkdir -p "$(dirname "$out")"
   [[ -e $out ]] && { echo "exists, skipping $out"; return; }
-  curl -fsSL "$RATINGS" -o "$out"
+  curl -fL --progress-bar "$RATINGS" -o "$out"
   echo "wrote $out ($(du -m "$out" | cut -f1) MB)"
 }
 
 do_fmri() {
   local archive="$DEST/betas_csv.zip"
-  curl -fsSL "$FMRI_ZIP" -o "$archive"
+  curl -fL --progress-bar "$FMRI_ZIP" -o "$archive"
   local pats=()
   for s in $SUBJECTS; do pats+=("betas_csv/sub-${s}_*"); done
   unzip -o "$archive" "${pats[@]}" -d "$DEST"
