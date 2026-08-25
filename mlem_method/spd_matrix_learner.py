@@ -11,7 +11,9 @@ if tp.TYPE_CHECKING:
 
 
 class SPDMatrixLearnerBuilder(BaseModel):
-    param: tp.Literal["none", "diagonal", "sym", "triu", "exp", "cholesky", "dnn"] = "cholesky"
+    param: tp.Literal[
+        "none", "diagonal", "structured", "sym", "triu", "exp", "cholesky", "dnn"
+    ] = "cholesky"
     fro_norm: bool = True
     loss: tp.Literal["spearman", "mse"] = "spearman"
     scoring: tp.Literal["spearman", "mse"] = "spearman"
@@ -20,13 +22,14 @@ class SPDMatrixLearnerBuilder(BaseModel):
 
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
-    def build(self, n_features) -> SPDMatrixLearner:
+    def build(self, n_features, groups=None) -> SPDMatrixLearner:
         """Build the model using this configuration"""
         from .spd_matrix_learner_torch import SPDMatrixLearner
 
         return SPDMatrixLearner(
             n_features=n_features,
             param=self.param,
+            groups=groups,
             fro_norm=self.fro_norm,
             loss=self.loss,
             scoring=self.scoring,

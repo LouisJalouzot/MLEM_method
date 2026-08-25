@@ -1,3 +1,5 @@
+import typing as tp
+
 import pandas as pd
 import torch
 from loguru import logger
@@ -56,6 +58,36 @@ class DNNParam(nn.Module):
         return W + (shift + self.eps) * self.eye
 
 
+class StructuredParam(nn.Module):
+    def __init__(self, dim, groups):
+        super().__init__()
+        if len(groups) != dim:
+            raise ValueError(f"expected {dim} coordinate groups, got {len(groups)}")
+
+        names = list(dict.fromkeys(groups))
+        lookup = {name: i for i, name in enumerate(names)}
+        group_index = torch.tensor([lookup[name] for name in groups])
+        order = torch.cat([torch.where(group_index == i)[0] for i in range(len(names))])
+        sizes = torch.bincount(group_index).tolist()
+
+        self.register_buffer("group_index", group_index)
+        self.register_buffer("inverse_order", torch.argsort(order))
+        self.diagonal = nn.Parameter(torch.zeros(len(names)))
+        self.directions = nn.ParameterList([nn.Parameter(torch.empty(size, 1)) for size in sizes])
+        for direction in self.directions:
+            nn.init.orthogonal_(direction)
+
+        self.cookbook = MatrixSymPosDef(dim=len(names))
+        self.coupling = nn.Parameter(self.cookbook.params_to_reals1d(torch.eye(len(names))))
+
+    def forward(self, W):
+        directions = torch.block_diag(*(direction / direction.norm() for direction in self.directions))[
+            self.inverse_order
+        ]
+        coupling = self.cookbook.reals1d_to_params(self.coupling)
+        return torch.diag(self.diagonal.exp()[self.group_index]) + directions @ coupling @ directions.T
+
+
 class NormFroParam(nn.Module):
     def forward(self, X):
         return X / X.norm(p="fro")
@@ -71,18 +103,20 @@ class SPDMatrixLearner(nn.Module):
         scoring: str = "spearman",
         spearman_regularization: str = "l2",
         spearman_regularization_strength: float = 1.0,
+        groups: tp.Sequence[str] | None = None,
     ):
         """
         Initialize an SPD Matrix Learner model.
 
         Args:
             n_features: Number of features in the input
-            param: Parametrization type ("exp", "cholesky", "dnn", "diagonal", "sym", "triu", or "none")
+            param: Parametrization type
             fro_norm: Whether to apply Frobenius norm normalization
             loss: Loss function to use ("spearman" or "mse")
             scoring: Scoring method to use ("spearman" or "mse")
             spearman_regularization: Type of regularization for Spearman correlation
             spearman_regularization_strength: Strength of the regularization
+            groups: Coordinate-to-feature mapping required by the structured parametrization
         """
         super().__init__()
         self.spearman_regularization = spearman_regularization
@@ -114,6 +148,10 @@ class SPDMatrixLearner(nn.Module):
                 parametrize.register_parametrization(self.W, "weight", DNNParam(n_features))
             case "diagonal":
                 parametrize.register_parametrization(self.W, "weight", DiagonalParam())
+            case "structured":
+                if groups is None:
+                    raise ValueError("structured parametrization requires coordinate groups")
+                parametrize.register_parametrization(self.W, "weight", StructuredParam(n_features, groups))
             case "sym":
                 parametrize.register_parametrization(self.W, "weight", SymParam())
             case "triu":
@@ -122,15 +160,19 @@ class SPDMatrixLearner(nn.Module):
                 pass
             case _:
                 raise ValueError(
-                    f"Invalid parametrization: {self.param}. Choose from 'exp', 'cholesky', 'dnn', 'diagonal', 'sym', 'triu', or 'none'."
+                    f"Invalid parametrization: {self.param}. Choose from 'exp', 'cholesky', 'dnn', 'diagonal', "
+                    "'structured', 'sym', 'triu', or 'none'."
                 )
+
+        if self.param == "structured":
+            self.W.parametrizations.weight.original.requires_grad_(False)
 
         # Add normalization if requested
         if fro_norm:
             parametrize.register_parametrization(self.W, "weight", NormFroParam())
 
     def get_W(self) -> torch.Tensor:
-        W = self.W.weight.detach()
+        W = self.W.weight.detach().clone()
         if self.param == "triu":
             W = W.triu()
             W = W + W.T
