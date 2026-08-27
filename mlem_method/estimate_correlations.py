@@ -12,7 +12,7 @@ from pydantic import ConfigDict, Field
 
 from .dataset import Dataset
 from .pairwise_dataloader import PairwiseDataloader, PairwiseDataloaderBuilder
-from .utils import BaseModel, get_device, seed_from_basemodel
+from .utils import BaseModel, get_device
 
 
 def batch_corrcoef(x: torch.Tensor, ddof: int = 1, eps: float = 1e-8) -> torch.Tensor:
@@ -163,7 +163,7 @@ class EstimateCorrelations(BaseModel):
     ci_confidence: float = 0.99
 
     device: str | None = None
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="2")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
 
@@ -174,7 +174,7 @@ class EstimateCorrelations(BaseModel):
         X = self.dataset.encode()[0].to(self.device or get_device())
         dataloader = self.dataloader_builder.build_for_estimation(
             X,
-            seed=seed_from_basemodel(self),
+            seed=self.dataset.seed,
             signed=self.dataset.mahalanobis,
         )
 

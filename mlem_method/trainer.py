@@ -14,12 +14,7 @@ from .pairwise_dataloader import (
 from .sentence_representations import SentenceRepresentations
 from .spd_matrix_learner import SPDMatrixLearnerBuilder
 from .syntmov2024_representations import SyntMov2024Representations
-from .utils import (
-    BaseModelSharing,
-    get_device,
-    seed_everything,
-    seed_from_basemodel,
-)
+from .utils import BaseModelSharing, get_device, seed_everything
 from .word_representations import WordRepresentations
 
 if tp.TYPE_CHECKING:
@@ -50,7 +45,7 @@ class Trainer(BaseModelSharing):
     device: str | None = None
     unit_indices: list[int] | None = None
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="1")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
     _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {
@@ -64,7 +59,7 @@ class Trainer(BaseModelSharing):
 
     def get_model(self, state_dict=None, device=None) -> SPDMatrixLearner:
         n_features = self.dataset.n_coordinates
-        model = self.model_builder.build(n_features=n_features)
+        model = self.model_builder.build(n_features=n_features, groups=self.dataset.coordinate_groups)
         if state_dict is not None:
             model.load_state_dict(state_dict=state_dict)
 
@@ -88,7 +83,7 @@ class Trainer(BaseModelSharing):
             Y=Y,
             gamma=self.gamma,
             n_pairs=n_pairs,
-            seed=seed_from_basemodel(self),
+            seed=self.dataset.seed,
             signed=self.dataset.mahalanobis,
         )
 
@@ -96,7 +91,7 @@ class Trainer(BaseModelSharing):
     def _train_cached(self) -> tuple[list[torch.Tensor], pd.DataFrame]:
         from .trainer_torch import train
 
-        seed_everything(seed_from_basemodel(self))
+        seed_everything(self.dataset.seed)
 
         # Output state_dict as nn.Module can't be serialized for caching
         all_state_dicts = []
@@ -157,6 +152,7 @@ class OracleTrainer(Trainer):
         from .simulation import OracleLearner
 
         device = device or self.device or get_device()
+        seed_everything(self.dataset.seed)
         self.representations()
         simulation = self.representations.dataset.simulation
         Z = simulation.terms.to(device) if simulation.kind == "poly" else self.dataset.encode()[0].to(device)
@@ -177,7 +173,7 @@ class OracleTrainer(Trainer):
             Y=Y,
             gamma=self.gamma,
             n_pairs=n_pairs,
-            seed=seed_from_basemodel(self),
+            seed=self.dataset.seed,
             signed=self.dataset.mahalanobis,
         )
 

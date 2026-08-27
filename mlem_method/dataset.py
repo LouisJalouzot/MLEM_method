@@ -12,7 +12,7 @@ from exca import TaskInfra
 from pydantic import ConfigDict
 
 from .simulation import Simulation
-from .utils import BaseModel, encode_df, seed_from_basemodel
+from .utils import BaseModel, encode_df
 
 
 def _pair_names(names: np.ndarray) -> np.ndarray:
@@ -40,7 +40,7 @@ class Dataset(BaseModel):
     _words: list[str] = None
     _sentence_id: list[tp.Any] = None
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="2")
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def _exclude_from_cls_uid(self) -> tuple[str, ...]:
@@ -55,7 +55,7 @@ class Dataset(BaseModel):
         if self.simulation is not None:
             if only_columns:
                 return self.simulation.feature_names()
-            return self.simulation.make_df(seed_from_basemodel(self))
+            return self.simulation.make_df(self.seed)
         elif self.path.endswith(".csv"):
             data = pd.read_csv(self.path, nrows=0 if only_columns else None)
             if only_columns:
@@ -194,6 +194,4 @@ class SimulatedRepresentations(BaseModel):
         if self.dataset.simulation is None:
             raise ValueError("SimulatedRepresentations requires dataset.simulation")
         Z, groups = self.dataset.encode()
-        return self.dataset.simulation.make_Y(
-            Z, groups, seed_from_basemodel(self.dataset), signed=self.dataset.mahalanobis
-        )
+        return self.dataset.simulation.make_Y(Z, groups, self.dataset.seed, signed=self.dataset.mahalanobis)

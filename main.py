@@ -27,7 +27,9 @@ def yield_grid_search(grid_config):
         yield flat_config, unflatten(flat_config)
 
 
-def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max_workers=None, sequential=False):
+def run_grid_search(
+    base_class, grid_search, infra_path, fetch_results=True, max_workers=None, sequential=False, n_jobs=-2
+):
     """Run grid search with job array support.
 
     Args:
@@ -35,8 +37,9 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max
         grid_search: Dict of parameter paths to lists of values.
         infra_path: Dotted path to the infra to use (e.g., 'trainer.representations.infra').
         fetch_results: If True, collect and return results. If False, just wait for completion.
-        max_workers: Maximum number of workers. Defaults to n_configs if not specified.
+        max_workers: Maximum number of cluster workers. Defaults to n_configs if not specified.
         sequential: Run each task locally, cancelling its pending cluster job first.
+        n_jobs: Joblib workers used to construct tasks.
     """
     flat_configs = []
     n_configs = math.prod(len(v) for v in grid_search.values())
@@ -55,13 +58,8 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max
 
     with context as array:
         with tqdm(total=n_configs, desc="Creating tasks") as pbar:
-            for flat_config, task in Parallel(n_jobs=-2, return_as="generator", prefer="threads")(
-                delayed(
-                    lambda flat_config, config: (
-                        flat_config,
-                        base_infra.clone_obj(config),
-                    )
-                )(flat_config, config)
+            for flat_config, task in Parallel(n_jobs=n_jobs, return_as="generator", prefer="threads")(
+                delayed(lambda flat_config, config: (flat_config, base_infra.clone_obj(config)))(flat_config, config)
                 for flat_config, config in yield_grid_search(grid_search)
             ):
                 flat_configs.append(flat_config)
@@ -109,7 +107,7 @@ def run_grid_search(base_class, grid_search, infra_path, fetch_results=True, max
     return flat_configs, results
 
 
-def main(config: dict = {}):
+def main(config: dict = {}, n_jobs=-2):
     target = config.get("target", "mlem_method.FeatureImportance")
     module_name, class_name = target.rsplit(".", 1)
     module = importlib.import_module(module_name)
@@ -127,6 +125,7 @@ def main(config: dict = {}):
             fetch_results=False,
             max_workers=config.get("max_workers"),
             sequential=config.get("sequential", False),
+            n_jobs=n_jobs,
         )
 
     logger.info("Running grid search")
@@ -136,6 +135,7 @@ def main(config: dict = {}):
         infra_path=infra_path,
         max_workers=config.get("max_workers"),
         sequential=config.get("sequential", False),
+        n_jobs=n_jobs,
     )
 
     all_dfs = []
@@ -161,6 +161,12 @@ if __name__ == "__main__":
     parser.add_argument("config", nargs="*", type=str, default=None)
     parser.add_argument("--sequential", action="store_true", help="Run jobs one after another on this node.")
     parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=-2,
+        help="Joblib workers used to construct tasks (default: -2; use 1 if the backend is not thread-safe).",
+    )
+    parser.add_argument(
         "--log-level",
         type=str,
         default="INFO",
@@ -179,7 +185,7 @@ if __name__ == "__main__":
             with open(config_file, "r") as f:
                 config = yaml.safe_load(f)
             config["sequential"] = args.sequential
-            for i, df in enumerate(main(config)):
+            for i, df in enumerate(main(config, n_jobs=args.n_jobs)):
                 df.to_parquet(config_file.parent / f"{i}.parquet")
     else:
-        main()
+        main(n_jobs=args.n_jobs)

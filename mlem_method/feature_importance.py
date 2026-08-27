@@ -56,7 +56,7 @@ def compute_feature_importance(
             X_batch, Y_batch = dataloader[i]
             mask = mask.to(X_batch.device)
 
-            # Create flattened feature interactions
+            # Create flattened quadratic feature-change channels
             X_batch_flat = X_batch[:, None] * X_batch[:, :, None]
             X_batch_flat = X_batch_flat[:, *model.triu_indices]
 
@@ -162,7 +162,7 @@ class FeatureImportance(BaseModelSharing):
     alpha: float = 0.01
     pfi_grouping: tp.Literal["feature", "coordinate"] = "feature"
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="4")
     layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
     map_infra: MapInfra = MapInfra(version="2")
     model_config: ConfigDict = ConfigDict(extra="forbid")
