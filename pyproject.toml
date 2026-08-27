@@ -89,6 +89,3 @@ members = ["mlem"]
 
 [tool.ruff]
 line-length = 120
-
-[tool.pyright]
-typeCheckingMode = "off"
