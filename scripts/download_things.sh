@@ -1,66 +1,41 @@
 #!/usr/bin/env bash
-# Download THINGS-data subsets into $DEST (default data/things).
-#
-# usage: download_things.sh [annotations|fmri|meg|meg-probe|tiny] [--dest DIR] [subjects...]
-#   annotations  THINGSplus property ratings TSV (~10 MB)
-#   fmri         betas_csv.zip -> filtered unzip -> delete archive
-#                (figshare hosts one opaque 43 GB zip, so subjects ride in one transfer;
-#                 includes the per-subject ResponseData.h5 and metadata CSVs)
-#   meg          per-subject preprocessed epochs from OpenNeuro ds004212 (needs aws cli):
-#                aws s3 cp --no-sign-request s3://openneuro.org/ds004212/derivatives/preprocessed/
-#   meg-probe    list remote MEG files without downloading
-#   tiny         annotations + meg-probe
+# Download all THINGS annotations, fMRI betas, and preprocessed MEG epochs.
+# Usage: ./scripts/download_things.sh [destination]
 set -euo pipefail
 
-FMRI_ZIP="https://ndownloader.figshare.com/files/43635873"
-MEG_S3="s3://openneuro.org/ds004212/derivatives/preprocessed/"
-RATINGS="https://osf.io/download/670d5918125f07cd45015270"
+DEST=${1:-data/things}
+FMRI_URL=https://ndownloader.figshare.com/files/43635873
+MEG_URL=s3://openneuro.org/ds004212/derivatives/preprocessed/
+RATINGS_URL=https://osf.io/download/670d5918125f07cd45015270
 
-WHAT=tiny; DEST=data/things; SUBJECTS=(01)
-while [[ $# -gt 0 ]]; do
-  case $1 in
-    --dest) DEST=$2; shift 2 ;;
-    annotations|fmri|meg|meg-probe|tiny) WHAT=$1; shift ;;
-    *) SUBJECTS+=("$1"); shift ;;
-  esac
+for cmd in curl unzip aws; do
+  command -v "$cmd" >/dev/null || { echo "$cmd is required" >&2; exit 1; }
 done
-SUBJECTS=${SUBJECTS[*]}
-mkdir -p "$DEST"
 
-do_annotations() {
-  local out="$DEST/annotations/property-ratings.tsv"
-  mkdir -p "$(dirname "$out")"
-  [[ -e $out ]] && { echo "exists, skipping $out"; return; }
-  curl -fL --progress-bar "$RATINGS" -o "$out"
-  echo "wrote $out ($(du -m "$out" | cut -f1) MB)"
-}
+ratings="$DEST/annotations/property-ratings.tsv"
+if [[ ! -s $ratings ]]; then
+  mkdir -p "$(dirname "$ratings")"
+  curl -fL --retry 8 --progress-bar "$RATINGS_URL" -o "$ratings.tmp"
+  mv "$ratings.tmp" "$ratings"
+fi
 
-do_fmri() {
-  local archive="$DEST/betas_csv.zip"
-  curl -fL --progress-bar "$FMRI_ZIP" -o "$archive"
-  local pats=()
-  for s in $SUBJECTS; do pats+=("betas_csv/sub-${s}_*"); done
-  unzip -o "$archive" "${pats[@]}" -d "$DEST"
-  rm "$archive"
-}
+archive="$DEST/fmri/betas_csv.zip"
+complete="$DEST/fmri/betas_csv/.download-complete"
+if [[ ! -e $complete ]]; then
+  mkdir -p "$DEST/fmri"
+  unzip -Z1 "$archive" >/dev/null 2>&1 || \
+    curl -fL --retry 8 --progress-bar -C - "$FMRI_URL" -o "$archive"
+  unzip -o "$archive" 'betas_csv/*' -d "$DEST/fmri"
+  touch "$complete"
+fi
+rm -f "$archive"
 
-do_meg() {
-  command -v aws >/dev/null || { echo "aws cli required: https://docs.aws.amazon.com/cli/"; exit 1; }
-  local inc=()
-  for s in $SUBJECTS; do inc+=(--include "preprocessed_P${s#0}-epo*"); done
-  mkdir -p "$DEST/meg"
-  aws s3 cp --no-sign-request --recursive --exclude "*" "${inc[@]}" "$MEG_S3" "$DEST/meg/"
-}
-
-do_meg_probe() {
-  command -v aws >/dev/null || { echo "aws cli required"; return; }
-  aws s3 ls --no-sign-request "$MEG_S3" | grep -E "preprocessed_P[0-9]+-epo"
-}
-
-case $WHAT in
-  annotations) do_annotations ;;
-  fmri) do_fmri ;;
-  meg) do_meg ;;
-  meg-probe) do_meg_probe ;;
-  tiny) do_annotations; do_meg_probe ;;
-esac
+mkdir -p "$DEST/meg"
+aws --endpoint-url https://s3.amazonaws.com \
+    --region us-east-1 \
+    --no-sign-request \
+    s3 sync \
+    --exclude '*' \
+    --include 'preprocessed_P*-epo*.fif' \
+  "$MEG_URL" \
+  "$DEST/meg/"

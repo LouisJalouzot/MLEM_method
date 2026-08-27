@@ -49,11 +49,13 @@ Helmert coordinate or coordinate pair separately while retaining its `Group`.
 Download fMRI betas, MEG epochs and concept annotations into `data/things`
 (~80 GB total; the fMRI step additionally needs ~43 GB of temporary space):
 
+Requires `curl`, `unzip`, and the AWS CLI. Download everything with:
+
 ```bash
-./scripts/download_things.sh annotations
-./scripts/download_things.sh fmri --dest data/things 01 02 03
-./scripts/download_things.sh meg --dest data/things 01 02 03 04
+./scripts/download_things.sh  # optional destination argument; default: data/things
 ```
+
+The command is resumable and safe to rerun.
 
 Layout:
 
@@ -63,5 +65,3 @@ data/things/fmri/betas_csv/sub-*_ResponseData.h5   # single-trial betas (Y)
 data/things/fmri/betas_csv/sub-*_{Stimulus,Voxel}Metadata.csv
 data/things/meg/preprocessed_P*-epo*.fif           # preprocessed epochs (Y)
 ```
-
-Quick sanity check without big downloads: `./scripts/download_things.sh tiny`.
