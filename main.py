@@ -15,20 +15,31 @@ from tqdm.auto import tqdm
 from unflatten import unflatten
 
 
-def yield_grid_search(grid_config):
-    if not grid_config:
-        yield {}
-        return
-
+def yield_grid_search(grid_config, grid_search_zip=None):
     keys = grid_config.keys()
-    values = grid_config.values()
-    for v in product(*values):
-        flat_config = dict(zip(keys, v))
-        yield flat_config, unflatten(flat_config)
+    product_values = product(*grid_config.values()) if grid_config else [()]
+    zipped = [{}]
+    if grid_search_zip:
+        lengths = {len(values) for values in grid_search_zip.values()}
+        if len(lengths) != 1:
+            raise ValueError("grid_search_zip values must have equal lengths")
+        zipped = [dict(zip(grid_search_zip, values)) for values in zip(*grid_search_zip.values())]
+    for values in product_values:
+        base = dict(zip(keys, values))
+        for point in zipped:
+            flat_config = base | point
+            yield flat_config, unflatten(flat_config)
 
 
 def run_grid_search(
-    base_class, grid_search, infra_path, fetch_results=True, max_workers=None, sequential=False, n_jobs=-2
+    base_class,
+    grid_search,
+    infra_path,
+    fetch_results=True,
+    max_workers=None,
+    sequential=False,
+    n_jobs=-2,
+    grid_search_zip=None,
 ):
     """Run grid search with job array support.
 
@@ -43,6 +54,8 @@ def run_grid_search(
     """
     flat_configs = []
     n_configs = math.prod(len(v) for v in grid_search.values())
+    if grid_search_zip:
+        n_configs *= len(next(iter(grid_search_zip.values())))
 
     # Resolve which infra to use for cloning and job array
     infra_path_split = infra_path.split(".")
@@ -60,7 +73,7 @@ def run_grid_search(
         with tqdm(total=n_configs, desc="Creating tasks") as pbar:
             for flat_config, task in Parallel(n_jobs=n_jobs, return_as="generator", prefer="threads")(
                 delayed(lambda flat_config, config: (flat_config, base_infra.clone_obj(config)))(flat_config, config)
-                for flat_config, config in yield_grid_search(grid_search)
+                for flat_config, config in yield_grid_search(grid_search, grid_search_zip)
             ):
                 flat_configs.append(flat_config)
                 array.append(task)
@@ -107,7 +120,8 @@ def run_grid_search(
     return flat_configs, results
 
 
-def main(config: dict = {}, n_jobs=-2):
+def main(config: dict | None = None, n_jobs=-2):
+    config = config or {}
     target = config.get("target", "mlem_method.FeatureImportance")
     module_name, class_name = target.rsplit(".", 1)
     module = importlib.import_module(module_name)
@@ -136,6 +150,7 @@ def main(config: dict = {}, n_jobs=-2):
         max_workers=config.get("max_workers"),
         sequential=config.get("sequential", False),
         n_jobs=n_jobs,
+        grid_search_zip=config.get("grid_search_zip"),
     )
 
     all_dfs = []
@@ -149,7 +164,7 @@ def main(config: dict = {}, n_jobs=-2):
                     df[k] = str(v)
                 except Exception as e:
                     print(f"Error adding config {k}: {v} to DataFrame: {e}")
-                    raise e
+                    raise
         all_dfs.append(dfs)
 
     for dfs in zip(*all_dfs):
