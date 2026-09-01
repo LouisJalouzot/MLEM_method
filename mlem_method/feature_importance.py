@@ -1,121 +1,111 @@
 import typing as tp
-from time import time
 
 import numpy as np
 from exca import MapInfra, TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
+from sklearn.ensemble import RandomForestRegressor
 from tqdm.auto import tqdm
 
+from .baselines import EncodingBaseline
 from .dataset import Dataset
 from .estimate_correlations import EstimateCorrelations
 from .pairwise_dataloader import PairwiseDataloader
+from .simulation import OracleLearner
+from .spd_matrix_learner_torch import SPDMatrixLearner
 from .trainer import OracleTrainer, Trainer
-from .utils import BaseModelSharing, compute_stats, get_n_layers
+from .utils import BaseModelSharing, compute_stats, get_n_layers, spearman
 
 if tp.TYPE_CHECKING:
     import pandas as pd
-    from torch import nn
 
 
 def compute_feature_importance(
-    model: "nn.Module",
+    model: "SPDMatrixLearner | OracleLearner | RandomForestRegressor",
     dataloader: PairwiseDataloader,
-    groups: "pd.DataFrame",
+    groups: np.ndarray,
     n_perm: int = 5,
-    monitor: tp.Literal["std", "ci_width"] = "std",
-    thresh: float = 0.01,
     alpha: float = 0.01,
-    grouping: tp.Literal["feature", "coordinate"] = "feature",
-) -> tuple["pd.DataFrame", "pd.Series"]:
+) -> tuple["pd.DataFrame", "pd.DataFrame"]:
+    """Permutation main and interaction effects on stimulus features."""
+    from itertools import combinations
+
     import pandas as pd
     import torch
-    from captum.attr import FeaturePermutation
 
-    group_ids = pd.factorize(groups.Group)[0] if grouping == "feature" else np.arange(len(groups))
-    features = groups.Feature
-    metadata = groups.assign(_Group=group_ids).drop_duplicates("_Group").set_index("_Group")
-    feature_names = metadata["Group" if grouping == "feature" else "Feature"]
-    semantic_groups = metadata["Group"]
-    mask = torch.from_numpy(group_ids)
+    names = list(dict.fromkeys(groups))
+    blocks = [torch.as_tensor(np.flatnonzero(groups == name), device=dataloader.device) for name in names]
+    pairs = list(combinations(range(len(names)), 2))
+    selections = [(), *((k,) for k in range(len(names))), *pairs]
+    effects, scores = [], []
 
-    # Storage for results
-    importances = []
-    score = []
-    start = time()
-
-    for i in tqdm(
-        range(1, n_perm + 1),
-        desc="Computing feature importance",
-        disable=True,
-    ):
-        t = time()
-        if hasattr(model, "batch_importance"):
-            batch_importances, s = model.batch_importance(mask)
-        else:
-            X_batch, Y_batch = dataloader[i]
-            mask = mask.to(X_batch.device)
-
-            # Create flattened quadratic feature-change channels
-            X_batch_flat = X_batch[:, None] * X_batch[:, :, None]
-            X_batch_flat = X_batch_flat[:, *model.triu_indices]
-
-            # Calculate feature importance
-            feature_perm = FeaturePermutation(lambda x, Y_batch=Y_batch: model.score(x, Y_batch, flat=True))
-            batch_importances = feature_perm.attribute(X_batch_flat, feature_mask=mask[None]).cpu()
-            batch_importances = batch_importances.double().numpy().squeeze()
-            s = model.score(X_batch, Y_batch)
-        if not model.maximize:
-            batch_importances *= -1
-        importances.append(batch_importances)
-        score.append(s)
-
-        logger.debug(f"Batch {i:<3} / {n_perm} - Duration: {time() - t:<8.3f}s - Score: {s:<8.3g}")
-
-    # Compute importances statistics
-    importances = np.stack(importances)
-    importances = pd.DataFrame(importances, columns=features)
-    importances = compute_stats(importances, alpha=alpha)
-    importances = importances.reset_index(names="Feature")
-    importances["_Group"] = mask.cpu()
-    cols = [col for col in importances.columns if col not in ["_Group", "Feature"]]
-    aggregations = {
-        "Feature": [
-            ("Feature", lambda x: min(x, key=len)),
-            ("AllFeatures", list),
+    for _ in range(n_perm):
+        left, right, delta, observed, *clean_targets = dataloader.sample(n_pairs=dataloader.n_pairs, get_idx=True)
+        clean = clean_targets[-1] if clean_targets else observed
+        permutations = [
+            torch.randperm(dataloader.n, generator=dataloader.generator, device=dataloader.device) for _ in names
         ]
-    } | {col: "first" for col in cols}
-    importances = importances.groupby("_Group").agg(aggregations)
-    new_columns = [col_tuple[1] if col_tuple[0] == "Feature" else col_tuple[0] for col_tuple in importances.columns]
-    importances.columns = new_columns
-    importances = importances.reset_index()
-    importances["Feature"] = importances["_Group"].map(feature_names)
-    importances["Group"] = importances["_Group"].map(semantic_groups)
-    importances = importances.drop(columns="_Group").sort_values("mean", ascending=False)
 
-    # Compute score statistics
-    score_stats = compute_stats(score, alpha=alpha).iloc[0]
+        if isinstance(model, RandomForestRegressor):
+            variants = dataloader.X[None].expand(len(selections), -1, -1).clone()
+            for variant, selected in zip(variants, selections):
+                for k in selected:
+                    variant[:, blocks[k]] = dataloader.X[permutations[k]][:, blocks[k]]
+            predicted = torch.as_tensor(
+                model.predict(variants.flatten(0, 1).cpu().numpy()),
+                device=dataloader.device,
+                dtype=dataloader.X.dtype,
+            ).reshape(len(selections), dataloader.n, -1)
+            distances = (predicted[:, left] - predicted[:, right]).norm(dim=-1)
+            clean_scores = [spearman(distance, clean) for distance in distances]
+            observed_score = spearman(distances[0], observed)
 
-    # Log results
-    logger.info(
-        f"Feature importance computed in {time() - start:.3g}s. "
-        f"Mean score = {score_stats['mean']:.3g} ± {score_stats['std']:.3g}"
-    )
+        elif isinstance(model, SPDMatrixLearner):
+            replacements = [
+                dataloader.pair_delta(permutations[k][left], permutations[k][right], block)
+                for k, block in enumerate(blocks)
+            ]
+            clean_scores = []
+            for selected in selections:
+                X = delta.clone()
+                for k in selected:
+                    X[:, blocks[k]] = replacements[k]
+                clean_scores.append(model.score(X, clean))
+            observed_score = model.score(delta, observed)
 
-    # Warn if there's significant variability on the score correlation
-    # across batches
-    if monitor == "ci_width":
-        variability = score_stats["upper_ci"] - score_stats["lower_ci"]
-        message = f"the width of the {(1 - alpha) * 100:.3g}% confidence interval of the score correlation is {variability:.3g} "
-    elif monitor == "std":
-        variability = score_stats["std"]
-        message = f"the standard deviation of the score correlation is {variability:.3g} "
-    if variability > thresh:
-        logger.warning(
-            "Significant variability between batches: " + message + f"which is larger than the threshold {thresh:.3g}."
+        else:
+            observed_score = model.score_stimuli(dataloader.X, left, right, observed)
+            clean_scores = []
+            for selected in selections:
+                X = dataloader.X.clone()
+                for k in selected:
+                    X[:, blocks[k]] = dataloader.X[permutations[k]][:, blocks[k]]
+                clean_scores.append(model.score_stimuli(X, left, right, clean))
+
+        sign = -1 if isinstance(model, SPDMatrixLearner) and not model.maximize else 1
+        clean_scores = [sign * float(score) for score in clean_scores]
+        scores.append(sign * float(observed_score))
+        baseline = clean_scores[0]
+        main = clean_scores[1 : len(names) + 1]
+        joint = clean_scores[len(names) + 1 :]
+        effects.append(
+            [baseline - score for score in main]
+            + [main[a] + main[b] - joint_score - baseline for (a, b), joint_score in zip(pairs, joint)]
         )
 
-    return importances, score_stats.to_frame().T
+    features = [*names, *(f"({names[a]} x {names[b]})" for a, b in pairs)]
+    importances = compute_stats(pd.DataFrame(effects, columns=features), alpha).reset_index(names="Feature")
+    metadata = pd.DataFrame(
+        {
+            "Feature": features,
+            "AllFeatures": [[name] for name in names] + [[names[a], names[b]] for a, b in pairs],
+            "Order": ["main"] * len(names) + ["interaction"] * len(pairs),
+        }
+    )
+    importances = metadata.merge(importances)
+    importances["Group"] = importances.Feature
+    scores = compute_stats(scores, alpha=alpha).iloc[[0]]
+    return importances.sort_values("mean", ascending=False), scores
 
 
 def compute_cv_stats_per_split(df, alpha=0.01):
@@ -125,8 +115,9 @@ def compute_cv_stats_per_split(df, alpha=0.01):
     df[values] = df[values].astype(float)
     if "AllFeatures" in df.columns:
         metadata = ["Feature", "AllFeatures"]
-        if "Group" in df.columns:
-            metadata.append("Group")
+        for column in ["Group", "Order"]:
+            if column in df.columns:
+                metadata.append(column)
         all_features = df[metadata].drop_duplicates("Feature")
     else:
         all_features = None
@@ -152,17 +143,14 @@ def compute_cv_stats_per_split(df, alpha=0.01):
 class FeatureImportance(BaseModelSharing):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
     estimate_correlations: EstimateCorrelations = Field(default_factory=lambda: EstimateCorrelations())
-    trainer: tp.Annotated[Trainer | OracleTrainer, Field(discriminator="kind")] = Field(
+    trainer: tp.Annotated[Trainer | OracleTrainer | EncodingBaseline, Field(discriminator="kind")] = Field(
         default_factory=lambda: Trainer()
     )
 
     n_perm: int = 5
-    monitor: tp.Literal["std", "ci_width"] = "std"
-    thresh: float = 0.01
     alpha: float = 0.01
-    pfi_grouping: tp.Literal["feature", "coordinate"] = "feature"
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="4")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="10")
     layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
     map_infra: MapInfra = MapInfra(version="2")
     model_config: ConfigDict = ConfigDict(extra="forbid")
@@ -216,52 +204,47 @@ class FeatureImportance(BaseModelSharing):
     def compute(self) -> tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]:
         import pandas as pd
 
-        groups = self.trainer.fi_groups()
-        all_models, all_logs = self.trainer.train()
-
-        n_groups = len(groups) if self.pfi_grouping == "coordinate" else groups.Group.nunique()
+        n_features = self.dataset.n_features
         logger.info(
-            f"Computing permutation feature importance with {self.n_perm} permutations "
-            f"for {n_groups} groups of feature pairs."
+            f"Computing {n_features + n_features * (n_features - 1) // 2} permutation effects "
+            f"with {self.n_perm} permutations."
         )
 
         all_importances = []
         all_score = []
         all_weights = []
 
-        for i, (model, logs, (train_dl, test_dl)) in enumerate(zip(all_models, all_logs, self.trainer.get_folds())):
-            weights = model.get_flat_forwatted_W(pfeatures=self.dataset.pcoordinates)
-            weights["cv"] = i
-            weights["split"] = "train"
-            weights["converged"] = False if logs.empty else logs.converged.iloc[0]
-            weights["spd"] = False if logs.empty else logs.spd.iloc[0]
-            weights["training_duration"] = 0 if logs.empty else logs["Step Duration"].sum()
-            weights["n_epochs"] = len(logs)
-            gt_weights = getattr(self.trainer.representations, "gt_weights", None)
-            if gt_weights is not None:
-                weights = weights.merge(gt_weights)
-                weights["L2"] = np.linalg.norm(weights.GTWeight - weights.Weight)
-            all_weights.append(weights)
-            for dl, split in [(train_dl, "train"), (test_dl, "test")]:
+        for i, (model, logs, train_dl, test_dl) in enumerate(self.trainer.train()):
+            if self.trainer.kind == "mlem":
+                weights = model.get_flat_forwatted_W(pfeatures=self.dataset.pcoordinates)
+                weights["cv"] = i
+                weights["split"] = "train"
+                weights["converged"] = False if logs.empty else logs.converged.iloc[0]
+                weights["spd"] = False if logs.empty else logs.spd.iloc[0]
+                weights["training_duration"] = 0 if logs.empty else logs["Step Duration"].sum()
+                weights["n_epochs"] = len(logs)
+                gt_weights = getattr(self.trainer.representations, "gt_weights", None)
+                if gt_weights is not None:
+                    weights = weights.merge(gt_weights)
+                    weights["L2"] = np.linalg.norm(weights.GTWeight - weights.Weight)
+                all_weights.append(weights)
+            for split, dataloader in [("train", train_dl), ("test", test_dl)]:
                 importances, score = compute_feature_importance(
-                    model=model,
-                    dataloader=dl,
-                    groups=groups,
+                    model,
+                    dataloader,
+                    self.dataset.coordinate_groups,
                     n_perm=self.n_perm,
-                    monitor=self.monitor,
-                    thresh=self.thresh,
                     alpha=self.alpha,
-                    grouping=self.pfi_grouping,
                 )
-                for e in [importances, score]:
-                    e["cv"] = i
-                    e["split"] = split
+                for frame in [importances, score]:
+                    frame["cv"] = i
+                    frame["split"] = split
                 all_importances.append(importances)
                 all_score.append(score)
 
         all_importances = pd.concat(all_importances)
         all_score = pd.concat(all_score)
-        all_weights = pd.concat(all_weights)
+        all_weights = pd.concat(all_weights) if all_weights else pd.DataFrame()
 
         return all_importances, all_score, all_weights
 
@@ -273,6 +256,7 @@ class FeatureImportance(BaseModelSharing):
         if all_importances.cv.nunique() > 1:
             all_importances = compute_cv_stats_per_split(all_importances, alpha=self.alpha)
             all_score = compute_cv_stats_per_split(all_score, alpha=self.alpha)
-            all_weights = compute_cv_stats_per_split(all_weights, alpha=self.alpha)
+            if not all_weights.empty:
+                all_weights = compute_cv_stats_per_split(all_weights, alpha=self.alpha)
 
         return all_importances, all_score, all_weights

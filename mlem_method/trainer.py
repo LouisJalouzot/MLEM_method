@@ -21,6 +21,7 @@ if tp.TYPE_CHECKING:
     import pandas as pd
     import torch
 
+    from .pairwise_dataloader import PairwiseDataloader
     from .spd_matrix_learner_torch import SPDMatrixLearner
 
 
@@ -45,7 +46,7 @@ class Trainer(BaseModelSharing):
     device: str | None = None
     unit_indices: list[int] | None = None
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="6")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
     _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {
@@ -73,14 +74,18 @@ class Trainer(BaseModelSharing):
 
         X = self.dataset.encode()[0].to(device)
         Y = self.representations().to(device)
+        simulation = self.dataset.simulation
+        Y2 = simulation.transform(X) if simulation is not None and simulation.kind == "mlp" else None
 
         # Apply unit selection if specified
         if self.unit_indices is not None:
             Y = Y[:, self.unit_indices]
+            Y2 = None if Y2 is None else Y2[:, self.unit_indices]
 
         return self.dataloader_builder.build(
             X=X,
             Y=Y,
+            Y2=Y2,
             gamma=self.gamma,
             n_pairs=n_pairs,
             seed=self.dataset.seed,
@@ -118,12 +123,10 @@ class Trainer(BaseModelSharing):
 
         return all_state_dicts, all_logs
 
-    def train(self) -> tuple[list[SPDMatrixLearner], pd.DataFrame]:
-        all_state_dicts, all_logs = self._train_cached()
-
-        all_models = [self.get_model(state_dict=sd) for sd in all_state_dicts]
-
-        return all_models, all_logs
+    def train(self) -> tp.Iterator[tuple[SPDMatrixLearner, pd.DataFrame, PairwiseDataloader, PairwiseDataloader]]:
+        state_dicts, logs = self._train_cached()
+        for state_dict, log, (train, test) in zip(state_dicts, logs, self.get_folds()):
+            yield self.get_model(state_dict=state_dict), log, train, test
 
     def one_log(self) -> pd.DataFrame:
         _, all_logs = self._train_cached()
@@ -155,7 +158,7 @@ class OracleTrainer(Trainer):
         seed_everything(self.dataset.seed)
         self.representations()
         simulation = self.representations.dataset.simulation
-        Z = simulation.terms.to(device) if simulation.kind == "poly" else self.dataset.encode()[0].to(device)
+        Z = self.dataset.encode()[0].to(device)
         _, n_pairs = self.estimate_correlations.estimate_correlations()
         model = OracleLearner(n_features=Z.shape[1])
         model.bind(simulation.transform, Z, n_pairs)
@@ -165,7 +168,7 @@ class OracleTrainer(Trainer):
         device = device or self.device or get_device()
         self.representations()
         simulation = self.representations.dataset.simulation
-        X = simulation.terms.to(device) if simulation.kind == "poly" else self.dataset.encode()[0].to(device)
+        X = self.dataset.encode()[0].to(device)
         Y = simulation.transform(X)
         _, n_pairs = self.estimate_correlations.estimate_correlations()
         return self.dataloader_builder.build(
@@ -180,12 +183,9 @@ class OracleTrainer(Trainer):
     def train(self):
         import pandas as pd
 
-        return [self.get_model()], [pd.DataFrame()]
+        for train, test in self.get_folds():
+            yield self.get_model(), pd.DataFrame(), train, test
 
     def fi_groups(self):
-        self.representations()
-        simulation = self.representations.dataset.simulation
-        if simulation.kind == "poly":
-            return simulation.term_groups.copy()
         groups = self.dataset.encode()[1]
         return groups.rename_axis("Feature").rename("Group").reset_index()

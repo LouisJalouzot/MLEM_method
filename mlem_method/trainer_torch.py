@@ -1,4 +1,4 @@
-import typing as tp
+from copy import deepcopy
 from time import time
 
 import pandas as pd
@@ -23,7 +23,7 @@ def train(
     device: str = "cpu",
     monitor: str = "loss",
     patience: int = 50,
-) -> tp.Tuple[nn.Module, pd.DataFrame]:
+) -> tuple[nn.Module, pd.DataFrame]:
     model.train()
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -45,7 +45,7 @@ def train(
     for i in range(1, max_epochs + 1):
         t = time()
 
-        X_batch, Y_batch = train_dataloader[i]
+        X_batch, Y_batch, *_ = train_dataloader[i]
         X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
         optimizer.zero_grad(set_to_none=True)
         Y_pred = model(X_batch)
@@ -53,7 +53,7 @@ def train(
         loss.backward()
         grad_norm = model.compute_gradient_norm()
         optimizer.step()
-        X_batch_test, Y_batch_test = test_dataloader[i]
+        X_batch_test, Y_batch_test, *_ = test_dataloader[i]
         X_batch_test, Y_batch_test = X_batch_test.to(device), Y_batch_test.to(device)
         with torch.no_grad():
             train_score = model.score(X_batch, Y_batch)
@@ -105,7 +105,7 @@ def train(
             if improved:
                 best_score = current_score
                 epochs_without_improvement = 0
-                best_model_state_dict = model.state_dict().copy()
+                best_model_state_dict = deepcopy(model.state_dict())
             else:
                 epochs_without_improvement += 1
 

@@ -40,7 +40,7 @@ class Dataset(BaseModel):
     _words: list[str] = None
     _sentence_id: list[tp.Any] = None
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="2")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def _exclude_from_cls_uid(self) -> tuple[str, ...]:
