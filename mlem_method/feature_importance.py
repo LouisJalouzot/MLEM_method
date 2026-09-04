@@ -39,7 +39,7 @@ def compute_feature_importance(
     selections = [(), *((k,) for k in range(len(names))), *pairs]
     effects, scores = [], []
 
-    for _ in range(n_perm):
+    for _ in tqdm(range(n_perm), desc="Permutations"):
         left, right, delta, observed, *clean_targets = dataloader.sample(n_pairs=dataloader.n_pairs, get_idx=True)
         clean = clean_targets[-1] if clean_targets else observed
         permutations = [
@@ -47,18 +47,25 @@ def compute_feature_importance(
         ]
 
         if isinstance(model, RandomForestRegressor):
-            variants = dataloader.X[None].expand(len(selections), -1, -1).clone()
-            for variant, selected in zip(variants, selections):
-                for k in selected:
-                    variant[:, blocks[k]] = dataloader.X[permutations[k]][:, blocks[k]]
-            predicted = torch.as_tensor(
-                model.predict(variants.flatten(0, 1).cpu().numpy()),
+            observed_predicted = torch.as_tensor(
+                model.predict(dataloader.X.cpu().numpy()),
                 device=dataloader.device,
                 dtype=dataloader.X.dtype,
-            ).reshape(len(selections), dataloader.n, -1)
-            distances = (predicted[:, left] - predicted[:, right]).norm(dim=-1)
-            clean_scores = [spearman(distance, clean) for distance in distances]
-            observed_score = spearman(distances[0], observed)
+            ).reshape(dataloader.n, -1)
+            observed_distance = (observed_predicted[left] - observed_predicted[right]).norm(dim=-1)
+            observed_score = spearman(observed_distance, observed)
+            clean_scores = []
+            for selected in selections:
+                variant = dataloader.X.clone()
+                for k in selected:
+                    variant[:, blocks[k]] = dataloader.X[permutations[k]][:, blocks[k]]
+                predicted = torch.as_tensor(
+                    model.predict(variant.cpu().numpy()),
+                    device=dataloader.device,
+                    dtype=dataloader.X.dtype,
+                ).reshape(dataloader.n, -1)
+                distance = (predicted[left] - predicted[right]).norm(dim=-1)
+                clean_scores.append(spearman(distance, clean))
 
         elif isinstance(model, SPDMatrixLearner):
             replacements = [
