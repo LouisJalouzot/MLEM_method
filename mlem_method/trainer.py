@@ -146,11 +146,6 @@ class Trainer(BaseModelSharing):
 class OracleTrainer(Trainer):
     kind: tp.Literal["oracle"] = "oracle"
 
-    def model_post_init(self, __context: tp.Any, /) -> None:
-        super().model_post_init(__context)
-        if self.dataloader_builder.cv is not None:
-            raise ValueError("OracleTrainer requires dataloader_builder.cv=None")
-
     def get_model(self, state_dict=None, device=None):
         from .simulation import OracleLearner
 
