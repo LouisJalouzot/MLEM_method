@@ -5,13 +5,11 @@ import typing as tp
 import numpy as np
 from pydantic import ConfigDict, Field
 
-from .utils import BaseModel, seed_from_basemodel
+from .utils import BaseModel
 
 if tp.TYPE_CHECKING:
     import pandas as pd
     import torch
-
-    from .dataset import Dataset
 
 
 class MdsSimulation(BaseModel):
@@ -78,26 +76,36 @@ class MdsSimulation(BaseModel):
         return self._Y
 
 
-class PolynomialSimulation(BaseModel):
-    kind: tp.Literal["poly"] = "poly"
-    n: int = 200
-    n_cont: int = 8
-    cat_sizes: tuple[int, ...] = (2, 2, 2, 3, 4)
-    d: int = 300
-    p_main: float = 0.5
-    p_inter: float = 0.15
-    noise: float = 0.2
-    outliers: float = 0.02
-    outlier_scale: float = 10
-    _strength: pd.Series = None
+class RandomMlpSimulation(BaseModel):
+    """Random MLP with no metric in the data-generating process.
+
+    Standard random weights make semantic features exchangeable in expectation
+    and increasingly similar in importance as the network widens. Lognormal
+    feature gains create a non-degenerate Oracle FI ranking; all encoded
+    coordinates of a categorical feature share one gain. All other parameters
+    use standard seeded PyTorch initialization.
+    """
+
+    kind: tp.Literal["mlp"] = "mlp"
+    n: int = Field(default=160, ge=2)
+    n_numeric: int = Field(default=4, ge=0)
+    category_cardinalities: tuple[int, ...] = (4, 4, 4)
+    hidden_dim: int = Field(default=40, ge=1)
+    d: int = Field(default=768, ge=1)
+    gain_sigma: float = Field(default=0.55, ge=0)
+    noise: float = Field(default=0.25, ge=0)
+    _model: torch.nn.Module = None
     _Y: torch.Tensor = None
-    _terms: torch.Tensor = None
-    _term_groups: pd.DataFrame = None
-    _A: np.ndarray = None
+    _Y0: torch.Tensor = None
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def feature_names(self) -> np.ndarray:
-        return np.array([*(f"c{k}" for k in range(len(self.cat_sizes))), *(f"x{k}" for k in range(self.n_cont))])
+        return np.array(
+            [
+                *(f"c{k}" for k in range(len(self.category_cardinalities))),
+                *(f"x{k}" for k in range(self.n_numeric)),
+            ]
+        )
 
     def make_df(self, seed: int) -> pd.DataFrame:
         import pandas as pd
@@ -105,100 +113,64 @@ class PolynomialSimulation(BaseModel):
         rng = np.random.default_rng(seed)
         return pd.DataFrame(
             {
-                **{f"c{k}": rng.choice(C, self.n).astype(str) for k, C in enumerate(self.cat_sizes)},
-                **{f"x{k}": rng.normal(size=self.n) for k in range(self.n_cont)},
+                **{
+                    f"c{k}": rng.choice(cardinality, self.n).astype(str)
+                    for k, cardinality in enumerate(self.category_cardinalities)
+                },
+                **{f"x{k}": rng.normal(size=self.n) for k in range(self.n_numeric)},
             }
         )
 
     @property
-    def strength(self):
-        return self._strength
+    def Y0(self):
+        if self._Y0 is None:
+            raise RuntimeError("call make_Y first")
+        return self._Y0
+
+    def transform(self, Z: torch.Tensor) -> torch.Tensor:
+        import torch
+
+        if self._model is None:
+            raise RuntimeError("call make_Y first")
+        self._model.to(Z.device)
+        with torch.no_grad():
+            return self._model(Z) / self.d**0.5
 
     def make_Y(self, Z: torch.Tensor, groups: pd.Series, seed: int, signed: bool = False) -> torch.Tensor:
         if self._Y is not None:
             return self._Y
 
-        import pandas as pd
         import torch
-        from sklearn.datasets import make_spd_matrix
-        from sklearn.preprocessing import PolynomialFeatures, StandardScaler, normalize
+        from torch import nn
 
         rng = np.random.default_rng(seed)
-        coord_feature = groups.to_numpy()
+        feature_gains = rng.lognormal(sigma=self.gain_sigma, size=groups.nunique())
+        feature_gains /= np.sqrt(np.mean(feature_gains**2))
+        gains = torch.from_numpy(groups.map(dict(zip(groups.unique(), feature_gains))).to_numpy(np.float32))
 
-        # Expand encoded coordinates into main terms and pairwise products.
-        poly = PolynomialFeatures(2, interaction_only=True, include_bias=False)
-        H = poly.fit_transform(np.asarray(Z))
-        powers = poly.powers_.astype(bool)
-
-        # Map each term to its theoretical feature(s). Drop z_a*z_b when both
-        # columns belong to the same feature (two simplex axes of one categorical).
-        term_features = [tuple(np.unique(coord_feature[p])) for p in powers]
-        keep = np.array([len(f) == p.sum() for f, p in zip(term_features, powers)])
-        term_groups = pd.Series([f for f, k in zip(term_features, keep) if k])
-        term_powers = poly.powers_[keep].astype(bool)
-        coordinates = groups.index.to_numpy(dtype=str)
-        term_names = [
-            coordinates[power].item()
-            if power.sum() == 1
-            else f"({coordinates[power][0]} x {coordinates[power][1]})"
-            for power in term_powers
-        ]
-        group_names = [
-            group[0] if len(group) == 1 else f"({group[0]} x {group[1]})" for group in term_groups
-        ]
-        scaler = StandardScaler()
-        H = scaler.fit_transform(H[:, keep])
-
-        # Sparse, heavy-tailed strength for each theoretical main effect/interaction.
-        unique = term_groups.drop_duplicates()
-        prob = np.array([self.p_main if len(g) == 1 else self.p_inter for g in unique])
-        strength = pd.Series(
-            (rng.random(len(unique)) < prob) * rng.lognormal(size=len(unique)), index=unique, name="strength"
+        torch.manual_seed(seed)
+        self._model = nn.Sequential(
+            nn.Linear(Z.shape[1], self.hidden_dim),
+            nn.Tanh(),
+            nn.Linear(self.hidden_dim, self.d),
+            nn.Tanh(),
         )
+        with torch.no_grad():
+            self._model[0].weight.mul_(gains)
+        self._model.requires_grad_(False).to(Z.device)
+        self._Y0 = self.transform(Z.float()).cpu()
 
-        # Random distributed encoding; normalize for number of coordinates per group.
-        scale = term_groups.map(strength / np.sqrt(term_groups.value_counts())).to_numpy()
-        A = normalize(rng.normal(size=(H.shape[1], self.d)), axis=1) * scale[:, None]
-
-        Y = H @ A
-
-        # Correlated anisotropic noise, with occasional sample-level outliers.
-        eps = rng.multivariate_normal(np.zeros(self.d), make_spd_matrix(self.d, random_state=seed), size=len(Y))
-        eps[rng.random(len(Y)) < self.outliers] *= self.outlier_scale
-        eps *= self.noise * Y.std() / eps.std()
-        self._strength = strength
-        self._terms = torch.from_numpy(H.astype(np.float32))
-        self._term_groups = pd.DataFrame({"Feature": term_names, "Group": group_names})
-        self._A = A
-        self._Y = torch.from_numpy((Y + eps).astype(np.float32))
+        eps = rng.normal(size=self._Y0.shape).astype(np.float32)
+        eps *= self.noise * self._Y0.std(dim=0).numpy()
+        self._Y = self._Y0 + torch.from_numpy(eps)
         return self._Y
 
-    @property
-    def terms(self) -> torch.Tensor:
-        if self._terms is None:
-            raise RuntimeError("call make_Y first")
-        return self._terms
 
-    @property
-    def term_groups(self) -> pd.DataFrame:
-        if self._term_groups is None:
-            raise RuntimeError("call make_Y first")
-        return self._term_groups
-
-    def transform(self, H: torch.Tensor) -> torch.Tensor:
-        import torch
-
-        if self._A is None:
-            raise RuntimeError("call make_Y first")
-        return H @ torch.as_tensor(self._A, dtype=H.dtype, device=H.device)
-
-
-Simulation = tp.Annotated[MdsSimulation | PolynomialSimulation, Field(discriminator="kind")]
+Simulation = tp.Annotated[MdsSimulation | RandomMlpSimulation, Field(discriminator="kind")]
 
 
 class OracleLearner:
-    """Dummy model: PFI permutes oracle input terms, score is Spearman of distances."""
+    """Fixed simulator used to compute clean geometry and permutation effects."""
 
     maximize = True
 
@@ -210,7 +182,7 @@ class OracleLearner:
         self.transform = None
         self.Z = None
         self.Y = None
-        self.n_pairs = 4096
+        self.n_pairs = None
         self.i = self.j = self.D = None
 
     def parameters(self):
@@ -236,6 +208,12 @@ class OracleLearner:
 
         Yp = self.transform(Zp)
         return spearman((Yp[self.i] - Yp[self.j]).norm(dim=1), self.D)
+
+    def score_stimuli(self, Z, i, j, target):
+        from .utils import spearman
+
+        Y = self.transform(Z)
+        return spearman((Y[i] - Y[j]).norm(dim=1), target).item()
 
     def batch_importance(self, mask):
         from captum.attr import FeaturePermutation

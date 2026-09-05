@@ -35,6 +35,8 @@ def get_device():
     import torch
 
     if torch.cuda.is_available():
+        if os.getenv("CUDA_VISIBLE_DEVICES"):
+            return "cuda"
         # Get GPU id with the most free memory, select at random if there are multiple
         try:
             gpus = subprocess.check_output(["nvidia-smi", "--format=csv", "--query-gpu=memory.free"])
@@ -127,7 +129,7 @@ def encode_df(df: pd.DataFrame, simplex: bool = False) -> tuple[torch.Tensor, pd
     number_cols = np.array(
         [
             (
-                not pd.api.types.is_categorical_dtype(t)
+                not isinstance(t, pd.CategoricalDtype)
                 and not pd.api.types.is_string_dtype(t)
                 and np.issubdtype(t, np.number)
             )

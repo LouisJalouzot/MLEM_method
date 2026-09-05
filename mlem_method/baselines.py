@@ -12,45 +12,74 @@ from sklearn.model_selection import StratifiedKFold
 from tqdm.auto import tqdm
 
 from .dataset import Dataset, SimulatedRepresentations
+from .estimate_correlations import EstimateCorrelations
+from .pairwise_dataloader import PairwiseDataloaderBuilder
 from .sentence_representations import SentenceRepresentations
 from .utils import BaseModelSharing, compute_stats
 from .word_representations import WordRepresentations
 
 
-def compute_encoding_baseline(X, Y, n_estimators=10, n_jobs=-2, verbose=False):
-    model = RandomForestRegressor(n_estimators=n_estimators, n_jobs=n_jobs, verbose=verbose, random_state=0)
-    model.fit(X, Y)
-    importances = [tree.feature_importances_ for tree in model.estimators_]
-
-    return compute_stats(importances)
-
-
 class EncodingBaseline(BaseModelSharing):
+    kind: tp.Literal["rf"] = "rf"
     dataset: Dataset = Field(default_factory=lambda: Dataset())
+    estimate_correlations: EstimateCorrelations = Field(default_factory=lambda: EstimateCorrelations())
     representations: tp.Annotated[
         SentenceRepresentations | WordRepresentations | SimulatedRepresentations,
         Field(discriminator="level"),
     ] = Field(default_factory=lambda: SentenceRepresentations())
 
     n_estimators: int = 100
+    dataloader_builder: PairwiseDataloaderBuilder = Field(default_factory=lambda: PairwiseDataloaderBuilder(cv=0.2))
 
     n_jobs: int = -2
     verbose: bool = False
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="5")
+    train_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
     model_config: ConfigDict = ConfigDict(extra="forbid")
-    _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {"dataset": ["representations"]}
-    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("n_jobs", "verbose")
+    _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {"dataset": ["estimate_correlations", "representations"]}
+    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("n_jobs", "verbose", "infra", "train_infra")
 
-    @infra.apply
-    def compute(
-        self,
-    ) -> tuple[np.ndarray, np.ndarray]:
+    def get_folds(self):
+        _, n_pairs = self.estimate_correlations.estimate_correlations()
         X = self.dataset.encode()[0]
         Y = self.representations()
+        simulation = self.dataset.simulation
+        Y2 = simulation.transform(X) if simulation is not None and simulation.kind == "mlp" else None
+        return self.dataloader_builder.build(
+            X=X,
+            Y=Y,
+            Y2=Y2,
+            n_pairs=n_pairs,
+            seed=self.dataset.seed,
+            signed=self.dataset.mahalanobis,
+        )
 
-        importances = compute_encoding_baseline(X, Y, self.n_estimators, self.n_jobs, self.verbose)
+    @train_infra.apply(exclude_from_cache_uid=("n_jobs", "verbose"))
+    def _train_cached(self) -> list[RandomForestRegressor]:
+        return [
+            RandomForestRegressor(
+                n_estimators=self.n_estimators,
+                n_jobs=self.n_jobs,
+                verbose=self.verbose,
+                random_state=self.dataset.seed,
+            ).fit(train.X.cpu().numpy(), train.Y.cpu().numpy())
+            for train, _ in self.get_folds()
+        ]
+
+    def train(self):
+        for model, (train, test) in zip(self._train_cached(), self.get_folds()):
+            yield model, pd.DataFrame(), train, test
+
+    @infra.apply
+    def compute(self):
+        forest = RandomForestRegressor(
+            n_estimators=self.n_estimators,
+            n_jobs=self.n_jobs,
+            verbose=self.verbose,
+            random_state=self.dataset.seed,
+        ).fit(self.dataset.encode()[0], self.representations())
+        importances = compute_stats([tree.feature_importances_ for tree in forest.estimators_])
         importances["Feature"] = self.dataset.coordinates
-
         return importances.sort_values("mean", ascending=False)
 
 
