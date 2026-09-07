@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pandas as pd
-
 from mlem import ReduceDimensions
 
 script_dir = Path(__file__).parent
@@ -25,10 +24,6 @@ model_layers = [
     ("state-spaces/mamba-790m-hf", 21),
     ("AntonV/mamba2-780m-hf", 14),
     ("AntonV/mamba2-1.3b-hf", 21),
-    ("fla-hub/rwkv7-191M-world", 6),
-    ("fla-hub/rwkv7-191M-world", 9),
-    ("fla-hub/rwkv7-1.5B-world", 8),
-    ("fla-hub/rwkv7-7.2B-g0a", 10),
 ]
 for method in ["pca", "mds"]:
     rd = ReduceDimensions(

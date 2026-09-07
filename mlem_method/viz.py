@@ -145,6 +145,7 @@ def clean_df(
             "-2512",
             "-HF",
             "-pt",
+            "-pile",
         ]:
             models = models.str.replace(to_remove, "")
         # Convert to categories to keep original order in plots

@@ -10,14 +10,14 @@ from wordfreq import zipf_frequency
 
 NOUNS = [
     # singular, plural, gender
-    ("mother", "mothers", "f"),
-    ("sister", "sisters", "f"),
-    ("wife", "wives", "f"),
-    ("father", "fathers", "m"),
-    ("brother", "brothers", "m"),
-    ("husband", "husbands", "m"),
+    ("woman", "women", "f"),
+    ("girl", "girls", "f"),
+    ("lady", "ladies", "f"),
+    ("man", "men", "m"),
+    ("boy", "boys", "m"),
+    ("king", "kings", "m"),
 ]
-VERBS = [("knows", "know"), ("helps", "help")]
+VERBS = [("sees", "see"), ("likes", "like")]
 PREPOSITIONS = ["near", "behind"]
 NUMBERS = ["sg", "pl"]
 ATTACHMENTS = ["peripheral", "center_embedding"]
