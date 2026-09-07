@@ -104,29 +104,35 @@ for method in ("mlem", "rsa"):
         )
 
         if family == "gpt2":
-            target, ha, va = g.iloc[-1], "center", "top"
-            x, y = target["MDS1"], target["MDS2"] - 1.5 * ypad
+            target, ha, va = g.iloc[0], "center", "bottom"
+            x, y = target["MDS1"], target["MDS2"] + 1.5 * ypad
         elif family == "opt":
-            target, ha, va = g.iloc[-1], "right", "center"
-            x, y = target["MDS1"] - 6 * xpad, target["MDS2"]
+            target, ha, va = g.iloc[0], "left", "center"
+            x, y = target["MDS1"] + 3 * xpad, target["MDS2"]
         elif family == "pythia":
             target, ha, va = g.iloc[1], "right", "center"
             x, y = target["MDS1"] - 3 * xpad, target["MDS2"]
         elif family == "OLMo-2":
             target, ha, va = g.iloc[0], "left", "center"
-            x, y = target["MDS1"] + 3 * xpad, target["MDS2"]
+            x, y = target["MDS1"] + 4 * xpad, target["MDS2"]
         elif family == "Llama-3.2":
-            target, ha, va = g.iloc[-1], "right", "center"
-            x, y = target["MDS1"] - 2 * xpad, target["MDS2"] + ypad
+            target, ha, va = g.iloc[-1], "right", "bottom"
+            x, y = target["MDS1"] + 5.0 * xpad, target["MDS2"] + 1 * ypad
         elif family == "Ministral-3":
+            target, ha, va = g.iloc[-1], "left", "center"
+            x, y = target["MDS1"] + 3 * xpad, target["MDS2"]
+        elif family == "Qwen3":
             target, ha, va = g.iloc[0], "center", "top"
-            x, y = target["MDS1"], target["MDS2"] - 2.5 * ypad
+            x, y = target["MDS1"], target["MDS2"] - 1.5 * ypad
         elif family == "mamba":
             target, ha, va = g.iloc[len(g) // 2], "right", "center"
-            x, y = target["MDS1"] - 3 * xpad, target["MDS2"]
+            x, y = target["MDS1"] - 4 * xpad, target["MDS2"]
         elif family == "mamba2":
-            target, ha, va = g.iloc[1], "center", "bottom"
-            x, y = target["MDS1"], target["MDS2"] + 2 * ypad
+            target, ha, va = g.iloc[-1], "left", "top"
+            x, y = target["MDS1"] + 0.75 * xpad, target["MDS2"] - 0.75 * ypad
+        elif family == "RWKV4":
+            target, ha, va = g.iloc[2], "right", "center"
+            x, y = target["MDS1"] - 3 * xpad, target["MDS2"]
         else:
             target, ha, va = g.iloc[0], "center", "bottom"
             x, y = target["MDS1"], target["MDS2"] + 1.5 * ypad
@@ -169,9 +175,10 @@ for method in ("mlem", "rsa"):
         columnspacing=0.8,
         handletextpad=0.5,
     )
-    ax.scatter(-0.065, -0.03, s=70, facecolors="white", edgecolors="black", clip_on=False, transform=ax.transAxes)
-    ax.text(0, -0.03, "smallest model", transform=ax.transAxes, va="center", ha="left", fontsize=9)
-    ax.set(xlabel="MDS 1", ylabel="MDS 2")
+    ax.scatter(-0.155, -0.03, s=70, facecolors="white", edgecolors="black", clip_on=False, transform=ax.transAxes)
+    ax.text(-0.09, -0.03, "smallest model", transform=ax.transAxes, va="center", ha="left", fontsize=9)
+    ax.set_xlabel("MDS 1")
+    ax.set_ylabel("MDS 2", labelpad=36)
     ax.set_aspect("equal")
     ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
     for spine in ax.spines.values():
