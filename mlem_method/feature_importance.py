@@ -55,17 +55,22 @@ def compute_feature_importance(
             observed_distance = (observed_predicted[left] - observed_predicted[right]).norm(dim=-1)
             observed_score = spearman(observed_distance, observed)
             clean_scores = []
-            for selected in selections:
-                variant = dataloader.X.clone()
-                for k in selected:
-                    variant[:, blocks[k]] = dataloader.X[permutations[k]][:, blocks[k]]
+            for start in range(0, len(selections), 32):
+                variants = []
+                for selected in selections[start : start + 32]:
+                    variant = dataloader.X.clone()
+                    for k in selected:
+                        variant[:, blocks[k]] = dataloader.X[permutations[k]][:, blocks[k]]
+                    variants.append(variant)
+                variant_array = torch.stack(variants).cpu().numpy()
                 predicted = torch.as_tensor(
-                    model.predict(variant.cpu().numpy()),
+                    model.predict(variant_array.reshape(-1, variant_array.shape[-1])),
                     device=dataloader.device,
                     dtype=dataloader.X.dtype,
-                ).reshape(dataloader.n, -1)
-                distance = (predicted[left] - predicted[right]).norm(dim=-1)
-                clean_scores.append(spearman(distance, clean))
+                ).reshape(len(variants), dataloader.n, -1)
+                for batch_predicted in predicted:
+                    distance = (batch_predicted[left] - batch_predicted[right]).norm(dim=-1)
+                    clean_scores.append(spearman(distance, clean))
 
         elif isinstance(model, SPDMatrixLearner):
             replacements = [
@@ -156,6 +161,7 @@ class FeatureImportance(BaseModelSharing):
 
     n_perm: int = 5
     alpha: float = 0.01
+    fi_splits: tuple[tp.Literal["train", "test"], ...] = ("train", "test")
 
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="10")
     layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
@@ -235,10 +241,11 @@ class FeatureImportance(BaseModelSharing):
                     weights = weights.merge(gt_weights)
                     weights["L2"] = np.linalg.norm(weights.GTWeight - weights.Weight)
                 all_weights.append(weights)
-            for split, dataloader in [("train", train_dl), ("test", test_dl)]:
+            dataloaders = {"train": train_dl, "test": test_dl}
+            for split in self.fi_splits:
                 importances, score = compute_feature_importance(
                     model,
-                    dataloader,
+                    dataloaders[split],
                     self.dataset.coordinate_groups,
                     n_perm=self.n_perm,
                     alpha=self.alpha,
