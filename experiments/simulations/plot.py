@@ -113,6 +113,11 @@ for key, g in pd.concat(estimates).groupby(keys):
 data = pd.concat(geometries).merge(pd.DataFrame(rows), on=keys)
 
 
+# %% Seed coverage (unique seeds, not feature/geometry rows)
+coverage = data.groupby(["method", "q", "n"])["dataset.seed"].nunique().unstack("method", fill_value=0)[methods]
+print("\nUnique seeds:")
+print(coverage.to_string())
+
 # %% Line plots
 sns.set_theme(style="ticks")
 
@@ -123,8 +128,8 @@ ratio_data = data[[x in ratio_grid for x in zip(data.n, data.q)]].assign(
 
 plots = [
     (data.query("q == 56"), "n", "Stimuli $n$ ($q=56$)", "sample_efficiency.pdf"),
-    (ratio_data, "ratio_group", "Encoded feature/sample ratio $q/n$", "ratio_robustness.pdf"),
-    (data.query("n == 512"), "q", "Encoded features $q$ ($n=512$)", "q_robustness.pdf"),
+    (ratio_data, "ratio_group", "Encoded coordinate/sample ratio $q/n$", "ratio_robustness.pdf"),
+    (data.query("n == 512"), "q", "Encoded coordinates $q$ ($n=512$)", "q_robustness.pdf"),
 ]
 
 for df, x, xlabel, filename in plots:
@@ -145,7 +150,6 @@ for df, x, xlabel, filename in plots:
         col_order=metrics,
         kind="line",
         marker="o",
-        errorbar="sd",
         facet_kws={"sharey": False},
         height=3.5,
         aspect=1,
@@ -167,29 +171,38 @@ for df, x, xlabel, filename in plots:
 
 
 # %% Heatmaps
-long = data.melt(
-    id_vars=["n", "q", "method"],
-    value_vars=metrics,
-    var_name="metric",
-    value_name="value",
-)
+means = data.groupby(["method", "q", "n"])[list(metrics)].mean()
+qs, ns = sorted(data.q.unique()), sorted(data.n.unique())
+fig, axes = plt.subplots(len(metrics), len(methods), figsize=(14, 10), sharex=True, sharey=True, layout="constrained")
 
-g = sns.FacetGrid(
-    long,
-    row="method",
-    row_order=methods,
-    col="metric",
-    col_order=metrics,
-)
+for row, ((metric, title), cmap) in enumerate(zip(metrics.items(), ["Blues", "Oranges", "Purples_r"])):
+    # Share limits across methods within each metric row.
+    vmin, vmax = means[metric].min(), means[metric].max()
+    tables = means[metric].unstack("method").reindex(columns=methods)
+    for col, method in enumerate(methods):
+        ax = axes[row, col]
+        table = tables[method].unstack("n").reindex(index=qs[::-1], columns=ns)
+        sns.heatmap(
+            table,
+            ax=ax,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            cbar=False,
+            linewidths=0.35,
+            linecolor="white",
+            xticklabels=True,
+            yticklabels=True,
+        )
+        ax.set_facecolor("#eeeeeedb")
+        ax.tick_params(axis="both", length=0, labelsize=8, labelrotation=0)
+        ax.label_outer()
+        ax.set_xlabel("Stimuli $n$" if row == len(metrics) - 1 else "")
+        ax.set_ylabel(f"{title}\nEncoded coordinates $q$" if col == 0 else "", fontsize=11)
+        if row == 0:
+            ax.set_title(method, fontsize=12, pad=12)
+    fig.colorbar(ax.collections[0], ax=axes[row, :], fraction=0.025, pad=0.02)
 
-
-def heatmap(data, **_):
-    table = data.pivot_table(index="q", columns="n", values="value")
-    sns.heatmap(table, cbar=False)
-
-
-g.map_dataframe(heatmap)
-g.set_titles(row_template="{row_name}", col_template="{col_name}")
-g.set_axis_labels("$n$", "$q$")
-g.savefig(output / "heatmaps.pdf", bbox_inches="tight")
-plt.close(g.fig)
+fig.supxlabel("Light gray cells: no observations", fontsize=9, color="0.4")
+fig.savefig(output / "heatmaps.pdf", bbox_inches="tight")
+plt.close(fig)
