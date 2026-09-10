@@ -119,7 +119,8 @@ class Trainer(BaseModelSharing):
                 scoring=self.model_builder.scoring,
             )
             logs["cv"] = i
-            all_state_dicts.append(model.state_dict())
+            # Move off GPU before caching so the cached state dicts stay loadable without CUDA
+            all_state_dicts.append(model.to("cpu").state_dict())
             all_logs.append(logs)
 
         return all_state_dicts, all_logs
