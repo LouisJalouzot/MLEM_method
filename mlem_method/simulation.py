@@ -209,11 +209,12 @@ class OracleLearner:
         Yp = self.transform(Zp)
         return spearman((Yp[self.i] - Yp[self.j]).norm(dim=1), self.D)
 
-    def score_stimuli(self, Z, i, j, target):
-        from .utils import spearman
+    def score_stimuli(self, Z, i, j, target, metric=None):
+        from .utils import get_metric
 
         Y = self.transform(Z)
-        return spearman((Y[i] - Y[j]).norm(dim=1), target).item()
+        metric = metric or get_metric("spearman")[0]
+        return metric((Y[i] - Y[j]).norm(dim=1), target).item()
 
     def batch_importance(self, mask):
         from captum.attr import FeaturePermutation

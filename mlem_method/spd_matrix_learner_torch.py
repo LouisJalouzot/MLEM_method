@@ -9,7 +9,7 @@ from torch.nn import functional as F
 from torch.nn.utils import parametrize
 from torchsort import soft_rank
 
-from .utils import corrcoef, spearman
+from .utils import corrcoef, get_metric
 
 
 class DiagonalParam(nn.Module):
@@ -100,7 +100,6 @@ class SPDMatrixLearner(nn.Module):
         param: str = "cholesky",
         fro_norm: bool = True,
         loss: str = "spearman",
-        scoring: str = "spearman",
         spearman_regularization: str = "l2",
         spearman_regularization_strength: float = 1.0,
         groups: tp.Sequence[str] | None = None,
@@ -113,7 +112,6 @@ class SPDMatrixLearner(nn.Module):
             param: Parametrization type
             fro_norm: Whether to apply Frobenius norm normalization
             loss: Loss function to use ("spearman" or "mse")
-            scoring: Scoring method to use ("spearman" or "mse")
             spearman_regularization: Type of regularization for Spearman correlation
             spearman_regularization_strength: Strength of the regularization
             groups: Coordinate-to-feature mapping required by the structured parametrization
@@ -129,8 +127,6 @@ class SPDMatrixLearner(nn.Module):
             self.maximize = True
         else:
             raise ValueError(f"Invalid loss function {loss}. Choose 'mse' or 'spearman'.")
-        self.scoring = scoring
-
         # Create weight matrix
         self.n_features = n_features
         self.W = nn.Linear(n_features, n_features, bias=False, dtype=torch.float32)
@@ -259,13 +255,10 @@ class SPDMatrixLearner(nn.Module):
         return F.mse_loss(x, y)
 
     @torch.no_grad()
-    def score(self, x, y, flat=False):
+    def score(self, x, y, metric: tp.Callable | None = None, flat=False):
+        metric = metric or get_metric("spearman")[0]
         if flat or x.shape[1] != self.n_features:
             pred = self.flat_forward(x)
         else:
             pred = self.forward(x)
-
-        if self.scoring == "spearman":
-            return spearman(pred, y).item()
-        elif self.scoring == "mse":
-            return self.mse(pred, y).item()
+        return metric(pred, y).item()
