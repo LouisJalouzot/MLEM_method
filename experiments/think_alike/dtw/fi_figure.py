@@ -94,7 +94,7 @@ for method in ("mlem", "rsa"):
     )
     sns.despine(trim=True)
     ax.set_ylabel("")
-    ax.set_xlabel("Feature Importance    ")
+    ax.set_xlabel("Group Importance    ")
     fig.tight_layout()
     stem = f"{method}_group_fi"
     fig.savefig(OUTPUT_DIR / f"{stem}.pdf", metadata={"CreationDate": None}, bbox_inches="tight")
