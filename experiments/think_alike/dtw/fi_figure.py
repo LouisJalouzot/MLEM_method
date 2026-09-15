@@ -76,15 +76,14 @@ for method in ("mlem", "rsa"):
 
     fis = pd.concat(fis).groupby(["cv", "Feature"], as_index=False)["Feature Importance"].mean()
     print(fis.groupby("Feature")["Feature Importance"].agg(["mean", "std"]).sort_values("mean", ascending=False))
-    order = fis.groupby("Feature")["Feature Importance"].mean().sort_values(ascending=False).index
 
-    fig, ax = plt.subplots(figsize=(1.5, 3.25))
+    fig, ax = plt.subplots(figsize=(1, 2))
     sns.barplot(
         fis,
         x="Feature Importance",
         y="Feature",
         hue="Feature",
-        order=order,
+        order=MAIN_GROUPS.keys(),
         hue_order=MAIN_GROUPS.keys(),
         palette="tab10",
         legend=False,
@@ -92,9 +91,11 @@ for method in ("mlem", "rsa"):
         errorbar="sd",
         ax=ax,
     )
+    ax.set_xlim(0, 0.35)
+    ax.set_xticks([0, 0.3])
     sns.despine(trim=True)
     ax.set_ylabel("")
-    ax.set_xlabel("Group Importance    ")
+    ax.set_xlabel("Group Importance            ")
     fig.tight_layout()
     stem = f"{method}_group_fi"
     fig.savefig(OUTPUT_DIR / f"{stem}.pdf", metadata={"CreationDate": None}, bbox_inches="tight")

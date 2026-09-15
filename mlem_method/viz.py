@@ -49,7 +49,7 @@ MAIN_COHORT_SIZE = 44
 MAIN_GROUPS = {
     "Model size": ["Num. Parameters", "Active Parameters", "Depth", "Width"],
     "Training data": ["Training Tokens", "Training Context Length", "Vocabulary Size", "Language Focus"],
-    "Input/output interface": ["Tokenizer Type", "Tied Embeddings"],
+    "Input/output interface": ["Tied Embeddings"],
     "Sequence computation": ["Positional Encoding", "Token Mixer"],
     "Block transformation": ["Normalization", "Non-linearity"],
 }
