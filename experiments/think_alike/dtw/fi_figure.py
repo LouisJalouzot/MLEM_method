@@ -8,7 +8,6 @@ from mlem.mlem import MLEM
 
 from mlem_method.viz import (
     FIGURE_DIR,
-    GROUP_COLORS,
     MAIN_GROUPS,
     MEMORY,
     load_cohort,
@@ -77,7 +76,7 @@ for method in ("mlem", "rsa"):
 
     fis = pd.concat(fis).groupby(["cv", "Feature"], as_index=False)["Feature Importance"].mean()
     print(fis.groupby("Feature")["Feature Importance"].agg(["mean", "std"]).sort_values("mean", ascending=False))
-    hue_order = fis.groupby("Feature")["Feature Importance"].mean().sort_values(ascending=False).index
+    order = fis.groupby("Feature")["Feature Importance"].mean().sort_values(ascending=False).index
 
     fig, ax = plt.subplots(figsize=(1.5, 3.25))
     sns.barplot(
@@ -85,9 +84,9 @@ for method in ("mlem", "rsa"):
         x="Feature Importance",
         y="Feature",
         hue="Feature",
-        order=hue_order,
-        hue_order=hue_order,
-        palette=GROUP_COLORS,
+        order=order,
+        hue_order=MAIN_GROUPS.keys(),
+        palette="tab10",
         legend=False,
         orient="h",
         errorbar="sd",

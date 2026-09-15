@@ -8,14 +8,14 @@ from sklearn.manifold import MDS
 
 from mlem_method.viz import (
     FIGURE_DIR,
+    family_colors,
+    family_markers,
     load_cohort,
     load_distance_folds,
-    markers,
     mpl,
-    palettes,
     plt,
     remove_unused_categories,
-    sns,
+    shades,
 )
 
 parser = ArgumentParser()
@@ -60,9 +60,9 @@ for method in ("mlem", "rsa"):
 
     for idx, (family, g) in enumerate(families):
         g = remove_unused_categories(g)
-        colors = sns.color_palette(palettes[idx % len(palettes)], n_colors=len(g) + 2)[1:-1]
-        marker = markers[idx % len(markers)]
-        line_color = colors[-1]
+        family_color = family_colors[family]
+        colors = shades(family_color, len(g))
+        marker = family_markers[family]
 
         for row, color in zip(g.itertuples(), colors):
             ax.add_patch(
@@ -76,19 +76,15 @@ for method in ("mlem", "rsa"):
                 )
             )
 
-        ax.plot(g["MDS1"], g["MDS2"], color=line_color, linewidth=1.5, alpha=0.9, zorder=1.5)
-        sns.scatterplot(
-            g,
-            x="MDS1",
-            y="MDS2",
-            hue="model",
-            hue_order=g["model"].tolist(),
-            palette=colors,
+        ax.plot(g["MDS1"], g["MDS2"], color=family_color, linewidth=1.5, alpha=0.9, zorder=1.5)
+        ax.scatter(
+            g["MDS1"],
+            g["MDS2"],
             marker=marker,
             s=70,
-            edgecolor="none",
-            legend=False,
-            ax=ax,
+            facecolors=colors,
+            edgecolors="none",
+            zorder=2,
         )
 
         first = g.iloc[0]
@@ -137,15 +133,15 @@ for method in ("mlem", "rsa"):
             target, ha, va = g.iloc[0], "center", "bottom"
             x, y = target["MDS1"], target["MDS2"] + 1.5 * ypad
 
-        ax.text(x, y, family, color=line_color, fontsize=10, fontweight="bold", ha=ha, va=va)
+        ax.text(x, y, family, color=family_color, fontsize=10, fontweight="bold", ha=ha, va=va)
         handles.append(
             mpl.lines.Line2D(
                 [],
                 [],
                 marker=marker,
                 linestyle="-",
-                color=line_color,
-                markerfacecolor=line_color,
+                color=family_color,
+                markerfacecolor=family_color,
                 markeredgecolor="none",
                 markersize=7,
             )

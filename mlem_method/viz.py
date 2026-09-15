@@ -26,15 +26,17 @@ plt.rcParams["font.serif"] = ["Times New Roman", "DejaVu Serif", "serif"]
 plt.rcParams["font.family"] = "serif"
 plt.rcParams["savefig.bbox"] = "tight"
 pio.templates.default = "simple_white"
-markers = ["o", "s", "^", "v", "D", "p"]
-palettes = [
-    "Reds",
-    "Greens",
-    "Blues",
-    "Oranges",
-    "Purples",
-    "Greys",
-]
+family_order = ["gpt2", "opt", "pythia", "OLMo-2", "Llama-3.2", "Ministral-3", "Qwen3", "mamba", "mamba2", "RWKV4"]
+family_colors = dict(zip(family_order, sns.color_palette("tab10", n_colors=len(family_order))))
+family_markers = dict(
+    zip(family_order, ["o", "s", "^", "v", "<", ">", "D", "p", "h", "8"])
+)
+
+
+def shades(color, n):
+    """Light-to-dark model colors ending at the family's base color."""
+    return sns.light_palette(color, n_colors=n + 1)[1:]
+
 
 metadata = pd.read_csv("model_metadata.csv")
 
@@ -51,8 +53,6 @@ MAIN_GROUPS = {
     "Sequence computation": ["Positional Encoding", "Token Mixer"],
     "Block transformation": ["Normalization", "Non-linearity"],
 }
-GROUP_COLORS = {group: mpl.colormaps[palettes[i]](0.7) for i, group in enumerate(MAIN_GROUPS)}
-
 feature_rename = {
     "subj_NUM": "Subject number",
     "prep_LEMMA": "Preposition lemma",

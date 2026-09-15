@@ -4,12 +4,13 @@ from argparse import ArgumentParser
 from mlem_method.viz import *
 
 parser = ArgumentParser()
-parser.add_argument("--input", type=Path, default=Path(__file__).parent / "0.parquet")
-parser.add_argument("--output-dir", type=Path, default=Path("think_alike/figures"))
+parser.add_argument("--long-range", action="store_true")
 args = parser.parse_args()
-args.output_dir.mkdir(parents=True, exist_ok=True)
+input_path = Path(__file__).parent / ("../long_range_2/0.parquet" if args.long_range else "0.parquet")
+output_dir = FIGURE_DIR / ("long_range" if args.long_range else "")
+output_dir.mkdir(parents=True, exist_ok=True)
 
-i, meta = load_df(args.input, to_keep=to_keep)
+i, meta = load_df(input_path, to_keep=to_keep)
 
 print("Top features:", top_features := select_top_features(i))
 df_plot = i[i["Feature"].isin(top_features)]
@@ -90,4 +91,4 @@ sns.move_legend(
     handlelength=3,
 )
 g.fig.subplots_adjust(top=0.975, wspace=0.05, hspace=0.13)
-plt.savefig(args.output_dir / "feature_importance.pdf", metadata={"CreationDate": None})
+plt.savefig(output_dir / "feature_importance.pdf", metadata={"CreationDate": None})

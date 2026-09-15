@@ -4,12 +4,13 @@ from argparse import ArgumentParser
 from mlem_method.viz import *
 
 parser = ArgumentParser()
-parser.add_argument("--input", type=Path, default=Path(__file__).parent / "0.parquet")
-parser.add_argument("--output-dir", type=Path, default=Path("think_alike/figures"))
+parser.add_argument("--long-range", action="store_true")
 args = parser.parse_args()
-args.output_dir.mkdir(parents=True, exist_ok=True)
+input_path = Path(__file__).parent / ("../long_range_2/0.parquet" if args.long_range else "0.parquet")
+output_dir = FIGURE_DIR / ("long_range" if args.long_range else "")
+output_dir.mkdir(parents=True, exist_ok=True)
 
-i, meta = load_df(args.input, to_keep=to_keep)
+i, meta = load_df(input_path, to_keep=to_keep)
 i = smooth_fi_by_layer(i)
 gb_cols = list(meta.columns)
 
@@ -33,8 +34,8 @@ fig, axes = plt.subplots(rows, cols, figsize=(cols * 4, rows * 2.5), squeeze=Fal
 
 for idx, (ax, family) in enumerate(zip(axes.flat, families)):
     df_plot = all_coords[all_coords["family"] == family]
-    marker = markers[idx % len(markers)]
-    palette = palettes[idx % len(palettes)]
+    marker = family_markers[family]
+    palette = shades(family_colors[family], df_plot["model"].nunique())
 
     pca_lineplot2d(df_plot, ax=ax, band_alpha=0.4, marker=marker, palette=palette)
 
@@ -91,4 +92,4 @@ for ax in axes.flat[len(families) :]:
     ax.set_axis_off()
 
 plt.subplots_adjust(wspace=0.7, hspace=0.1)
-plt.savefig(args.output_dir / "trajectories.pdf", metadata={"CreationDate": None})
+plt.savefig(output_dir / "trajectories.pdf", metadata={"CreationDate": None})

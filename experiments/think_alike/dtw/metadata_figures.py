@@ -6,7 +6,7 @@ from matplotlib.lines import Line2D
 from scipy.cluster.hierarchy import dendrogram, linkage, set_link_color_palette
 from scipy.spatial.distance import squareform
 
-from mlem_method.viz import FIGURE_DIR, GROUP_COLORS, MAIN_GROUPS, load_cohort, plt, sns
+from mlem_method.viz import FIGURE_DIR, MAIN_GROUPS, load_cohort, plt, sns
 
 OUTPUT_DIR = FIGURE_DIR / "dtw"
 model_metadata, _, features, features_dist = load_cohort()
@@ -65,10 +65,11 @@ dendrogram(
     leaf_font_size=11,
     ax=ax,
 )
+colors = {group: color for group, color in zip(MAIN_GROUPS.keys(), sns.color_palette("tab10"))}
 for tick in ax.get_yticklabels():
-    tick.set_color(GROUP_COLORS[feature_to_group[tick.get_text()]])
+    tick.set_color(colors[feature_to_group[tick.get_text()]])
 ax.legend(
-    handles=[Line2D([], [], marker="o", linestyle="", color=c, label=g) for g, c in GROUP_COLORS.items()],
+    handles=[Line2D([], [], marker="o", linestyle="", color=c, label=g) for g, c in colors.items()],
     frameon=False,
     loc="center left",
     bbox_to_anchor=(1.02, 0.5),

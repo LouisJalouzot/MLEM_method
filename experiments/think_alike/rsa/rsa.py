@@ -65,20 +65,20 @@ all_coords = all_coords.reset_index()
 # %% Plot trajectories
 families = all_coords.family.unique()
 fig, axes = plt.subplots(1, len(families), figsize=(11, 3), sharex=True, sharey=True)
-palettes = {"gpt2": "Reds", "opt": "Greens", "pythia": "Blues"}
-markers = {"gpt2": "o", "opt": "s", "pythia": "D"}
 
 for i, (ax, family) in enumerate(zip(axes, families)):
     df = all_coords[all_coords.family == family]
+    marker = family_markers[family]
+    color = family_colors[family]
     sns.lineplot(
         remove_unused_categories(df),
         x="MDS1",
         y="MDS2",
         hue="model",
         sort=False,
-        marker=markers[family],
-        palette=palettes[family],
-        markeredgecolor=None,
+        marker=marker,
+        palette=shades(color, df["model"].nunique()),
+        markeredgecolor="none",
         ax=ax,
     )
 
@@ -92,7 +92,7 @@ for i, (ax, family) in enumerate(zip(axes, families)):
         zorder=100,
         legend=False,
         ax=ax,
-        marker=markers[family],
+        marker=marker,
     )
 
     handles, labels = ax.get_legend_handles_labels()
@@ -102,7 +102,7 @@ for i, (ax, family) in enumerate(zip(axes, families)):
         mpl.lines.Line2D(
             [],
             [],
-            marker=markers[family],
+            marker=marker,
             linestyle="None",
             markerfacecolor="white",
             markeredgecolor="black",

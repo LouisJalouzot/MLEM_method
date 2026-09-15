@@ -4,12 +4,13 @@ from argparse import ArgumentParser
 from mlem_method.viz import *
 
 parser = ArgumentParser()
-parser.add_argument("--input", type=Path, default=Path(__file__).parent / "1.parquet")
-parser.add_argument("--output-dir", type=Path, default=Path("think_alike/figures"))
+parser.add_argument("--long-range", action="store_true")
 args = parser.parse_args()
-args.output_dir.mkdir(parents=True, exist_ok=True)
+input_path = Path(__file__).parent / ("../long_range_2/1.parquet" if args.long_range else "1.parquet")
+output_dir = FIGURE_DIR / ("long_range" if args.long_range else "")
+output_dir.mkdir(parents=True, exist_ok=True)
 
-s, meta = load_df(args.input, to_keep=to_keep)
+s, meta = load_df(input_path, to_keep=to_keep)
 
 # %% Spearman
 families = meta["family"].unique()
@@ -25,8 +26,8 @@ fig, axes = plt.subplots(
 
 for idx, (ax, family) in enumerate(zip(axes.flat, families)):
     df_plot = s[s["family"] == family]
-    marker = markers[idx % len(markers)]
-    palette = sns.color_palette(palettes[idx % len(palettes)], n_colors=df_plot["model"].nunique())
+    marker = family_markers[family]
+    palette = shades(family_colors[family], df_plot["model"].nunique())
 
     sns.lineplot(
         remove_unused_categories(df_plot),
@@ -74,4 +75,4 @@ for ax in axes.flat[len(families) :]:
     ax.set_axis_off()
 
 plt.subplots_adjust(right=0.75, wspace=0.9, hspace=-0.1)
-plt.savefig(args.output_dir / "spearman.pdf", metadata={"CreationDate": None})
+plt.savefig(output_dir / "spearman.pdf", metadata={"CreationDate": None})
