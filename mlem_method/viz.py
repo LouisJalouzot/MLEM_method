@@ -47,8 +47,8 @@ FIGURE_DIR = ROOT / "think_alike/figures"
 MEMORY = Memory(ROOT / ".cache/joblib", verbose=0)
 MAIN_COHORT_SIZE = 44
 MAIN_GROUPS = {
-    "Model size": ["Num. Parameters", "Active Parameters", "Depth", "Width"],
-    "Training data": ["Training Tokens", "Training Context Length", "Vocabulary Size", "Language Focus"],
+    "Model size": ["Num. Parameters", "Depth", "Width"],
+    "Training data": ["Training Tokens", "Context Window", "Vocabulary Size", "Language Focus"],
     "Input/output interface": ["Tied Embeddings"],
     "Sequence computation": ["Positional Encoding", "Token Mixer"],
     "Block transformation": ["Normalization", "Non-linearity"],

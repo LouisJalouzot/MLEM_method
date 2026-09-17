@@ -137,7 +137,7 @@ def get_model_metadata(model_id, architecture, n_params_B, n_tokens_B):
         "Width": np.log2(width),
         "Depth / Width": depth / width,
         "Training Tokens": np.log10(n_tokens_B),
-        "Training Context Length": np.log2(CONTEXT_LENGTHS[model_id]),
+        "Context Window": np.log2(CONTEXT_LENGTHS[model_id]),
         "Training Lineage": "Pretraining",
         "Vocabulary Size": np.log2(config["vocab_size"]),
         "Tokenizer Type": tokenizer,

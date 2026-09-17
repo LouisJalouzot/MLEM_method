@@ -4,8 +4,8 @@
 
 | Group | Features | Motivation |
 |---|---|---|
-| Model size | Num. Parameters, Active Parameters, Depth, Width | Capacity and model shape. |
-| Training data | Training Tokens, Training Context Length, Vocabulary Size, Language Focus | Pretraining scale, context regime, and linguistic coverage. |
+| Model size | Num. Parameters, Depth, Width | Capacity and model shape. |
+| Training data | Training Tokens, Context Window, Vocabulary Size, Language Focus | Pretraining scale, context regime, and linguistic coverage. |
 | Input/output interface | Tokenizer Type, Tied Embeddings | Text input and output interface. |
 | Sequence computation | Positional Encoding, Token Mixer | Position handling and cross-token computation. |
 | Block transformation | Normalization, Non-linearity | Within-block transformation. |
