@@ -14,7 +14,7 @@ from .pairwise_dataloader import PairwiseDataloader
 from .simulation import OracleLearner
 from .spd_matrix_learner_torch import SPDMatrixLearner
 from .trainer import OracleTrainer, Trainer
-from .utils import BaseModelSharing, compute_stats, get_n_layers, spearman
+from .utils import BaseModelSharing, compute_stats, get_metric, get_n_layers
 
 if tp.TYPE_CHECKING:
     import pandas as pd
@@ -26,13 +26,15 @@ def compute_feature_importance(
     groups: np.ndarray,
     n_perm: int = 5,
     alpha: float = 0.01,
+    scoring: tp.Literal["spearman", "pearson", "mse"] = "spearman",
 ) -> tuple["pd.DataFrame", "pd.DataFrame"]:
-    """Permutation main and interaction effects on stimulus features."""
+    """Permutation effects using the same scoring metric for every model."""
     from itertools import combinations
 
     import pandas as pd
     import torch
 
+    metric, maximize = get_metric(scoring)
     names = list(dict.fromkeys(groups))
     blocks = [torch.as_tensor(np.flatnonzero(groups == name), device=dataloader.device) for name in names]
     pairs = list(combinations(range(len(names)), 2))
@@ -53,19 +55,24 @@ def compute_feature_importance(
                 dtype=dataloader.X.dtype,
             ).reshape(dataloader.n, -1)
             observed_distance = (observed_predicted[left] - observed_predicted[right]).norm(dim=-1)
-            observed_score = spearman(observed_distance, observed)
+            observed_score = metric(observed_distance, observed)
             clean_scores = []
-            for selected in selections:
-                variant = dataloader.X.clone()
-                for k in selected:
-                    variant[:, blocks[k]] = dataloader.X[permutations[k]][:, blocks[k]]
+            for start in range(0, len(selections), 32):
+                variants = []
+                for selected in selections[start : start + 32]:
+                    variant = dataloader.X.clone()
+                    for k in selected:
+                        variant[:, blocks[k]] = dataloader.X[permutations[k]][:, blocks[k]]
+                    variants.append(variant)
+                variant_array = torch.stack(variants).cpu().numpy()
                 predicted = torch.as_tensor(
-                    model.predict(variant.cpu().numpy()),
+                    model.predict(variant_array.reshape(-1, variant_array.shape[-1])),
                     device=dataloader.device,
                     dtype=dataloader.X.dtype,
-                ).reshape(dataloader.n, -1)
-                distance = (predicted[left] - predicted[right]).norm(dim=-1)
-                clean_scores.append(spearman(distance, clean))
+                ).reshape(len(variants), dataloader.n, -1)
+                for batch_predicted in predicted:
+                    distance = (batch_predicted[left] - batch_predicted[right]).norm(dim=-1)
+                    clean_scores.append(metric(distance, clean))
 
         elif isinstance(model, SPDMatrixLearner):
             replacements = [
@@ -77,8 +84,19 @@ def compute_feature_importance(
                 X = delta.clone()
                 for k in selected:
                     X[:, blocks[k]] = replacements[k]
-                clean_scores.append(model.score(X, clean))
-            observed_score = model.score(delta, observed)
+                with torch.no_grad():
+                    clean_scores.append(model.score(X, clean, metric))
+            with torch.no_grad():
+                observed_score = model.score(delta, observed, metric)
+
+        elif isinstance(model, OracleLearner):
+            observed_score = model.score_stimuli(dataloader.X, left, right, observed, metric=metric)
+            clean_scores = []
+            for selected in selections:
+                X = dataloader.X.clone()
+                for k in selected:
+                    X[:, blocks[k]] = dataloader.X[permutations[k]][:, blocks[k]]
+                clean_scores.append(model.score_stimuli(X, left, right, clean, metric=metric))
 
         else:
             observed_score = model.score_stimuli(dataloader.X, left, right, observed)
@@ -89,7 +107,7 @@ def compute_feature_importance(
                     X[:, blocks[k]] = dataloader.X[permutations[k]][:, blocks[k]]
                 clean_scores.append(model.score_stimuli(X, left, right, clean))
 
-        sign = -1 if isinstance(model, SPDMatrixLearner) and not model.maximize else 1
+        sign = 1 if maximize else -1
         clean_scores = [sign * float(score) for score in clean_scores]
         scores.append(sign * float(observed_score))
         baseline = clean_scores[0]
@@ -154,10 +172,12 @@ class FeatureImportance(BaseModelSharing):
         default_factory=lambda: Trainer()
     )
 
+    scoring: tp.Literal["spearman", "pearson", "mse"] = "spearman"
     n_perm: int = 5
     alpha: float = 0.01
+    fi_splits: tuple[tp.Literal["train", "test"], ...] = ("train", "test")
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="10")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="12")
     layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
     map_infra: MapInfra = MapInfra(version="2")
     model_config: ConfigDict = ConfigDict(extra="forbid")
@@ -235,13 +255,15 @@ class FeatureImportance(BaseModelSharing):
                     weights = weights.merge(gt_weights)
                     weights["L2"] = np.linalg.norm(weights.GTWeight - weights.Weight)
                 all_weights.append(weights)
-            for split, dataloader in [("train", train_dl), ("test", test_dl)]:
+            dataloaders = {"train": train_dl, "test": test_dl}
+            for split in self.fi_splits:
                 importances, score = compute_feature_importance(
                     model,
-                    dataloader,
+                    dataloaders[split],
                     self.dataset.coordinate_groups,
                     n_perm=self.n_perm,
                     alpha=self.alpha,
+                    scoring=self.scoring,
                 )
                 for frame in [importances, score]:
                     frame["cv"] = i

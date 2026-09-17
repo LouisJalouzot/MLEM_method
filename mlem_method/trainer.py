@@ -116,6 +116,7 @@ class Trainer(BaseModelSharing):
                 device=device,
                 monitor=self.monitor,
                 patience=self.patience,
+                scoring=self.model_builder.scoring,
             )
             logs["cv"] = i
             all_state_dicts.append(model.state_dict())

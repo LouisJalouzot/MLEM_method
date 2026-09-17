@@ -16,7 +16,7 @@ class SPDMatrixLearnerBuilder(BaseModel):
     ] = "cholesky"
     fro_norm: bool = True
     loss: tp.Literal["spearman", "mse"] = "spearman"
-    scoring: tp.Literal["spearman", "mse"] = "spearman"
+    scoring: tp.Literal["spearman", "pearson", "mse"] = "spearman"
     spearman_regularization: str = "l2"
     spearman_regularization_strength: float = 1.0
 
@@ -32,7 +32,6 @@ class SPDMatrixLearnerBuilder(BaseModel):
             groups=groups,
             fro_norm=self.fro_norm,
             loss=self.loss,
-            scoring=self.scoring,
             spearman_regularization=self.spearman_regularization,
             spearman_regularization_strength=self.spearman_regularization_strength,
         )

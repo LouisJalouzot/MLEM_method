@@ -312,3 +312,18 @@ def spearman(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     y_rank = y.argsort().argsort().to(dtype)
 
     return corrcoef(x_rank, y_rank)
+
+
+def get_metric(name: tp.Literal["spearman", "pearson", "mse"]) -> tuple[tp.Callable, bool]:
+    """Return a pairwise metric and whether higher values are better."""
+    import torch.nn.functional as F
+
+    match name:
+        case "spearman":
+            return spearman, True
+        case "pearson":
+            return corrcoef, True
+        case "mse":
+            return F.mse_loss, False
+        case _:
+            raise ValueError(f"Invalid scoring method {name}.")
