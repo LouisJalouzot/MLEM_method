@@ -6,6 +6,7 @@ Loads BIDS-formatted events from the SyntMov2024 syntactic movement study.
 from __future__ import annotations
 
 import json
+from functools import cached_property
 from pathlib import Path
 
 import numpy as np
@@ -94,11 +95,9 @@ class SyntMov2024Dataset(Dataset):
     def level(self) -> str:
         return "syntmov2024"
 
-    @property
+    @cached_property
     def features(self) -> np.ndarray:
-        if self._features is None:
-            self._features = np.array(FEATURE_COLS, dtype=str)
-        return self._features
+        return np.array(FEATURE_COLS, dtype=str)
 
     def read(self, only_columns: bool = False) -> pd.DataFrame | np.ndarray:
         """Read events and extract features, validating against fMRI availability."""

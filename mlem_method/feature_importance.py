@@ -54,7 +54,7 @@ def compute_feature_importance(
                 device=dataloader.device,
                 dtype=dataloader.X.dtype,
             ).reshape(dataloader.n, -1)
-            observed_distance = (observed_predicted[left] - observed_predicted[right]).norm(dim=-1)
+            observed_distance = dataloader.distance(observed_predicted[left], observed_predicted[right])
             observed_score = metric(observed_distance, observed)
             clean_scores = []
             for start in range(0, len(selections), 32):
@@ -71,7 +71,7 @@ def compute_feature_importance(
                     dtype=dataloader.X.dtype,
                 ).reshape(len(variants), dataloader.n, -1)
                 for batch_predicted in predicted:
-                    distance = (batch_predicted[left] - batch_predicted[right]).norm(dim=-1)
+                    distance = dataloader.distance(batch_predicted[left], batch_predicted[right])
                     clean_scores.append(metric(distance, clean))
 
         elif isinstance(model, SPDMatrixLearner):

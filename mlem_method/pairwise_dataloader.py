@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import typing as tp
 
+import numpy as np
 from loguru import logger
 from pydantic import ConfigDict
 
-from .utils import BaseModel
+from .utils import BaseModel, corrcoef
 
 
 class PairwiseDataloader:
@@ -70,6 +71,8 @@ class PairwiseDataloader:
 
         if distance == "cosine":
             self.distance = lambda x, y: 1 - F.cosine_similarity(x, y, dim=-1)
+        elif distance == "correlation":
+            self.distance = lambda x, y: 1 - corrcoef(x, y)
         else:
             self.distance = lambda x, y: (x - y).norm(p=distance, dim=-1)
 
@@ -155,7 +158,7 @@ PairwiseDataLoaderGenerator = tp.Generator[tuple[PairwiseDataloader, PairwiseDat
 
 
 class PairwiseDataloaderBuilder(BaseModel):
-    cv: int | float | None = None
+    cv: int | float | tuple[list[int], list[int]] | None = None
     distance: str | float | int = 2
     nan_to_num: float = 0
     min_max_scale: bool = True
@@ -163,7 +166,11 @@ class PairwiseDataloaderBuilder(BaseModel):
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def model_post_init(self, context):
-        if isinstance(self.cv, int):
+        if isinstance(self.cv, tuple):
+            assert len(self.cv) == 2 and all(len(i) > 0 for i in self.cv), (
+                "cv as a predefined split needs a (train_indices, test_indices) pair"
+            )
+        elif isinstance(self.cv, int):
             assert self.cv > 1, "if cv is an int, it needs to be greater than 1"
         elif isinstance(self.cv, float):
             assert 0 < self.cv < 1, "if cv is a float, it needs to be between 0 and 1"
@@ -201,6 +208,22 @@ class PairwiseDataloaderBuilder(BaseModel):
             seed=seed,
         )
         assert X is not None or Y is not None, "X or Y must be provided"
+        if isinstance(self.cv, tuple):
+            train_indices, test_indices = (np.asarray(i, dtype=int) for i in self.cv)
+            logger.info(f"Predefined split: {len(train_indices)} train / {len(test_indices)} test samples")
+            yield (
+                build_dl(
+                    X[train_indices] if X is not None else None,
+                    Y[train_indices] if Y is not None else None,
+                    Y2[train_indices] if Y2 is not None else None,
+                ),
+                build_dl(
+                    X[test_indices] if X is not None else None,
+                    Y[test_indices] if Y is not None else None,
+                    Y2[test_indices] if Y2 is not None else None,
+                ),
+            )
+            return
         if self.cv is None:
             yield build_dl(X, Y, Y2), build_dl(X, Y, Y2)
         if isinstance(self.cv, int):

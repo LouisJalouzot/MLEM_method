@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as tp
+from functools import cached_property
 
 import numpy as np
 
@@ -28,17 +29,7 @@ class Dataset(BaseModel):
     seed: int = 0
     mahalanobis: bool = False
     simulation: Simulation | None = None
-    _features: list[str] = None
-    _triu_indices: tuple[np.ndarray, np.ndarray] = None
-    _pfeatures: list[str] = None
-    _coordinate_groups: pd.Series = None
-    _pcoordinates: list[str] = None
     _level: str = None
-    _df: pd.DataFrame = None
-    _df_features: pd.DataFrame = None
-    _sentences: list[str] = None
-    _words: list[str] = None
-    _sentence_id: list[tp.Any] = None
 
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
     model_config: ConfigDict = ConfigDict(extra="forbid")
@@ -69,58 +60,40 @@ class Dataset(BaseModel):
                 data = pd.read_parquet(self.path)
         return data
 
-    @property
+    @cached_property
     def features(self) -> np.ndarray:
-        if self._features is not None:
-            return self._features
-        else:
-            features = self.read(only_columns=True)
-            if "word" in features:
-                features = features[~np.isin(features, ["word", "start_idx", "end_idx", "sentence"])]
-                self._level = "word"
-            elif "sentence" in features:
-                self._level = "sentence"
-                features = features[features != "sentence"]
-            elif self.simulation is not None:
-                self._level = "simulated"
-            self._features = np.array(features, dtype=str)
-            self._triu_indices = np.triu_indices(len(features))
-            self._pfeatures = _pair_names(features)
+        features = self.read(only_columns=True)
+        if "word" in features:
+            features = features[~np.isin(features, ["word", "start_idx", "end_idx", "sentence"])]
+            self._level = "word"
+        elif "sentence" in features:
+            self._level = "sentence"
+            features = features[features != "sentence"]
+        elif self.simulation is not None:
+            self._level = "simulated"
+        return np.array(features, dtype=str)
 
-            return self._features
-
-    @property
+    @cached_property
     def triu_indices(self) -> tuple[np.ndarray, np.ndarray]:
-        if self._triu_indices is None:
-            _ = self.features  # Ensure features are computed
-            self._triu_indices = np.triu_indices(len(self._features))
-        return self._triu_indices
+        return np.triu_indices(len(self.features))
 
-    @property
+    @cached_property
     def pfeatures(self) -> list[str]:
-        if self._pfeatures is None:
-            self._pfeatures = _pair_names(self.features)
-        return self._pfeatures
+        return _pair_names(self.features)
 
-    @property
+    @cached_property
     def df(self) -> pd.DataFrame:
         import pandas as pd
 
-        if self._df is not None:
-            return self._df
-        else:
-            df = self.read()
-            # Add pairwise features
-            pairwise_features = []
-            for i, f_1 in enumerate(self.features):
-                for f_2 in self.features[i + 1 :]:
-                    s = df[f_1].astype(str) + ", " + df[f_2].astype(str)
-                    s.name = f"({f_1} x {f_2})"
-                    pairwise_features.append(s)
-            df = pd.concat([df, *pairwise_features], axis=1)
-            self._df = df
-
-            return df
+        df = self.read()
+        # Add pairwise features
+        pairwise_features = []
+        for i, f_1 in enumerate(self.features):
+            for f_2 in self.features[i + 1 :]:
+                s = df[f_1].astype(str) + ", " + df[f_2].astype(str)
+                s.name = f"({f_1} x {f_2})"
+                pairwise_features.append(s)
+        return pd.concat([df, *pairwise_features], axis=1)
 
     @property
     def df_features(self) -> pd.DataFrame:
@@ -130,27 +103,25 @@ class Dataset(BaseModel):
     def n_features(self) -> int:
         return len(self.features)
 
+    @cached_property
+    def _coordinate_groups(self) -> pd.Series:
+        return self.encode()[1]
+
     @property
     def coordinates(self) -> np.ndarray:
-        if self._coordinate_groups is None:
-            _, self._coordinate_groups = self.encode()
         return self._coordinate_groups.index.to_numpy(dtype=str)
 
     @property
     def coordinate_groups(self) -> np.ndarray:
-        if self._coordinate_groups is None:
-            _, self._coordinate_groups = self.encode()
         return self._coordinate_groups.to_numpy(dtype=str)
 
     @property
     def n_coordinates(self) -> int:
         return len(self.coordinates)
 
-    @property
+    @cached_property
     def pcoordinates(self) -> np.ndarray:
-        if self._pcoordinates is None:
-            self._pcoordinates = _pair_names(self.coordinates)
-        return self._pcoordinates
+        return _pair_names(self.coordinates)
 
     @property
     def pcoordinate_groups(self) -> np.ndarray:

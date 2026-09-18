@@ -15,6 +15,7 @@ from .dataset import Dataset, SimulatedRepresentations
 from .estimate_correlations import EstimateCorrelations
 from .pairwise_dataloader import PairwiseDataloaderBuilder
 from .sentence_representations import SentenceRepresentations
+from .things_representations import THINGSFmriRepresentations, THINGSMegRepresentations
 from .utils import BaseModelSharing, compute_stats
 from .word_representations import WordRepresentations
 
@@ -24,7 +25,11 @@ class EncodingBaseline(BaseModelSharing):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
     estimate_correlations: EstimateCorrelations = Field(default_factory=lambda: EstimateCorrelations())
     representations: tp.Annotated[
-        SentenceRepresentations | WordRepresentations | SimulatedRepresentations,
+        SentenceRepresentations
+        | WordRepresentations
+        | SimulatedRepresentations
+        | THINGSFmriRepresentations
+        | THINGSMegRepresentations,
         Field(discriminator="level"),
     ] = Field(default_factory=lambda: SentenceRepresentations())
 

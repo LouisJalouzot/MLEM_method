@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-18
+- Added THINGS-data loaders: `THINGSDataset` (semantic and lexical features, official 8,640/100 split) and the fMRI and MEG representations.
+- MEG consumes the released OpenNeuro ds004212 epochs unchanged (0.1–40 Hz, 1.4 s epochs, baseline-normalized, 200 Hz); only MEG channels are picked and each stimulus' repetitions are averaged per time window. The earlier baseline-covariance whitening is removed, so MEG feature-importance, ceiling and efficiency results predating this entry must be recomputed; their cache keys change accordingly.
+
 ## 2026-09-14
 - Added `FeatureImportance.scoring` for Spearman, Pearson, or MSE permutation FI across all trainers; added Pearson training-validation scoring.
 - Decoupled score-based early stopping and FI direction from the training loss, fixing mixed MSE/correlation configurations.
