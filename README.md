@@ -61,7 +61,10 @@ Layout:
 
 ```text
 data/things/annotations/property-ratings.tsv      # THINGSplus concept features (X)
+data/things/annotations/concepts-metadata_things.tsv  # lexical confounds (extended/custom sets)
 data/things/fmri/betas_csv/sub-*_ResponseData.h5   # single-trial betas (Y)
 data/things/fmri/betas_csv/sub-*_{Stimulus,Voxel}Metadata.csv
 data/things/meg/preprocessed_P*-epo*.fif           # preprocessed epochs (Y)
 ```
+
+Feature selection is documented in [`THINGSDataset`](mlem_method/things_dataset.py).

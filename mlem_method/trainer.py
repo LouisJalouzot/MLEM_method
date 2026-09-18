@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as tp
 
 from exca import TaskInfra
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
 from .dataset import Dataset, SimulatedRepresentations
 from .estimate_correlations import EstimateCorrelations
@@ -14,6 +14,7 @@ from .pairwise_dataloader import (
 from .sentence_representations import SentenceRepresentations
 from .spd_matrix_learner import SPDMatrixLearnerBuilder
 from .syntmov2024_representations import SyntMov2024Representations
+from .things_representations import THINGSFmriRepresentations, THINGSMegRepresentations
 from .utils import BaseModelSharing, get_device, seed_everything
 from .word_representations import WordRepresentations
 
@@ -30,7 +31,12 @@ class Trainer(BaseModelSharing):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
     estimate_correlations: EstimateCorrelations = Field(default_factory=lambda: EstimateCorrelations())
     representations: tp.Annotated[
-        SentenceRepresentations | WordRepresentations | SimulatedRepresentations | SyntMov2024Representations,
+        SentenceRepresentations
+        | WordRepresentations
+        | SimulatedRepresentations
+        | SyntMov2024Representations
+        | THINGSFmriRepresentations
+        | THINGSMegRepresentations,
         Field(discriminator="level"),
     ] = Field(default_factory=lambda: SentenceRepresentations())
     dataloader_builder: PairwiseDataloaderBuilder = Field(default_factory=lambda: PairwiseDataloaderBuilder())
@@ -53,10 +59,14 @@ class Trainer(BaseModelSharing):
         "dataset": ["estimate_correlations", "representations"],
     }
 
-    def model_post_init(self, __context: tp.Any, /) -> None:
-        assert self.dataset.level == self.representations.level, (
-            f"Dataset level {self.dataset.level} does not match representations level {self.representations.level}"
-        )
+    @model_validator(mode="after")
+    def _check_levels(self) -> "Trainer":
+        if self.dataset.level != self.representations.level:
+            # THINGS: one shared stimulus set across two acquisition modalities
+            assert self.dataset.level == "things" and self.representations.level in ("things-fmri", "things-meg"), (
+                f"Dataset level {self.dataset.level} does not match representations level {self.representations.level}"
+            )
+        return self
 
     def get_model(self, state_dict=None, device=None) -> SPDMatrixLearner:
         n_features = self.dataset.n_coordinates
