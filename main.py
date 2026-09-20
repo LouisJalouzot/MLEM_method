@@ -12,7 +12,7 @@ import yaml
 from joblib import Parallel, delayed
 from loguru import logger
 from tqdm.auto import tqdm
-from unflatten import unflatten
+from exca.confdict import ConfDict
 
 
 def yield_grid_search(grid_config, grid_search_zip=None):
@@ -28,7 +28,7 @@ def yield_grid_search(grid_config, grid_search_zip=None):
         base = dict(zip(keys, values))
         for point in zipped:
             flat_config = base | point
-            yield flat_config, unflatten(flat_config)
+            yield flat_config, ConfDict(flat_config)
 
 
 def run_grid_search(

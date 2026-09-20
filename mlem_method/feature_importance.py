@@ -41,7 +41,7 @@ def compute_feature_importance(
     selections = [(), *((k,) for k in range(len(names))), *pairs]
     effects, scores = [], []
 
-    for _ in tqdm(range(n_perm), desc="Permutations"):
+    for _ in range(n_perm):
         left, right, delta, observed, *clean_targets = dataloader.sample(n_pairs=dataloader.n_pairs, get_idx=True)
         clean = clean_targets[-1] if clean_targets else observed
         permutations = [

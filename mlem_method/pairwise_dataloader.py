@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as tp
 
 from loguru import logger
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
 from .utils import BaseModel
 
@@ -156,6 +156,7 @@ PairwiseDataLoaderGenerator = tp.Generator[tuple[PairwiseDataloader, PairwiseDat
 
 class PairwiseDataloaderBuilder(BaseModel):
     cv: int | float | None = None
+    n_train: int | None = Field(default=None, ge=2)
     distance: str | float | int = 2
     nan_to_num: float = 0
     min_max_scale: bool = True
@@ -163,6 +164,8 @@ class PairwiseDataloaderBuilder(BaseModel):
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def model_post_init(self, context):
+        if self.n_train is not None and self.cv is None:
+            raise ValueError("n_train requires a held-out split (cv)")
         if isinstance(self.cv, int):
             assert self.cv > 1, "if cv is an int, it needs to be greater than 1"
         elif isinstance(self.cv, float):
@@ -188,49 +191,49 @@ class PairwiseDataloaderBuilder(BaseModel):
         seed=None,
         signed=False,
     ) -> PairwiseDataLoaderGenerator:
-        build_dl = lambda x, y, y2=None: PairwiseDataloader(
-            X=x,
-            Y=y,
-            Y2=y2,
-            n_pairs=n_pairs,
-            gamma=gamma,
-            distance=self.distance,
-            nan_to_num=self.nan_to_num,
-            min_max_scale=self.min_max_scale,
-            signed=signed,
-            seed=seed,
-        )
+        """Keep the holdout fixed; subsample only the training pool.
+
+        >>> import torch
+        >>> x = torch.arange(20).reshape(-1, 1)
+        >>> full, test = next(PairwiseDataloaderBuilder(cv=5).build(X=x, seed=0))
+        >>> small, same = next(PairwiseDataloaderBuilder(cv=5, n_train=4).build(X=x, seed=0))
+        >>> (small.n, test.n, torch.equal(test.X, same.X))
+        (4, 4, True)
+        """
+        from numpy.random import default_rng
+        from sklearn.model_selection import KFold, ShuffleSplit
+        from sklearn.utils.validation import check_consistent_length
+
         assert X is not None or Y is not None, "X or Y must be provided"
+        check_consistent_length(X, Y, Y2)
+        data = X if X is not None else Y
         if self.cv is None:
-            yield build_dl(X, Y, Y2), build_dl(X, Y, Y2)
-        if isinstance(self.cv, int):
-            from sklearn.model_selection import KFold
+            splits = [(slice(None), slice(None))]
+        elif isinstance(self.cv, int):
+            splits = KFold(n_splits=self.cv, shuffle=True, random_state=0).split(data)
+        else:
+            splits = ShuffleSplit(n_splits=1, test_size=self.cv, random_state=0).split(data)
 
-            kf = KFold(n_splits=self.cv, shuffle=True, random_state=0)
-            for i, (train_index, test_index) in enumerate(kf.split(X), start=1):
-                train_dl = build_dl(
-                    X[train_index] if X is not None else None,
-                    Y[train_index] if Y is not None else None,
-                    Y2[train_index] if Y2 is not None else None,
-                )
-                test_dl = build_dl(
-                    X[test_index] if X is not None else None,
-                    Y[test_index] if Y is not None else None,
-                    Y2[test_index] if Y2 is not None else None,
-                )
+        for i, (train, test) in enumerate(splits, start=1):
+            if self.n_train is not None:
+                if self.n_train > len(train):
+                    raise ValueError(f"n_train={self.n_train} exceeds the training pool ({len(train)})")
+                if self.n_train < len(train):
+                    train = default_rng(seed).permutation(train)[:self.n_train]
+            if isinstance(self.cv, int):
                 logger.info(f"Split {i} of {self.cv}")
-                yield train_dl, test_dl
-        elif isinstance(self.cv, float):
-            from sklearn.model_selection import train_test_split
-
-            arrays = [a for a in [X, Y, Y2] if a is not None]
-            splits = train_test_split(*arrays, test_size=self.cv, random_state=0)
-            it = iter(splits)
-            X_train, X_test = (next(it), next(it)) if X is not None else (None, None)
-            Y_train, Y_test = (next(it), next(it)) if Y is not None else (None, None)
-            Y2_train, Y2_test = (next(it), next(it)) if Y2 is not None else (None, None)
-
-            yield (
-                build_dl(X_train, Y_train, Y2_train),
-                build_dl(X_test, Y_test, Y2_test),
+            yield tuple(
+                PairwiseDataloader(
+                    X=X[index] if X is not None else None,
+                    Y=Y[index] if Y is not None else None,
+                    Y2=Y2[index] if Y2 is not None else None,
+                    n_pairs=n_pairs,
+                    gamma=gamma,
+                    distance=self.distance,
+                    nan_to_num=self.nan_to_num,
+                    min_max_scale=self.min_max_scale,
+                    signed=signed,
+                    seed=seed,
+                )
+                for index in (train, test)
             )

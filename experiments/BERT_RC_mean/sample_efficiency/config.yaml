@@ -1,0 +1,23 @@
+# Five fixed folds: 1,536 test stimuli each; null uses all 6,144 training stimuli.
+# Full encodings/embeddings and pair-budget estimation are shared across sizes.
+base_config:
+  infra:
+    folder: .cache
+    cluster: slurm
+    job_name: bert_sample_efficiency
+    timeout_min: 1200
+    cpus_per_task: 24
+    gpus_per_node: 1
+    slurm_constraint: h100
+    slurm_account: ioj@h100
+    slurm_additional_parameters: {qos: qos_gpu_h100-t3, hint: nomultithread}
+  dataset:
+    path: datasets/relative_clause.csv
+  trainer:
+    kind: mlem
+    dataloader_builder: {cv: 5}
+    representations: {model_name: bert-base-uncased, layer: 7, level: sentence}
+
+grid_search:
+  trainer.model_builder.param: [diagonal, triu, cholesky]
+  trainer.dataloader_builder.n_train: [256, 512, 1024, 2048, 4096, null]

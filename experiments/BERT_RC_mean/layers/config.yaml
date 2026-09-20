@@ -1,9 +1,8 @@
-target: src.feature_importance.FeatureImportance
-
 base_config:
   dataset:
     path: datasets/relative_clause.csv
   trainer:
+    kind: mlem
     dataloader_builder:
       cv: 5
     representations:
@@ -12,14 +11,11 @@ base_config:
 
 grid_search_prepare:
   trainer.model_builder.param:
-    - triu
+    - cholesky
   trainer.representations.layer:
     - 7
 
 grid_search:
-  trainer.model_builder.param:
-    - triu
-    - cholesky
   trainer.representations.layer:
     - 1
     - 2
