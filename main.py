@@ -4,34 +4,15 @@ import math
 import sys
 from contextlib import nullcontext
 from functools import reduce
-from itertools import batched, product
+from itertools import product
 from pathlib import Path
-from typing import Any, ClassVar
 
 import pandas as pd
 import yaml
-from exca import TaskInfra
 from joblib import Parallel, delayed
 from loguru import logger
-from pydantic import BaseModel
 from tqdm.auto import tqdm
 from unflatten import unflatten
-
-
-class TaskBatch(BaseModel):
-    tasks: list[Any]
-    uids: list[str]
-    infra_name: str
-    infra: TaskInfra = TaskInfra(mode="retry")
-    _exclude_from_cls_uid: ClassVar[tuple[str, ...]] = ("tasks",)
-
-    @infra.apply
-    def compute(self):
-        for task in self.tasks:
-            infra = getattr(task, self.infra_name)
-            local = infra.clone_obj(**{self.infra_name: {"cluster": None}})
-            # Each task writes its original cache before the next task starts.
-            getattr(local, self.infra_name).job().result()
 
 
 def yield_grid_search(grid_config, grid_search_zip=None):
@@ -59,7 +40,6 @@ def run_grid_search(
     sequential=False,
     n_jobs=-2,
     grid_search_zip=None,
-    tasks_per_job=1,
 ):
     """Run grid search with job array support.
 
@@ -71,11 +51,7 @@ def run_grid_search(
         max_workers: Maximum number of cluster workers. Defaults to n_configs if not specified.
         sequential: Run each task locally, cancelling its pending cluster job first.
         n_jobs: Joblib workers used to construct tasks.
-        tasks_per_job: Configurations run sequentially per allocation; ignored with sequential=True.
     """
-    if not isinstance(tasks_per_job, int) or isinstance(tasks_per_job, bool) or tasks_per_job < 1:
-        raise ValueError("tasks_per_job must be a positive integer")
-    packed = not sequential and tasks_per_job > 1
     flat_configs = []
     n_configs = math.prod(len(v) for v in grid_search.values())
     if grid_search_zip:
@@ -88,7 +64,7 @@ def run_grid_search(
     # Create tasks and optionally submit them to a job array
     logger.info(f"Creating {n_configs} tasks for {base_class.__class__.__name__}.{infra_path}")
     logger.trace(f"Infra config: {base_infra.model_dump_json(indent=2)}")
-    if sequential or packed:
+    if sequential:
         context = nullcontext([])
     else:
         context = base_infra.job_array(max_workers=max_workers or n_configs, allow_repeated_tasks=True)
@@ -102,32 +78,8 @@ def run_grid_search(
                 flat_configs.append(flat_config)
                 array.append(task)
                 pbar.update(1)
-        if not sequential and not packed:
+        if not sequential:
             logger.info("Submitting tasks to job array")
-
-    if packed:
-        # Import by module name so Submitit can reload batches launched via the CLI.
-        from main import TaskBatch
-
-        infra_name = infra_path_split[-1]
-        batch_config = dict(infra_name=infra_name, infra=base_infra.model_dump())
-        template = TaskBatch(tasks=[], uids=[], **batch_config)
-        with template.infra.job_array(
-            max_workers=max_workers or math.ceil(n_configs / tasks_per_job),
-            allow_empty=True,
-            allow_repeated_tasks=True,
-        ) as batches:
-            for tasks in batched(array, tasks_per_job):
-                infras = [getattr(task, infra_name) for task in tasks]
-                if base_infra.mode != "force" and all(infra.status() == "completed" for infra in infras):
-                    continue
-                batch = TaskBatch(tasks=list(tasks), uids=[infra.uid() for infra in infras], **batch_config)
-                # A completed batch receipt may outlive an individually cleared task cache.
-                if batch.infra.status() == "completed":
-                    batch.infra.clear_job()
-                batches.append(batch)
-        for batch in tqdm(batches, desc="Waiting for packed jobs"):
-            batch.infra.job().result()
 
     # Wait for completion and collect results if necessary
     results = []
@@ -138,9 +90,6 @@ def run_grid_search(
     for idx, task in enumerate(tqdm(array, desc=desc)):
         task_infra = getattr(task, infra_path_split[-1])
         try:
-            if packed:
-                task = task_infra.clone_obj(**{infra_path_split[-1]: {"mode": "cached"}})
-                task_infra = getattr(task, infra_path_split[-1])
             if sequential:
                 try:
                     cached = task_infra.status() == "completed"
@@ -190,7 +139,6 @@ def main(config: dict | None = None, n_jobs=-2):
             fetch_results=False,
             max_workers=config.get("max_workers"),
             sequential=config.get("sequential", False),
-            tasks_per_job=config.get("tasks_per_job", 1),
             n_jobs=n_jobs,
         )
 
@@ -201,7 +149,6 @@ def main(config: dict | None = None, n_jobs=-2):
         infra_path=infra_path,
         max_workers=config.get("max_workers"),
         sequential=config.get("sequential", False),
-        tasks_per_job=config.get("tasks_per_job", 1),
         n_jobs=n_jobs,
         grid_search_zip=config.get("grid_search_zip"),
     )
@@ -229,12 +176,6 @@ if __name__ == "__main__":
     parser.add_argument("config", nargs="*", type=str, default=None)
     parser.add_argument("--sequential", action="store_true", help="Run jobs one after another on this node.")
     parser.add_argument(
-        "--tasks-per-job",
-        type=int,
-        default=None,
-        help="Run N configurations sequentially per allocation (default: 1; ignored with --sequential).",
-    )
-    parser.add_argument(
         "--n-jobs",
         type=int,
         default=-2,
@@ -248,8 +189,6 @@ if __name__ == "__main__":
         help="Logging level (default: INFO)",
     )
     args = parser.parse_args()
-    if args.tasks_per_job is not None and args.tasks_per_job < 1:
-        parser.error("--tasks-per-job must be positive")
 
     # Configure logging level
     logger.remove()
@@ -261,8 +200,6 @@ if __name__ == "__main__":
             with open(config_file, "r") as f:
                 config = yaml.safe_load(f)
             config["sequential"] = args.sequential
-            if args.tasks_per_job is not None:
-                config["tasks_per_job"] = args.tasks_per_job
             for i, df in enumerate(main(config, n_jobs=args.n_jobs)):
                 df.to_parquet(config_file.parent / f"{i}.parquet")
     else:
