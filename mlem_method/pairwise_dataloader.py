@@ -237,3 +237,9 @@ class PairwiseDataloaderBuilder(BaseModel):
                 )
                 for index in (train, test)
             )
+
+    def get_folds(
+        self, X=None, Y=None, Y2=None, n_pairs=None, gamma=1, seed=None, signed=False
+    ) -> PairwiseDataLoaderGenerator:
+        """Single choke point for fold construction; pair budget and tensors stay caller-side."""
+        return self.build(X=X, Y=Y, Y2=Y2, n_pairs=n_pairs, gamma=gamma, seed=seed, signed=signed)

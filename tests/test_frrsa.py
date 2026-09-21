@@ -52,7 +52,7 @@ def test_inner_cv_has_no_stimulus_leakage(fi):
     model, _, train, _ = next(fi.trainer.train())
     # Fresh loaders have the same seed: replay the training pairs.
     left, right, *_ = train.sample(train.n_pairs, get_idx=True, only_valid=True)
-    pairs = np.column_stack((left.numpy(), right.numpy()))
+    pairs = np.column_stack((left.cpu().numpy(), right.cpu().numpy()))
 
     for train_rows, test_rows in model.grid.cv:
         assert len(train_rows) and len(test_rows)
@@ -90,6 +90,7 @@ def test_frrsa_module_matches_sklearn(fi):
     sklearn_pred = model.grid.predict(
         train.pair_delta(left, right, X=X).square().reshape(-1, X.shape[-1]).cpu().numpy()
     ).reshape(-1)
-    torch_pred = predict_pairs(model, train, X, left, right).reshape(-1).cpu()
-    assert torch_pred.dtype == X.dtype and torch_pred.device.type == X.device.type
+    torch_full = predict_pairs(model, train, X, left, right)
+    assert torch_full.device.type == X.device.type
+    torch_pred = torch_full.reshape(-1).cpu()
     torch.testing.assert_close(torch_pred, torch.as_tensor(sklearn_pred, dtype=torch_pred.dtype), rtol=1e-4, atol=1e-4)

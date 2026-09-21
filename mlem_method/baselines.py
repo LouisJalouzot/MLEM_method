@@ -19,7 +19,7 @@ from .dataset import Dataset, SimulatedRepresentations
 from .estimate_correlations import EstimateCorrelations
 from .pairwise_dataloader import PairwiseDataloaderBuilder
 from .sentence_representations import SentenceRepresentations
-from .utils import BaseModelSharing, compute_stats
+from .utils import BaseModelSharing, compute_stats, get_device
 from .word_representations import WordRepresentations
 
 
@@ -63,17 +63,13 @@ class EncodingBaseline(BaseModelSharing):
 
     def get_folds(self):
         _, n_pairs = self.estimate_correlations.estimate_correlations()
-        X = self.dataset.encode()[0]
-        Y = self.representations()
+        device = get_device()
+        X = self.dataset.encode()[0].to(device)
+        Y = self.representations().to(device)
         simulation = self.dataset.simulation
         Y2 = simulation.transform(X) if simulation is not None and simulation.kind == "mlp" else None
-        return self.dataloader_builder.build(
-            X=X,
-            Y=Y,
-            Y2=Y2,
-            n_pairs=n_pairs,
-            seed=self.dataset.seed,
-            signed=self.dataset.mahalanobis,
+        return self.dataloader_builder.get_folds(
+            X=X, Y=Y, Y2=Y2, n_pairs=n_pairs, seed=self.dataset.seed, signed=self.dataset.mahalanobis
         )
 
     @train_infra.apply(exclude_from_cache_uid=("n_jobs", "verbose"))

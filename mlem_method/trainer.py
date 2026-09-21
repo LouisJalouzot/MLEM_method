@@ -82,12 +82,12 @@ class Trainer(BaseModelSharing):
             Y = Y[:, self.unit_indices]
             Y2 = None if Y2 is None else Y2[:, self.unit_indices]
 
-        return self.dataloader_builder.build(
+        return self.dataloader_builder.get_folds(
             X=X,
             Y=Y,
             Y2=Y2,
-            gamma=self.gamma,
             n_pairs=n_pairs,
+            gamma=self.gamma,
             seed=self.dataset.seed,
             signed=self.dataset.mahalanobis,
         )
@@ -160,11 +160,11 @@ class OracleTrainer(Trainer):
         X = self.dataset.encode()[0].to(device)
         Y = simulation.transform(X)
         _, n_pairs = self.estimate_correlations.estimate_correlations()
-        return self.dataloader_builder.build(
+        return self.dataloader_builder.get_folds(
             X=X,
             Y=Y,
-            gamma=self.gamma,
             n_pairs=n_pairs,
+            gamma=self.gamma,
             seed=self.dataset.seed,
             signed=self.dataset.mahalanobis,
         )

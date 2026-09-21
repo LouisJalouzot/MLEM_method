@@ -106,12 +106,7 @@ class RSA(BaseModelSharing):
         Y1 = self.representations_1().to(device)
         Y2 = self.representations_2().to(device)
 
-        dl_it = self.dataloader_builder.build(
-            Y=Y1,
-            Y2=Y2,
-            n_pairs=n_pairs,
-            seed=seed_from_basemodel(self),
-        )
+        dl_it = self.dataloader_builder.get_folds(Y=Y1, Y2=Y2, n_pairs=n_pairs, seed=seed_from_basemodel(self))
         dl, _ = next(iter(dl_it))
         correlations = []
         for i in range(1, self.n_batches + 1):
