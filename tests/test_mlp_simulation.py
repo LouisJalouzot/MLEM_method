@@ -45,11 +45,20 @@ class RecordingScore:
         self.interaction = interaction
         self.inputs = []
 
-    def score_stimuli(self, Z, i, j, target):
-        self.inputs.append(Z.clone())
-        changed = (Z != self.original).any(0)
-        first, second = changed[:2].any().item(), changed[2:].any().item()
-        return 1 - 0.2 * first - 0.3 * second - self.interaction * first * second
+    def __call__(self, Z, i, j):
+        self.inputs.extend(Z.clone().unbind(0))
+        changed = (Z != self.original).any(dim=1)
+        first, second = changed[:, :2].any(dim=-1).double(), changed[:, 2:].any(dim=-1).double()
+        score = 1 - 0.2 * first - 0.3 * second - self.interaction * first * second
+        return score[:, None].expand(-1, len(i))
+
+
+@pytest.fixture
+def recording_score(monkeypatch):
+    monkeypatch.setattr(
+        "mlem_method.feature_importance.predict_pairs", lambda model, loader, X, left, right: model(X, left, right)
+    )
+    monkeypatch.setattr("mlem_method.feature_importance.get_metric", lambda name: (lambda pred, y: pred.mean(-1), True))
 
 
 def make_loader():
@@ -59,24 +68,33 @@ def make_loader():
     return X, PairwiseDataloader(X, Y, n_pairs=32, min_max_scale=False, signed=True, seed=0)
 
 
-def test_stimulus_permutation_keeps_categorical_block_together():
+@pytest.mark.parametrize("perturbations_per_eval", [1, 2, 32])
+def test_stimulus_permutation_keeps_categorical_block_together(recording_score, perturbations_per_eval):
     X, loader = make_loader()
     model = RecordingScore(X)
-    compute_feature_importance(model, loader, np.array(["c", "c", "x"]), n_perm=1)
+    compute_feature_importance(
+        model, loader, np.array(["c", "c", "x"]), n_perm=1, perturbations_per_eval=perturbations_per_eval
+    )
 
     permuted_c = model.inputs[2]
     original_rows = {tuple(row.tolist()) for row in X[:, :2]}
     assert all(tuple(row.tolist()) in original_rows for row in permuted_c[:, :2])
     assert torch.equal(permuted_c[:, 2], X[:, 2])
+    assert torch.equal(model.inputs[-1][:, :2], permuted_c[:, :2])
+    assert torch.equal(model.inputs[-1][:, 2], model.inputs[3][:, 2])
 
 
 @pytest.mark.filterwarnings("ignore:Precision loss occurred")
-def test_permutation_interaction_algebra():
+@pytest.mark.parametrize("perturbations_per_eval", [1, 2, 32])
+def test_permutation_interaction_algebra(recording_score, perturbations_per_eval):
     X, loader = make_loader()
-    additive, _ = compute_feature_importance(RecordingScore(X), loader, np.array(["c", "c", "x"]), n_perm=2)
+    additive, _ = compute_feature_importance(
+        RecordingScore(X), loader, np.array(["c", "c", "x"]), n_perm=2, perturbations_per_eval=perturbations_per_eval
+    )
     X, loader = make_loader()
     interacting, _ = compute_feature_importance(
-        RecordingScore(X, interaction=0.4), loader, np.array(["c", "c", "x"]), n_perm=2
+        RecordingScore(X, interaction=0.4), loader, np.array(["c", "c", "x"]), n_perm=2,
+        perturbations_per_eval=perturbations_per_eval,
     )
 
     assert abs(additive.loc[additive.Order == "interaction", "mean"].item()) < 1e-7

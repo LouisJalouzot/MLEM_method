@@ -5,13 +5,13 @@ from exca import MapInfra, TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import GridSearchCV
 from tqdm.auto import tqdm
 
-from .baselines import EncodingBaseline, FRRSA, FRRSABaseline
+from .baselines import EncodingBaseline, FRRSABaseline
 from .dataset import Dataset
 from .estimate_correlations import EstimateCorrelations
 from .pairwise_dataloader import PairwiseDataloader
-from .simulation import OracleLearner
 from .spd_matrix_learner_torch import SPDMatrixLearner
 from .trainer import OracleTrainer, Trainer
 from .utils import BaseModelSharing, compute_stats, get_metric, get_n_layers
@@ -20,117 +20,87 @@ if tp.TYPE_CHECKING:
     import pandas as pd
 
 
+def predict_pairs(model, dataloader, X, left, right):
+    """Model-agnostic pairwise distances for batched stimulus variants [..., N, F]."""
+    import torch
+
+    if isinstance(model, SPDMatrixLearner):
+        return model(dataloader.pair_delta(left, right, X=X))
+    if isinstance(model, GridSearchCV):
+        delta = dataloader.pair_delta(left, right, X=X)
+        values = model.predict(delta.square().reshape(-1, delta.shape[-1]).cpu().numpy())
+        return torch.as_tensor(values, device=X.device, dtype=X.dtype).reshape(delta.shape[:-1])
+    if callable(model):  # Oracle: a simulation transform on tensors
+        return dataloader.distance(model(X)[..., left, :], model(X)[..., right, :])
+    values = model.predict(X.reshape(-1, X.shape[-1]).cpu().numpy())  # RF: stimuli -> embeddings
+    Y = torch.as_tensor(values, device=X.device, dtype=X.dtype).reshape(*X.shape[:-1], -1)
+    return dataloader.distance(Y[..., left, :], Y[..., right, :])
+
+
 def compute_feature_importance(
-    model: "SPDMatrixLearner | OracleLearner | RandomForestRegressor | FRRSA",
+    model: "SPDMatrixLearner | RandomForestRegressor | GridSearchCV | tp.Callable",
     dataloader: PairwiseDataloader,
     groups: np.ndarray,
     n_perm: int = 5,
     alpha: float = 0.01,
     scoring: tp.Literal["spearman", "pearson", "mse"] = "spearman",
+    perturbations_per_eval: int = 32,
 ) -> tuple["pd.DataFrame", "pd.DataFrame"]:
-    """Permutation effects using the same scoring metric for every model."""
+    """Permutation effects using shared stimulus permutations for mains and joints."""
     from itertools import combinations
 
     import pandas as pd
     import torch
+    from captum.attr import FeatureAblation
 
     metric, maximize = get_metric(scoring)
-    names = list(dict.fromkeys(groups))
-    blocks = [torch.as_tensor(np.flatnonzero(groups == name), device=dataloader.device) for name in names]
+    sign = 1 if maximize else -1
+    X = dataloader.X
+    group_ids, names = pd.factorize(groups)
+    group_ids = torch.as_tensor(group_ids, device=X.device)
+    blocks = [torch.where(group_ids == k)[0] for k in range(len(names))]
     pairs = list(combinations(range(len(names)), 2))
-    selections = [(), *((k,) for k in range(len(names))), *pairs]
+    pair_ids = torch.tensor(pairs, dtype=torch.long, device=X.device)
+    # Score columns are mains then joints; joint_map sends each joint to the two groups it switches.
+    joint_map = torch.zeros(len(pairs), len(names), device=X.device).scatter_(1, pair_ids, 1)
+    keep = X.new_ones(1, len(names) + len(pairs))
     effects, scores = [], []
 
-    for _ in range(n_perm):
-        left, right, delta, observed, *clean_targets = dataloader.sample(n_pairs=dataloader.n_pairs, get_idx=True)
-        clean = clean_targets[-1] if clean_targets else observed
-        permutations = [
-            torch.randperm(dataloader.n, generator=dataloader.generator, device=dataloader.device) for _ in names
-        ]
+    with torch.no_grad():
+        for _ in range(n_perm):
+            left, right, _, observed, *clean_targets = dataloader.sample(dataloader.n_pairs, get_idx=True)
+            clean = clean_targets[-1] if clean_targets else observed
+            permuted = X.clone()
+            for block in blocks:
+                permutation = torch.randperm(dataloader.n, generator=dataloader.generator, device=X.device)
+                permuted[:, block] = X[permutation][:, block]
 
-        if isinstance(model, RandomForestRegressor):
-            observed_predicted = torch.as_tensor(
-                model.predict(dataloader.X.cpu().numpy()),
-                device=dataloader.device,
-                dtype=dataloader.X.dtype,
-            ).reshape(dataloader.n, -1)
-            observed_distance = (observed_predicted[left] - observed_predicted[right]).norm(dim=-1)
-            observed_score = metric(observed_distance, observed)
-            clean_scores = []
-            for start in range(0, len(selections), 32):
-                variants = []
-                for selected in selections[start : start + 32]:
-                    variant = dataloader.X.clone()
-                    for k in selected:
-                        variant[:, blocks[k]] = dataloader.X[permutations[k]][:, blocks[k]]
-                    variants.append(variant)
-                variant_array = torch.stack(variants).cpu().numpy()
-                predicted = torch.as_tensor(
-                    model.predict(variant_array.reshape(-1, variant_array.shape[-1])),
-                    device=dataloader.device,
-                    dtype=dataloader.X.dtype,
-                ).reshape(len(variants), dataloader.n, -1)
-                for batch_predicted in predicted:
-                    distance = (batch_predicted[left] - batch_predicted[right]).norm(dim=-1)
-                    clean_scores.append(metric(distance, clean))
+            def score(mask):
+                # mask 0 switches a selection to its permuted stimuli; torch.where keeps NaNs intact.
+                ablated = (1 - mask[:, : len(names)]) + (1 - mask[:, len(names) :]) @ joint_map
+                variants = torch.where((ablated == 0)[:, None, group_ids], X, permuted)
+                return sign * metric(predict_pairs(model, dataloader, variants, left, right), clean)
 
-        elif isinstance(model, (SPDMatrixLearner, FRRSA)):
-            replacements = [
-                dataloader.pair_delta(permutations[k][left], permutations[k][right], block)
-                for k, block in enumerate(blocks)
-            ]
-            clean_scores = []
-            for selected in selections:
-                X = delta.clone()
-                for k in selected:
-                    X[:, blocks[k]] = replacements[k]
-                with torch.no_grad():
-                    clean_scores.append(model.score(X, clean, metric))
-            with torch.no_grad():
-                observed_score = model.score(delta, observed, metric)
-
-        elif isinstance(model, OracleLearner):
-            observed_score = model.score_stimuli(dataloader.X, left, right, observed, metric=metric)
-            clean_scores = []
-            for selected in selections:
-                X = dataloader.X.clone()
-                for k in selected:
-                    X[:, blocks[k]] = dataloader.X[permutations[k]][:, blocks[k]]
-                clean_scores.append(model.score_stimuli(X, left, right, clean, metric=metric))
-
-        else:
-            observed_score = model.score_stimuli(dataloader.X, left, right, observed)
-            clean_scores = []
-            for selected in selections:
-                X = dataloader.X.clone()
-                for k in selected:
-                    X[:, blocks[k]] = dataloader.X[permutations[k]][:, blocks[k]]
-                clean_scores.append(model.score_stimuli(X, left, right, clean))
-
-        sign = 1 if maximize else -1
-        clean_scores = [sign * float(score) for score in clean_scores]
-        scores.append(sign * float(observed_score))
-        baseline = clean_scores[0]
-        main = clean_scores[1 : len(names) + 1]
-        joint = clean_scores[len(names) + 1 :]
-        effects.append(
-            [baseline - score for score in main]
-            + [main[a] + main[b] - joint_score - baseline for (a, b), joint_score in zip(pairs, joint)]
-        )
+            prediction = predict_pairs(model, dataloader, X[None], left, right)
+            scores.append((sign * metric(prediction, observed)).item())
+            # Captum attr = baseline - score, so main_a = S(all) - S_a and attr for a
+            # joint mask gives S(all) - S_ab.
+            attr = FeatureAblation(score).attribute(keep, perturbations_per_eval=perturbations_per_eval)[0]
+            main, joint = attr[: len(names)], attr[len(names) :]
+            # inter_ab = S_a + S_b - S_ab - S(all) = joint - main_a - main_b (baseline cancels).
+            effects.append(torch.cat([main, joint - main[pair_ids].sum(dim=-1)]).cpu().tolist())
 
     features = [*names, *(f"({names[a]} x {names[b]})" for a, b in pairs)]
-    importances = compute_stats(pd.DataFrame(effects, columns=features), alpha).reset_index(names="Feature")
-    metadata = pd.DataFrame(
+    stats = compute_stats(pd.DataFrame(effects, columns=features), alpha).reset_index(names="Feature")
+    importances = pd.DataFrame(
         {
             "Feature": features,
             "AllFeatures": [[name] for name in names] + [[names[a], names[b]] for a, b in pairs],
             "Order": ["main"] * len(names) + ["interaction"] * len(pairs),
+            "Group": features,
         }
-    )
-    importances = metadata.merge(importances)
-    importances["Group"] = importances.Feature
-    scores = compute_stats(scores, alpha=alpha).iloc[[0]]
-    return importances.sort_values("mean", ascending=False), scores
+    ).merge(stats)
+    return importances.sort_values("mean", ascending=False), compute_stats(scores, alpha=alpha).iloc[[0]]
 
 
 def compute_cv_stats_per_split(df, alpha=0.01):
@@ -174,6 +144,7 @@ class FeatureImportance(BaseModelSharing):
 
     scoring: tp.Literal["spearman", "pearson", "mse"] = "spearman"
     n_perm: int = 5
+    perturbations_per_eval: int = Field(default=32, ge=1)
     alpha: float = 0.01
     fi_splits: tuple[tp.Literal["train", "test"], ...] = ("train", "test")
 
@@ -185,6 +156,7 @@ class FeatureImportance(BaseModelSharing):
         "infra",
         "layers_infra",
         "map_infra",
+        "perturbations_per_eval",
     )
     _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {
         "dataset": ["trainer", "estimate_correlations"],
@@ -264,6 +236,7 @@ class FeatureImportance(BaseModelSharing):
                     n_perm=self.n_perm,
                     alpha=self.alpha,
                     scoring=self.scoring,
+                    perturbations_per_eval=self.perturbations_per_eval,
                 )
                 for frame in [importances, score]:
                     frame["cv"] = i

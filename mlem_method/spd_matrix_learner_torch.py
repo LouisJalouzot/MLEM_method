@@ -9,7 +9,7 @@ from torch.nn import functional as F
 from torch.nn.utils import parametrize
 from torchsort import soft_rank
 
-from .utils import corrcoef, get_metric
+from .utils import corrcoef
 
 
 class DiagonalParam(nn.Module):
@@ -120,7 +120,7 @@ class SPDMatrixLearner(nn.Module):
         self.spearman_regularization = spearman_regularization
         self.spearman_regularization_strength = spearman_regularization_strength
         if loss == "mse":
-            self.loss = self.mse
+            self.loss = F.mse_loss
             self.maximize = False
         elif loss == "spearman":
             self.loss = self.spearman_diff
@@ -130,7 +130,7 @@ class SPDMatrixLearner(nn.Module):
         # Create weight matrix
         self.n_features = n_features
         self.W = nn.Linear(n_features, n_features, bias=False, dtype=torch.float32)
-        self.triu_indices = torch.triu_indices(n_features, n_features)
+        self.register_buffer("triu_indices", torch.triu_indices(n_features, n_features), persistent=False)
 
         # Add appropriate parametrization
 
@@ -218,12 +218,8 @@ class SPDMatrixLearner(nn.Module):
         return True
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
-        """Forward pass: weighted sum of transformed features"""
-        return (self.W(X) * X).sum(dim=1)
-
-    def flat_forward(self, X: torch.Tensor) -> torch.Tensor:
-        """Forward pass using flattened weights"""
-        return X @ self.get_flat_W()
+        """Predict quadratic distances from pair deltas, with optional batch dimensions."""
+        return (self.W(X) * X).sum(dim=-1)
 
     def compute_gradient_norm(self, norm_type=2):
         total_norm = 0
@@ -248,17 +244,4 @@ class SPDMatrixLearner(nn.Module):
             regularization_strength=self.spearman_regularization_strength,
         )
 
-        return corrcoef(x_rank / n, y_rank / n)
-
-    def mse(self, x, y):
-
-        return F.mse_loss(x, y)
-
-    @torch.no_grad()
-    def score(self, x, y, metric: tp.Callable | None = None, flat=False):
-        metric = metric or get_metric("spearman")[0]
-        if flat or x.shape[1] != self.n_features:
-            pred = self.flat_forward(x)
-        else:
-            pred = self.forward(x)
-        return metric(pred, y).item()
+        return corrcoef(x_rank / n, y_rank / n).squeeze(0)

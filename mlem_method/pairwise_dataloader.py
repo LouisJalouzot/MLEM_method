@@ -73,9 +73,9 @@ class PairwiseDataloader:
         else:
             self.distance = lambda x, y: (x - y).norm(p=distance, dim=-1)
 
-    def pair_delta(self, i, j, coords=None):
-        X = self.X if coords is None else self.X[:, coords]
-        delta = (X[i] - X[j]).nan_to_num(self.nan_to_num)
+    def pair_delta(self, i, j, X=None):
+        X = self.X if X is None else X
+        delta = (X[..., i, :] - X[..., j, :]).nan_to_num(self.nan_to_num)
         return delta if self.signed else delta.abs().clip(0, 1)
 
     def get_X_shape(self):

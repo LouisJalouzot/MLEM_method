@@ -2,9 +2,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from sklearn.model_selection import GridSearchCV
 
 from mlem_method import FeatureImportance
-from mlem_method.baselines import FRRSA
 
 
 @pytest.fixture
@@ -41,7 +41,7 @@ def test_training(fi, scoring):
     np.testing.assert_array_equal(trainer.fractions, np.linspace(0.05, 1, 20))
 
     for model, _, _, _ in folds:
-        assert isinstance(model, FRRSA)
+        assert isinstance(model, GridSearchCV)
         assert model.best_estimator_[-1].fracs in trainer.fractions
         assert np.isfinite(model.best_score_)
         # Ridge must retain every encoded coordinate, including categorical ones.
@@ -62,6 +62,10 @@ def test_inner_cv_has_no_stimulus_leakage(fi):
 
 
 def test_feature_importance(fi):
+    serial = fi.infra.clone_obj(perturbations_per_eval=1)
+    assert fi.infra.uid() == serial.infra.uid()
+    assert fi.layers_infra.uid() == serial.layers_infra.uid()
+    assert fi.map_infra.uid() == serial.map_infra.uid()
     importance, scores, weights = fi.compute()
 
     # Three original features give three main effects and three interactions per fold.

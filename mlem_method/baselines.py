@@ -87,12 +87,6 @@ class EncodingBaseline(BaseModelSharing):
         return importances.sort_values("mean", ascending=False)
 
 
-class FRRSA(GridSearchCV):
-    def score(self, X, target, metric):
-        pred = torch.as_tensor(self.predict(X.square().cpu().numpy()), device=X.device, dtype=X.dtype)
-        return metric(pred, target)
-
-
 class FRRSABaseline(EncodingBaseline):
     kind: tp.Literal["frrsa"] = "frrsa"
     # Unconstrained FR-RSA defaults: ViCCo-Group/frrsa, fitting/crossvalidation.py.
@@ -100,10 +94,10 @@ class FRRSABaseline(EncodingBaseline):
     inner_cv: int = 5
     scoring: tp.Literal["pearson", "spearman"] = "pearson"
 
-    train_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="2")
+    train_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
 
     @train_infra.apply(exclude_from_cache_uid=("n_jobs", "verbose"))
-    def _train_cached(self) -> list[FRRSA]:
+    def _train_cached(self) -> list[GridSearchCV]:
         models = []
         corr = pearsonr if self.scoring == "pearson" else spearmanr
         for train, _ in self.get_folds():
@@ -120,7 +114,7 @@ class FRRSABaseline(EncodingBaseline):
                     self.inner_cv, shuffle=True, random_state=self.dataset.seed
                 ).split(np.arange(train.n))
             ]
-            model = FRRSA(
+            model = GridSearchCV(
                 estimator=make_pipeline(StandardScaler(), FracRidgeRegressor(fit_intercept=True, jit=False)),
                 param_grid={"fracridgeregressor__fracs": self.fractions},
                 cv=cv,

@@ -61,8 +61,8 @@ def train(
         X_batch_test, Y_batch_test, *_ = test_dataloader[i]
         X_batch_test, Y_batch_test = X_batch_test.to(device), Y_batch_test.to(device)
         with torch.no_grad():
-            train_score = model.score(X_batch, Y_batch, metric)
-            test_score = model.score(X_batch_test, Y_batch_test, metric)
+            train_score = metric(model(X_batch), Y_batch).item()
+            test_score = metric(model(X_batch_test), Y_batch_test).item()
 
         W = model.get_W()
         diff_norm = (W - prev_w).norm(p=torch.inf).item()

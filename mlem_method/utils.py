@@ -296,17 +296,17 @@ def seed_from_basemodel(model: BaseModel):
 
 
 def corrcoef(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-    """Pearson correlation coefficient between two 1D tensors"""
-    x_n = x - x.mean()
-    y_n = y - y.mean()
-    x_n = x_n / x_n.norm()
-    y_n = y_n / y_n.norm()
+    """Pearson correlation along the last axis, preserving batch dimensions."""
+    x_n = x - x.mean(dim=-1, keepdim=True)
+    y_n = y - y.mean(dim=-1, keepdim=True)
+    x_n = x_n / x_n.norm(dim=-1, keepdim=True)
+    y_n = y_n / y_n.norm(dim=-1, keepdim=True)
 
-    return (x_n * y_n).sum()
+    return (x_n * y_n).sum(dim=-1)
 
 
 def spearman(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-    """Spearman correlation coefficient between two 1D tensors"""
+    """Spearman correlation along the last axis, preserving batch dimensions."""
     dtype = x.dtype
     x_rank = x.argsort().argsort().to(dtype)
     y_rank = y.argsort().argsort().to(dtype)
@@ -315,15 +315,13 @@ def spearman(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
 
 
 def get_metric(name: tp.Literal["spearman", "pearson", "mse"]) -> tuple[tp.Callable, bool]:
-    """Return a pairwise metric and whether higher values are better."""
-    import torch.nn.functional as F
-
+    """Return a last-axis pairwise metric and whether higher values are better."""
     match name:
         case "spearman":
             return spearman, True
         case "pearson":
             return corrcoef, True
         case "mse":
-            return F.mse_loss, False
+            return lambda x, y: (x - y).square().mean(dim=-1), False
         case _:
             raise ValueError(f"Invalid scoring method {name}.")

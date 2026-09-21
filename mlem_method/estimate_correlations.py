@@ -109,7 +109,7 @@ def estimate_correlations(
     import torch
 
     _, n_features = dataloader.get_X_shape()
-    triu_indices = torch.triu_indices(n_features, n_features)
+    i, j = torch.triu_indices(n_features, n_features, device=dataloader.device)
     sample_size = init_sample_size
 
     while sample_size < max_sample_size:
@@ -119,10 +119,8 @@ def estimate_correlations(
         # (n_trials, n_samples, n_features)
         X_batch = dataloader.sample(n_pairs=sample_size, n_trials=n_trials)
         if product:
-            # (n_trials, n_samples, n_features, n_features)
-            X_batch = X_batch[:, :, None] * X_batch[:, :, :, None]
             # (n_trials, n_samples, n_feature_pairs)
-            X_batch = X_batch[:, :, *triu_indices]
+            X_batch = X_batch[..., i] * X_batch[..., j]
 
         # Compute correlations and confidence intervals
         # (n_trials, n_feature_pairs)

@@ -149,17 +149,9 @@ class OracleTrainer(Trainer):
     kind: tp.Literal["oracle"] = "oracle"
 
     def get_model(self, state_dict=None, device=None):
-        from .simulation import OracleLearner
-
-        device = device or self.device or get_device()
         seed_everything(self.dataset.seed)
         self.representations()
-        simulation = self.representations.dataset.simulation
-        Z = self.dataset.encode()[0].to(device)
-        _, n_pairs = self.estimate_correlations.estimate_correlations()
-        model = OracleLearner(n_features=Z.shape[1])
-        model.bind(simulation.transform, Z, n_pairs)
-        return model
+        return self.representations.dataset.simulation.transform
 
     def get_folds(self, device=None) -> PairwiseDataLoaderGenerator:
         device = device or self.device or get_device()
