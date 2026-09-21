@@ -85,7 +85,9 @@ def compute_feature_importance(
             scores.append((sign * metric(prediction, observed)).item())
             # Captum attr = baseline - score, so main_a = S(all) - S_a and attr for a
             # joint mask gives S(all) - S_ab.
-            attr = FeatureAblation(score).attribute(keep, perturbations_per_eval=perturbations_per_eval)[0]
+            attr = FeatureAblation(score).attribute(
+                keep, perturbations_per_eval=perturbations_per_eval, show_progress=True
+            )[0]
             main, joint = attr[: len(names)], attr[len(names) :]
             # inter_ab = S_a + S_b - S_ab - S(all) = joint - main_a - main_b (baseline cancels).
             effects.append(torch.cat([main, joint - main[pair_ids].sum(dim=-1)]).cpu().tolist())
@@ -138,9 +140,9 @@ def compute_cv_stats_per_split(df, alpha=0.01):
 class FeatureImportance(BaseModelSharing):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
     estimate_correlations: EstimateCorrelations = Field(default_factory=lambda: EstimateCorrelations())
-    trainer: tp.Annotated[
-        Trainer | OracleTrainer | EncodingBaseline | FRRSABaseline, Field(discriminator="kind")
-    ] = Field(default_factory=lambda: Trainer())
+    trainer: tp.Annotated[Trainer | OracleTrainer | EncodingBaseline | FRRSABaseline, Field(discriminator="kind")] = (
+        Field(default_factory=lambda: Trainer())
+    )
 
     scoring: tp.Literal["spearman", "pearson", "mse"] = "spearman"
     n_perm: int = 5

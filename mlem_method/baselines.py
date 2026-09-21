@@ -119,6 +119,7 @@ class FRRSABaseline(EncodingBaseline):
                 param_grid={"fracridgeregressor__fracs": self.fractions},
                 cv=cv,
                 scoring=lambda model, X, y: corr(y, model.predict(X)).statistic,
+                n_jobs=self.n_jobs,
             ).fit(X, y)
             models.append(model)
         return models
