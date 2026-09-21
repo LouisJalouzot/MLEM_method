@@ -40,10 +40,11 @@ def test_training(fi, scoring):
     assert len(folds) == 2
     np.testing.assert_array_equal(trainer.fractions, np.linspace(0.05, 1, 20))
 
-    for model, _, _, _ in folds:
+    for model, logs, _, _ in folds:
         assert isinstance(model, FRRSA)
         assert model.grid.best_estimator_[-1].fracs in trainer.fractions
         assert np.isfinite(model.grid.best_score_)
+        assert np.isfinite(logs["training_duration"].iloc[0]) and logs["training_duration"].iloc[0] >= 0
         # Ridge must retain every encoded coordinate, including categorical ones.
         assert model.grid.n_features_in_ == fi.dataset.n_coordinates > fi.dataset.n_features
 
@@ -76,7 +77,11 @@ def test_feature_importance(fi):
     assert len(scores) == 2
     assert np.isfinite(importance["mean"]).all()
     assert np.isfinite(scores["mean"]).all()
-    assert weights.empty
+    assert len(weights) == 2 * fi.dataset.n_coordinates
+    assert {"Feature", "Weight", "cv", "split", "training_duration"} <= set(weights.columns)
+    assert set(weights.split) == {"train"}
+    assert np.isfinite(weights["Weight"]).all()
+    assert ((weights.training_duration >= 0) & np.isfinite(weights.training_duration)).all()
 
 
 def test_frrsa_module_matches_sklearn(fi):

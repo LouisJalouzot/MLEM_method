@@ -1,4 +1,5 @@
 import typing as tp
+from time import time
 
 import numpy as np
 import pandas as pd
@@ -31,8 +32,10 @@ class FRRSA(torch.nn.Module):
         self.grid = grid
         scaler, ridge = grid.best_estimator_
         for name, values in {
-            "mean": scaler.mean_, "scale": scaler.scale_,
-            "w": np.asarray(ridge.coef_).squeeze(), "b": np.ravel(ridge.intercept_).squeeze(),
+            "mean": scaler.mean_,
+            "scale": scaler.scale_,
+            "w": np.asarray(ridge.coef_).squeeze(),
+            "b": np.ravel(ridge.intercept_).squeeze(),
         }.items():
             self.register_buffer(name, torch.as_tensor(np.asarray(values), dtype=torch.float64))
 
@@ -73,20 +76,27 @@ class EncodingBaseline(BaseModelSharing):
         )
 
     @train_infra.apply(exclude_from_cache_uid=("n_jobs", "verbose"))
-    def _train_cached(self) -> list[RandomForestRegressor]:
-        return [
-            RandomForestRegressor(
-                n_estimators=self.n_estimators,
-                n_jobs=self.n_jobs,
-                verbose=self.verbose,
-                random_state=self.dataset.seed,
-            ).fit(train.X.cpu().numpy(), train.Y.cpu().numpy())
-            for train, _ in self.get_folds()
-        ]
+    def _train_cached(self) -> tuple[list[RandomForestRegressor], "pd.DataFrame"]:
+        import pandas as pd
+
+        models, durations = [], []
+        for i, (train, _) in enumerate(self.get_folds()):
+            start = time()
+            models.append(
+                RandomForestRegressor(
+                    n_estimators=self.n_estimators,
+                    n_jobs=self.n_jobs,
+                    verbose=self.verbose,
+                    random_state=self.dataset.seed,
+                ).fit(train.X.cpu().numpy(), train.Y.cpu().numpy())
+            )
+            durations.append({"cv": i, "training_duration": time() - start})
+        return models, pd.DataFrame(durations)
 
     def train(self):
-        for model, (train, test) in zip(self._train_cached(), self.get_folds()):
-            yield model, pd.DataFrame(), train, test
+        models, logs = self._train_cached()
+        for (k, log), (train, test) in zip(logs.iterrows(), self.get_folds()):
+            yield models[k], log.to_frame().T, train, test
 
     @infra.apply
     def compute(self):
@@ -108,13 +118,15 @@ class FRRSABaseline(EncodingBaseline):
     inner_cv: int = 5
     scoring: tp.Literal["pearson", "spearman"] = "pearson"
 
-    train_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
+    train_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="4")
 
     @train_infra.apply(exclude_from_cache_uid=("n_jobs", "verbose"))
-    def _train_cached(self) -> list["FRRSA"]:
-        models = []
+    def _train_cached(self) -> tuple[list["FRRSA"], "pd.DataFrame"]:
+        import pandas as pd
+
+        models, durations = [], []
         corr = pearsonr if self.scoring == "pearson" else spearmanr
-        for train, _ in self.get_folds():
+        for i, (train, _) in enumerate(self.get_folds()):
             left, right, delta, distance, *_ = train.sample(train.n_pairs, get_idx=True, only_valid=True)
             left, right = left.cpu().numpy(), right.cpu().numpy()
             X = delta.square().cpu().numpy()
@@ -124,10 +136,11 @@ class FRRSABaseline(EncodingBaseline):
                     np.flatnonzero(np.isin(left, tr) & np.isin(right, tr)),
                     np.flatnonzero(np.isin(left, te) & np.isin(right, te)),
                 )
-                for tr, te in KFold(
-                    self.inner_cv, shuffle=True, random_state=self.dataset.seed
-                ).split(np.arange(train.n))
+                for tr, te in KFold(self.inner_cv, shuffle=True, random_state=self.dataset.seed).split(
+                    np.arange(train.n)
+                )
             ]
+            start = time()
             model = GridSearchCV(
                 estimator=make_pipeline(StandardScaler(), FracRidgeRegressor(fit_intercept=True, jit=False)),
                 param_grid={"fracridgeregressor__fracs": self.fractions},
@@ -136,7 +149,8 @@ class FRRSABaseline(EncodingBaseline):
                 n_jobs=self.n_jobs,
             ).fit(X, y)
             models.append(FRRSA(model))
-        return models
+            durations.append({"cv": i, "training_duration": time() - start})
+        return models, pd.DataFrame(durations)
 
 
 def compute_decoding_baseline(X, Y, n_splits=5):

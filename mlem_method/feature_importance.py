@@ -224,6 +224,14 @@ class FeatureImportance(BaseModelSharing):
                     weights = weights.merge(gt_weights)
                     weights["L2"] = np.linalg.norm(weights.GTWeight - weights.Weight)
                 all_weights.append(weights)
+            elif self.trainer.kind in ("rf", "frrsa"):
+                weight = model.feature_importances_ if self.trainer.kind == "rf" else model.w.cpu().numpy()
+                weights = pd.DataFrame({"Feature": self.dataset.coordinates, "Weight": weight})
+                weights["cv"] = i
+                weights["split"] = "train"
+                weights["training_duration"] = logs["training_duration"].iloc[0] if len(logs) else 0
+                weights["n_epochs"] = 1
+                all_weights.append(weights)
             dataloaders = {"train": train_dl, "test": test_dl}
             for split in self.fi_splits:
                 importances, score = compute_feature_importance(
