@@ -17,3 +17,29 @@ This project uses `uv` for dependency management.
     uv sync
     source .venv/bin/activate
     ```
+
+## Mahalanobis MLEM
+
+Enable full Mahalanobis learning with one dataset flag:
+
+```yaml
+dataset:
+  mahalanobis: true
+pfi_grouping: feature  # or coordinate
+```
+
+Continuous features keep the legacy min-max scaling. A categorical feature with
+`C` levels becomes `C - 1` unit-simplex (Helmert) coordinates. Pairwise input is
+the signed coordinate difference, so the existing SPD learner fits
+`delta.T @ W @ delta`.
+
+`Dataset.features` and `Dataset.pfeatures` describe theoretical features and
+their interactions. `Dataset.coordinates` and `Dataset.pcoordinates` describe
+the model input and the upper triangle of `W`. `Dataset.encode()` returns
+`(X, groups)`, where `groups` maps each coordinate to its theoretical feature;
+`Dataset.pcoordinate_groups` gives the corresponding mapping for quadratic
+coordinate terms.
+
+`pfi_grouping: feature` jointly permutes all coordinate terms belonging to one
+theoretical feature or interaction. `pfi_grouping: coordinate` reports each
+Helmert coordinate or coordinate pair separately while retaining its `Group`.

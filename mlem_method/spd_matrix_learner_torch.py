@@ -1,3 +1,5 @@
+import typing as tp
+
 import pandas as pd
 import torch
 from loguru import logger
@@ -7,7 +9,7 @@ from torch.nn import functional as F
 from torch.nn.utils import parametrize
 from torchsort import soft_rank
 
-from .utils import corrcoef, spearman
+from .utils import corrcoef
 
 
 class DiagonalParam(nn.Module):
@@ -56,6 +58,36 @@ class DNNParam(nn.Module):
         return W + (shift + self.eps) * self.eye
 
 
+class StructuredParam(nn.Module):
+    def __init__(self, dim, groups):
+        super().__init__()
+        if len(groups) != dim:
+            raise ValueError(f"expected {dim} coordinate groups, got {len(groups)}")
+
+        names = list(dict.fromkeys(groups))
+        lookup = {name: i for i, name in enumerate(names)}
+        group_index = torch.tensor([lookup[name] for name in groups])
+        order = torch.cat([torch.where(group_index == i)[0] for i in range(len(names))])
+        sizes = torch.bincount(group_index).tolist()
+
+        self.register_buffer("group_index", group_index)
+        self.register_buffer("inverse_order", torch.argsort(order))
+        self.diagonal = nn.Parameter(torch.zeros(len(names)))
+        self.directions = nn.ParameterList([nn.Parameter(torch.empty(size, 1)) for size in sizes])
+        for direction in self.directions:
+            nn.init.orthogonal_(direction)
+
+        self.cookbook = MatrixSymPosDef(dim=len(names))
+        self.coupling = nn.Parameter(self.cookbook.params_to_reals1d(torch.eye(len(names))))
+
+    def forward(self, W):
+        directions = torch.block_diag(*(direction / direction.norm() for direction in self.directions))[
+            self.inverse_order
+        ]
+        coupling = self.cookbook.reals1d_to_params(self.coupling)
+        return torch.diag(self.diagonal.exp()[self.group_index]) + directions @ coupling @ directions.T
+
+
 class NormFroParam(nn.Module):
     def forward(self, X):
         return X / X.norm(p="fro")
@@ -68,39 +100,37 @@ class SPDMatrixLearner(nn.Module):
         param: str = "cholesky",
         fro_norm: bool = True,
         loss: str = "spearman",
-        scoring: str = "spearman",
         spearman_regularization: str = "l2",
         spearman_regularization_strength: float = 1.0,
+        groups: tp.Sequence[str] | None = None,
     ):
         """
         Initialize an SPD Matrix Learner model.
 
         Args:
             n_features: Number of features in the input
-            param: Parametrization type ("exp", "cholesky", "dnn", "diagonal", "sym", "triu", or "none")
+            param: Parametrization type
             fro_norm: Whether to apply Frobenius norm normalization
             loss: Loss function to use ("spearman" or "mse")
-            scoring: Scoring method to use ("spearman" or "mse")
             spearman_regularization: Type of regularization for Spearman correlation
             spearman_regularization_strength: Strength of the regularization
+            groups: Coordinate-to-feature mapping required by the structured parametrization
         """
         super().__init__()
         self.spearman_regularization = spearman_regularization
         self.spearman_regularization_strength = spearman_regularization_strength
         if loss == "mse":
-            self.loss = self.mse
+            self.loss = F.mse_loss
             self.maximize = False
         elif loss == "spearman":
             self.loss = self.spearman_diff
             self.maximize = True
         else:
             raise ValueError(f"Invalid loss function {loss}. Choose 'mse' or 'spearman'.")
-        self.scoring = scoring
-
         # Create weight matrix
         self.n_features = n_features
         self.W = nn.Linear(n_features, n_features, bias=False, dtype=torch.float32)
-        self.triu_indices = torch.triu_indices(n_features, n_features)
+        self.register_buffer("triu_indices", torch.triu_indices(n_features, n_features), persistent=False)
 
         # Add appropriate parametrization
 
@@ -109,15 +139,15 @@ class SPDMatrixLearner(nn.Module):
             case "exp":
                 parametrize.register_parametrization(self.W, "weight", SPDExpParam())
             case "cholesky":
-                parametrize.register_parametrization(
-                    self.W, "weight", CholeskyParam(n_features)
-                )
+                parametrize.register_parametrization(self.W, "weight", CholeskyParam(n_features))
             case "dnn":
-                parametrize.register_parametrization(
-                    self.W, "weight", DNNParam(n_features)
-                )
+                parametrize.register_parametrization(self.W, "weight", DNNParam(n_features))
             case "diagonal":
                 parametrize.register_parametrization(self.W, "weight", DiagonalParam())
+            case "structured":
+                if groups is None:
+                    raise ValueError("structured parametrization requires coordinate groups")
+                parametrize.register_parametrization(self.W, "weight", StructuredParam(n_features, groups))
             case "sym":
                 parametrize.register_parametrization(self.W, "weight", SymParam())
             case "triu":
@@ -126,15 +156,19 @@ class SPDMatrixLearner(nn.Module):
                 pass
             case _:
                 raise ValueError(
-                    f"Invalid parametrization: {self.param}. Choose from 'exp', 'cholesky', 'dnn', 'diagonal', 'sym', 'triu', or 'none'."
+                    f"Invalid parametrization: {self.param}. Choose from 'exp', 'cholesky', 'dnn', 'diagonal', "
+                    "'structured', 'sym', 'triu', or 'none'."
                 )
+
+        if self.param == "structured":
+            self.W.parametrizations.weight.original.requires_grad_(False)
 
         # Add normalization if requested
         if fro_norm:
             parametrize.register_parametrization(self.W, "weight", NormFroParam())
 
     def get_W(self) -> torch.Tensor:
-        W = self.W.weight.detach()
+        W = self.W.weight.detach().clone()
         if self.param == "triu":
             W = W.triu()
             W = W + W.T
@@ -147,9 +181,7 @@ class SPDMatrixLearner(nn.Module):
         return W[*self.triu_indices]
 
     def get_flat_forwatted_W(self, pfeatures) -> pd.DataFrame:
-        return pd.DataFrame(
-            {"Feature": pfeatures, "Weight": self.get_flat_W().cpu().detach()}
-        )
+        return pd.DataFrame({"Feature": pfeatures, "Weight": self.get_flat_W().cpu().detach()})
 
     def get_formatted_W(self, features=None) -> pd.DataFrame:
         """Get the weight matrix as a pandas DataFrame with feature names"""
@@ -169,35 +201,25 @@ class SPDMatrixLearner(nn.Module):
         eigenvalues = torch.linalg.eigvalsh(W)
         return eigenvalues.min().item()
 
-    def check_spd(self) -> None:
+    def check_spd(self) -> bool:
         try:
             norm_diff = self.norm_diff()
             if norm_diff > 1e-5:
-                logger.warning(
-                    f"Matrix is not symmetric: Max |W - W^T| = {norm_diff:.2g} > 1e-5"
-                )
+                logger.warning(f"Matrix is not symmetric: Max |W - W^T| = {norm_diff:.2g} > 1e-5")
                 return False
             min_lambda = self.min_eigenvalue()
             if min_lambda <= 0:
-                logger.warning(
-                    f"Matrix is not positive definite: Min λ(W) {min_lambda:.2g} <= 0"
-                )
+                logger.warning(f"Matrix is not positive definite: Min λ(W) {min_lambda:.2g} <= 0")
                 return False
-            logger.info(
-                f"SPD check: Max |W - W^T| = {norm_diff:.2g} - Min λ(W) = {min_lambda:.2g}"
-            )
-        except Exception as e:
+            logger.info(f"SPD check: Max |W - W^T| = {norm_diff:.2g} - Min λ(W) = {min_lambda:.2g}")
+        except RuntimeError as e:
             logger.error(f"SPD check failed: {e}.\n")
             return False
         return True
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
-        """Forward pass: weighted sum of transformed features"""
-        return (self.W(X) * X).sum(dim=1)
-
-    def flat_forward(self, X: torch.Tensor) -> torch.Tensor:
-        """Forward pass using flattened weights"""
-        return X @ self.get_flat_W()
+        """Predict quadratic distances from pair deltas, with optional batch dimensions."""
+        return (self.W(X) * X).sum(dim=-1)
 
     def compute_gradient_norm(self, norm_type=2):
         total_norm = 0
@@ -222,20 +244,4 @@ class SPDMatrixLearner(nn.Module):
             regularization_strength=self.spearman_regularization_strength,
         )
 
-        return corrcoef(x_rank / n, y_rank / n)
-
-    def mse(self, x, y):
-
-        return F.mse_loss(x, y)
-
-    @torch.no_grad()
-    def score(self, x, y):
-        if x.shape[1] == self.n_features:
-            pred = self.forward(x)
-        else:
-            pred = self.flat_forward(x)
-
-        if self.scoring == "spearman":
-            return spearman(pred, y).item()
-        elif self.scoring == "mse":
-            return self.mse(pred, y).item()
+        return corrcoef(x_rank / n, y_rank / n).squeeze(0)

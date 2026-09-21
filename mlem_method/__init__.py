@@ -1,6 +1,6 @@
 import warnings
 
-from .baselines import DecodingBaseline, EncodingBaseline
+from .baselines import DecodingBaseline, EncodingBaseline, FRRSABaseline
 from .dataset import Dataset
 from .estimate_correlations import EstimateCorrelations
 from .feature_importance import FeatureImportance
@@ -23,6 +23,7 @@ __all__ = [
     "FeatureImportance",
     "DecodingBaseline",
     "EncodingBaseline",
+    "FRRSABaseline",
     "Dataset",
     "EstimateCorrelations",
     "PairwiseDataloaderBuilder",

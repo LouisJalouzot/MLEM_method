@@ -1,127 +1,108 @@
 import typing as tp
-from time import time
 
 import numpy as np
 from exca import MapInfra, TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import GridSearchCV
 from tqdm.auto import tqdm
 
+from .baselines import EncodingBaseline, FRRSABaseline
 from .dataset import Dataset
 from .estimate_correlations import EstimateCorrelations
 from .pairwise_dataloader import PairwiseDataloader
-from .trainer import Trainer
-from .utils import BaseModelSharing, compute_stats, get_n_layers
+from .spd_matrix_learner_torch import SPDMatrixLearner
+from .trainer import OracleTrainer, Trainer
+from .utils import BaseModelSharing, compute_stats, get_metric, get_n_layers
 
 if tp.TYPE_CHECKING:
     import pandas as pd
-    from torch import nn
+
+
+def predict_pairs(model, dataloader, X, left, right):
+    """Model-agnostic pairwise distances for batched stimulus variants [..., N, F]."""
+    import torch
+
+    if isinstance(model, SPDMatrixLearner):
+        return model(dataloader.pair_delta(left, right, X=X))
+    if isinstance(model, GridSearchCV):
+        delta = dataloader.pair_delta(left, right, X=X)
+        values = model.predict(delta.square().reshape(-1, delta.shape[-1]).cpu().numpy())
+        return torch.as_tensor(values, device=X.device, dtype=X.dtype).reshape(delta.shape[:-1])
+    if callable(model):  # Oracle: a simulation transform on tensors
+        return dataloader.distance(model(X)[..., left, :], model(X)[..., right, :])
+    values = model.predict(X.reshape(-1, X.shape[-1]).cpu().numpy())  # RF: stimuli -> embeddings
+    Y = torch.as_tensor(values, device=X.device, dtype=X.dtype).reshape(*X.shape[:-1], -1)
+    return dataloader.distance(Y[..., left, :], Y[..., right, :])
 
 
 def compute_feature_importance(
-    model: "nn.Module",
+    model: "SPDMatrixLearner | RandomForestRegressor | GridSearchCV | tp.Callable",
     dataloader: PairwiseDataloader,
-    clusters: "pd.DataFrame",
+    groups: np.ndarray,
     n_perm: int = 5,
-    monitor: tp.Literal["std", "ci_width"] = "std",
-    thresh: float = 0.01,
     alpha: float = 0.01,
-) -> tp.Tuple["pd.DataFrame", "pd.Series"]:
+    scoring: tp.Literal["spearman", "pearson", "mse"] = "spearman",
+    perturbations_per_eval: int = 32,
+) -> tuple["pd.DataFrame", "pd.DataFrame"]:
+    """Permutation effects using shared stimulus permutations for mains and joints."""
+    from itertools import combinations
+
     import pandas as pd
     import torch
-    from captum.attr import FeaturePermutation
+    from captum.attr import FeatureAblation
 
-    features = clusters.Feature
-    clusters = torch.from_numpy(clusters.Cluster.values)
+    metric, maximize = get_metric(scoring)
+    sign = 1 if maximize else -1
+    X = dataloader.X
+    group_ids, names = pd.factorize(groups)
+    group_ids = torch.as_tensor(group_ids, device=X.device)
+    blocks = [torch.where(group_ids == k)[0] for k in range(len(names))]
+    pairs = list(combinations(range(len(names)), 2))
+    pair_ids = torch.tensor(pairs, dtype=torch.long, device=X.device)
+    # Score columns are mains then joints; joint_map sends each joint to the two groups it switches.
+    joint_map = torch.zeros(len(pairs), len(names), device=X.device).scatter_(1, pair_ids, 1)
+    keep = X.new_ones(1, len(names) + len(pairs))
+    effects, scores = [], []
 
-    # Storage for results
-    importances = []
-    score = []
-    start = time()
+    with torch.no_grad():
+        for _ in range(n_perm):
+            left, right, _, observed, *clean_targets = dataloader.sample(dataloader.n_pairs, get_idx=True)
+            clean = clean_targets[-1] if clean_targets else observed
+            permuted = X.clone()
+            for block in blocks:
+                permutation = torch.randperm(dataloader.n, generator=dataloader.generator, device=X.device)
+                permuted[:, block] = X[permutation][:, block]
 
-    for i in tqdm(
-        range(1, n_perm + 1),
-        desc="Computing feature importance",
-        disable=True,
-    ):
-        t = time()
-        X_batch, Y_batch = dataloader[i]
-        clusters = clusters.to(X_batch.device)
+            def score(mask):
+                # mask 0 switches a selection to its permuted stimuli; torch.where keeps NaNs intact.
+                ablated = (1 - mask[:, : len(names)]) + (1 - mask[:, len(names) :]) @ joint_map
+                variants = torch.where((ablated == 0)[:, None, group_ids], X, permuted)
+                return sign * metric(predict_pairs(model, dataloader, variants, left, right), clean)
 
-        # Create flattened feature interactions
-        X_batch_flat = X_batch[:, None] * X_batch[:, :, None]
-        X_batch_flat = X_batch_flat[:, *model.triu_indices]
+            prediction = predict_pairs(model, dataloader, X[None], left, right)
+            scores.append((sign * metric(prediction, observed)).item())
+            # Captum attr = baseline - score, so main_a = S(all) - S_a and attr for a
+            # joint mask gives S(all) - S_ab.
+            attr = FeatureAblation(score).attribute(
+                keep, perturbations_per_eval=perturbations_per_eval, show_progress=True
+            )[0]
+            main, joint = attr[: len(names)], attr[len(names) :]
+            # inter_ab = S_a + S_b - S_ab - S(all) = joint - main_a - main_b (baseline cancels).
+            effects.append(torch.cat([main, joint - main[pair_ids].sum(dim=-1)]).cpu().tolist())
 
-        # Calculate feature importance
-        feature_perm = FeaturePermutation(lambda x: model.score(x, Y_batch))
-        batch_importances = feature_perm.attribute(
-            X_batch_flat, feature_mask=clusters[None]
-        ).cpu()
-        batch_importances = batch_importances.double().numpy().squeeze()
-        if not model.maximize:
-            batch_importances *= -1
-        importances.append(batch_importances)
-
-        # Calculate baseline performance
-        s = model.score(X_batch, Y_batch)
-        score.append(s)
-
-        logger.debug(
-            f"Batch {i:<3} / {n_perm} - "
-            f"Duration: {time() - t:<8.3f}s - "
-            f"Score: {s:<8.3g}"
-        )
-
-    # Compute importances statistics
-    importances = np.stack(importances)
-    importances = pd.DataFrame(importances, columns=features)
-    importances = compute_stats(importances, alpha=alpha)
-    importances = importances.reset_index(names="Feature")
-    importances["Cluster"] = clusters.cpu()
-    cols = [col for col in importances.columns if col not in ["Cluster", "Feature"]]
-    aggregations = {
-        "Feature": [
-            ("Feature", lambda x: min(x, key=len)),
-            ("AllFeatures", list),
-        ]
-    } | {col: "first" for col in cols}
-    importances = importances.groupby("Cluster").agg(aggregations)
-    new_columns = [
-        col_tuple[1] if col_tuple[0] == "Feature" else col_tuple[0]
-        for col_tuple in importances.columns
-    ]
-    importances.columns = new_columns
-    importances = importances.reset_index()
-
-    importances = importances.sort_values("mean", ascending=False)
-
-    # Compute score statistics
-    score_stats = compute_stats(score, alpha=alpha).iloc[0]
-
-    # Log results
-    logger.info(
-        f"Feature importance computed in {time() - start:.3g}s. "
-        f"Mean score = {score_stats['mean']:.3g} ± {score_stats['std']:.3g}"
-    )
-
-    # Warn if there's significant variability on the score correlation
-    # across batches
-    if monitor == "ci_width":
-        variability = score_stats["upper_ci"] - score_stats["lower_ci"]
-        message = f"the width of the {(1 - alpha) * 100:.3g}% confidence interval of the score correlation is {variability:.3g} "
-    elif monitor == "std":
-        variability = score_stats["std"]
-        message = (
-            f"the standard deviation of the score correlation is {variability:.3g} "
-        )
-    if variability > thresh:
-        logger.warning(
-            "Significant variability between batches: "
-            + message
-            + f"which is larger than the threshold {thresh:.3g}."
-        )
-
-    return importances, score_stats.to_frame().T
+    features = [*names, *(f"({names[a]} x {names[b]})" for a, b in pairs)]
+    stats = compute_stats(pd.DataFrame(effects, columns=features), alpha).reset_index(names="Feature")
+    importances = pd.DataFrame(
+        {
+            "Feature": features,
+            "AllFeatures": [[name] for name in names] + [[names[a], names[b]] for a, b in pairs],
+            "Order": ["main"] * len(names) + ["interaction"] * len(pairs),
+            "Group": features,
+        }
+    ).merge(stats)
+    return importances.sort_values("mean", ascending=False), compute_stats(scores, alpha=alpha).iloc[[0]]
 
 
 def compute_cv_stats_per_split(df, alpha=0.01):
@@ -130,7 +111,11 @@ def compute_cv_stats_per_split(df, alpha=0.01):
     values = "mean" if "mean" in df.columns else "Weight"
     df[values] = df[values].astype(float)
     if "AllFeatures" in df.columns:
-        all_features = df[["Feature", "AllFeatures"]].drop_duplicates("Feature")
+        metadata = ["Feature", "AllFeatures"]
+        for column in ["Group", "Order"]:
+            if column in df.columns:
+                metadata.append(column)
+        all_features = df[metadata].drop_duplicates("Feature")
     else:
         all_features = None
     if "Feature" in df.columns:
@@ -154,40 +139,38 @@ def compute_cv_stats_per_split(df, alpha=0.01):
 
 class FeatureImportance(BaseModelSharing):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
-    estimate_correlations: EstimateCorrelations = Field(
-        default_factory=lambda: EstimateCorrelations()
+    estimate_correlations: EstimateCorrelations = Field(default_factory=lambda: EstimateCorrelations())
+    trainer: tp.Annotated[Trainer | OracleTrainer | EncodingBaseline | FRRSABaseline, Field(discriminator="kind")] = (
+        Field(default_factory=lambda: Trainer())
     )
-    trainer: Trainer = Field(default_factory=lambda: Trainer())
 
+    scoring: tp.Literal["spearman", "pearson", "mse"] = "spearman"
     n_perm: int = 5
-    monitor: tp.Literal["std", "ci_width"] = "std"
-    thresh: float = 0.01
+    perturbations_per_eval: int = Field(default=32, ge=1)
     alpha: float = 0.01
+    fi_splits: tuple[tp.Literal["train", "test"], ...] = ("train", "test")
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
-    layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="1")
-    map_infra: MapInfra = MapInfra()
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="12")
+    layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
+    map_infra: MapInfra = MapInfra(version="2")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
         "infra",
         "layers_infra",
         "map_infra",
+        "perturbations_per_eval",
     )
-    _shared_fields_config: tp.ClassVar[tp.Dict[str, tp.List[str]]] = {
+    _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {
         "dataset": ["trainer", "estimate_correlations"],
         "estimate_correlations": ["trainer"],
     }
 
-    @map_infra.apply(
-        item_uid=str, exclude_from_cache_uid=("trainer.representations.layer",)
-    )
+    @map_infra.apply(item_uid=str, exclude_from_cache_uid=("trainer.representations.layer",))
     def run_layers(
         self, layers: tp.Iterable[int]
-    ) -> tp.Iterator[tp.Tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]]:
+    ) -> tp.Iterator[tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]]:
         for layer in layers:
-            fi_for_layer = self.infra.clone_obj(
-                trainer=dict(representations=dict(layer=layer))
-            )
+            fi_for_layer = self.infra.clone_obj(trainer={"representations": {"layer": layer}})
             importances, scores, weights = fi_for_layer.compute()
             for df in [importances, scores, weights]:
                 df["layer"] = layer
@@ -196,7 +179,7 @@ class FeatureImportance(BaseModelSharing):
     @layers_infra.apply
     def run_all_layers(
         self,
-    ) -> tp.Tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]:
+    ) -> tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]:
         import pandas as pd
 
         logger.info("Checking that embeddings are cached or launching job")
@@ -205,13 +188,9 @@ class FeatureImportance(BaseModelSharing):
         model_name = self.trainer.representations.model_name
         n_layers = get_n_layers(model_name)
         layers = range(n_layers + 1)
-        logger.info(
-            f"Running feature importance for {len(layers)} layers of model '{model_name}'"
-        )
+        logger.info(f"Running feature importance for {len(layers)} layers of model '{model_name}'")
         all_importances, all_scores, all_weights = [], [], []
-        for importances, scores, weights in tqdm(
-            self.run_layers(layers), total=len(layers), desc="Layers"
-        ):
+        for importances, scores, weights in tqdm(self.run_layers(layers), total=len(layers), desc="Layers"):
             all_importances.append(importances)
             all_scores.append(scores)
             all_weights.append(weights)
@@ -223,74 +202,65 @@ class FeatureImportance(BaseModelSharing):
         )
 
     @infra.apply
-    def compute(self) -> tp.Tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]:
+    def compute(self) -> tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]:
         import pandas as pd
 
-        # Estimate correlations with forced product
-        ec_forced_product = self.estimate_correlations.infra.clone_obj(
-            dataset=self.dataset, product=True
-        )
-        clusters = ec_forced_product.cluster_features()
-
-        all_models, all_logs = self.trainer.train()
-
+        n_features = self.dataset.n_features
         logger.info(
-            f"Computing permutation feature importance with {self.n_perm} permutations "
-            f"for {clusters.Cluster.max() + 1} clusters of feature pairs."
+            f"Computing {n_features + n_features * (n_features - 1) // 2} permutation effects "
+            f"with {self.n_perm} permutations."
         )
 
         all_importances = []
         all_score = []
         all_weights = []
 
-        for i, (model, logs, (train_dl, test_dl)) in enumerate(
-            zip(all_models, all_logs, self.trainer.get_folds())
-        ):
-            weights = model.get_flat_forwatted_W(pfeatures=self.dataset.pfeatures)
-            weights["cv"] = i
-            weights["split"] = "train"
-            weights["converged"] = False if logs.empty else logs.converged.iloc[0]
-            weights["spd"] = False if logs.empty else logs.spd.iloc[0]
-            weights["training_duration"] = (
-                0 if logs.empty else logs["Step Duration"].sum()
-            )
-            weights["n_epochs"] = len(logs)
-            if hasattr(self.trainer.representations, "gt_weights"):
-                weights = weights.merge(self.trainer.representations.gt_weights)
-                weights["L2"] = np.linalg.norm(weights.GTWeight - weights.Weight)
-            all_weights.append(weights)
-            for dl, split in [(train_dl, "train"), (test_dl, "test")]:
+        for i, (model, logs, train_dl, test_dl) in enumerate(self.trainer.train()):
+            if self.trainer.kind == "mlem":
+                weights = model.get_flat_forwatted_W(pfeatures=self.dataset.pcoordinates)
+                weights["cv"] = i
+                weights["split"] = "train"
+                weights["converged"] = False if logs.empty else logs.converged.iloc[0]
+                weights["spd"] = False if logs.empty else logs.spd.iloc[0]
+                weights["training_duration"] = 0 if logs.empty else logs["Step Duration"].sum()
+                weights["n_epochs"] = len(logs)
+                gt_weights = getattr(self.trainer.representations, "gt_weights", None)
+                if gt_weights is not None:
+                    weights = weights.merge(gt_weights)
+                    weights["L2"] = np.linalg.norm(weights.GTWeight - weights.Weight)
+                all_weights.append(weights)
+            dataloaders = {"train": train_dl, "test": test_dl}
+            for split in self.fi_splits:
                 importances, score = compute_feature_importance(
-                    model=model,
-                    dataloader=dl,
-                    clusters=clusters,
+                    model,
+                    dataloaders[split],
+                    self.dataset.coordinate_groups,
                     n_perm=self.n_perm,
-                    monitor=self.monitor,
-                    thresh=self.thresh,
                     alpha=self.alpha,
+                    scoring=self.scoring,
+                    perturbations_per_eval=self.perturbations_per_eval,
                 )
-                for e in [importances, score]:
-                    e["cv"] = i
-                    e["split"] = split
+                for frame in [importances, score]:
+                    frame["cv"] = i
+                    frame["split"] = split
                 all_importances.append(importances)
                 all_score.append(score)
 
         all_importances = pd.concat(all_importances)
         all_score = pd.concat(all_score)
-        all_weights = pd.concat(all_weights)
+        all_weights = pd.concat(all_weights) if all_weights else pd.DataFrame()
 
         return all_importances, all_score, all_weights
 
     def compute_and_aggregate(
         self,
-    ) -> tp.Tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]:
+    ) -> tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]:
         all_importances, all_score, all_weights = self.compute()
 
         if all_importances.cv.nunique() > 1:
-            all_importances = compute_cv_stats_per_split(
-                all_importances, alpha=self.alpha
-            )
+            all_importances = compute_cv_stats_per_split(all_importances, alpha=self.alpha)
             all_score = compute_cv_stats_per_split(all_score, alpha=self.alpha)
-            all_weights = compute_cv_stats_per_split(all_weights, alpha=self.alpha)
+            if not all_weights.empty:
+                all_weights = compute_cv_stats_per_split(all_weights, alpha=self.alpha)
 
         return all_importances, all_score, all_weights
