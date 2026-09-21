@@ -5,10 +5,9 @@ from exca import MapInfra, TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import GridSearchCV
 from tqdm.auto import tqdm
 
-from .baselines import EncodingBaseline, FRRSABaseline
+from .baselines import EncodingBaseline, FRRSA, FRRSABaseline
 from .dataset import Dataset
 from .estimate_correlations import EstimateCorrelations
 from .pairwise_dataloader import PairwiseDataloader
@@ -24,12 +23,8 @@ def predict_pairs(model, dataloader, X, left, right):
     """Model-agnostic pairwise distances for batched stimulus variants [..., N, F]."""
     import torch
 
-    if isinstance(model, SPDMatrixLearner):
+    if isinstance(model, SPDMatrixLearner | FRRSA):  # torch models consume raw pair deltas
         return model(dataloader.pair_delta(left, right, X=X))
-    if isinstance(model, GridSearchCV):
-        delta = dataloader.pair_delta(left, right, X=X)
-        values = model.predict(delta.square().reshape(-1, delta.shape[-1]).cpu().numpy())
-        return torch.as_tensor(values, device=X.device, dtype=X.dtype).reshape(delta.shape[:-1])
     if callable(model):  # Oracle: a simulation transform on tensors
         return dataloader.distance(model(X)[..., left, :], model(X)[..., right, :])
     values = model.predict(X.reshape(-1, X.shape[-1]).cpu().numpy())  # RF: stimuli -> embeddings
@@ -38,7 +33,7 @@ def predict_pairs(model, dataloader, X, left, right):
 
 
 def compute_feature_importance(
-    model: "SPDMatrixLearner | RandomForestRegressor | GridSearchCV | tp.Callable",
+    model: "SPDMatrixLearner | RandomForestRegressor | FRRSA | tp.Callable",
     dataloader: PairwiseDataloader,
     groups: np.ndarray,
     n_perm: int = 5,

@@ -2,9 +2,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from sklearn.model_selection import GridSearchCV
 
 from mlem_method import FeatureImportance
+from mlem_method.baselines import FRRSA
 
 
 @pytest.fixture
@@ -41,11 +41,11 @@ def test_training(fi, scoring):
     np.testing.assert_array_equal(trainer.fractions, np.linspace(0.05, 1, 20))
 
     for model, _, _, _ in folds:
-        assert isinstance(model, GridSearchCV)
-        assert model.best_estimator_[-1].fracs in trainer.fractions
-        assert np.isfinite(model.best_score_)
+        assert isinstance(model, FRRSA)
+        assert model.grid.best_estimator_[-1].fracs in trainer.fractions
+        assert np.isfinite(model.grid.best_score_)
         # Ridge must retain every encoded coordinate, including categorical ones.
-        assert model.n_features_in_ == fi.dataset.n_coordinates > fi.dataset.n_features
+        assert model.grid.n_features_in_ == fi.dataset.n_coordinates > fi.dataset.n_features
 
 
 def test_inner_cv_has_no_stimulus_leakage(fi):
@@ -54,7 +54,7 @@ def test_inner_cv_has_no_stimulus_leakage(fi):
     left, right, *_ = train.sample(train.n_pairs, get_idx=True, only_valid=True)
     pairs = np.column_stack((left.numpy(), right.numpy()))
 
-    for train_rows, test_rows in model.cv:
+    for train_rows, test_rows in model.grid.cv:
         assert len(train_rows) and len(test_rows)
         train_stimuli = set(pairs[train_rows].ravel())
         test_stimuli = set(pairs[test_rows].ravel())
@@ -77,3 +77,19 @@ def test_feature_importance(fi):
     assert np.isfinite(importance["mean"]).all()
     assert np.isfinite(scores["mean"]).all()
     assert weights.empty
+
+
+def test_frrsa_module_matches_sklearn(fi):
+    import torch
+
+    from mlem_method.feature_importance import predict_pairs
+
+    model, _, train, _ = next(fi.trainer.train())
+    left, right, _, observed, *rest = train.sample(train.n_pairs, get_idx=True)
+    X = train.X[None]
+    sklearn_pred = model.grid.predict(
+        train.pair_delta(left, right, X=X).square().reshape(-1, X.shape[-1]).cpu().numpy()
+    ).reshape(-1)
+    torch_pred = predict_pairs(model, train, X, left, right).reshape(-1).cpu()
+    assert torch_pred.dtype == X.dtype and torch_pred.device.type == X.device.type
+    torch.testing.assert_close(torch_pred, torch.as_tensor(sklearn_pred, dtype=torch_pred.dtype), rtol=1e-4, atol=1e-4)

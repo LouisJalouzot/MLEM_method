@@ -23,6 +23,24 @@ from .utils import BaseModelSharing, compute_stats
 from .word_representations import WordRepresentations
 
 
+class FRRSA(torch.nn.Module):
+    """FR-RSA as a torch module: standardized squared deltas through the fitted ridge weights."""
+
+    def __init__(self, grid: GridSearchCV):
+        super().__init__()
+        self.grid = grid
+        scaler, ridge = grid.best_estimator_
+        for name, values in {
+            "mean": scaler.mean_, "scale": scaler.scale_,
+            "w": np.asarray(ridge.coef_).squeeze(), "b": np.ravel(ridge.intercept_).squeeze(),
+        }.items():
+            self.register_buffer(name, torch.as_tensor(np.asarray(values), dtype=torch.float64))
+
+    def forward(self, delta):
+        mean, scale, w = self.mean.to(delta), self.scale.to(delta), self.w.to(delta)
+        return ((delta.square() - mean) / scale) @ w + self.b.to(delta)
+
+
 class EncodingBaseline(BaseModelSharing):
     kind: tp.Literal["rf"] = "rf"
     dataset: Dataset = Field(default_factory=lambda: Dataset())
@@ -97,7 +115,7 @@ class FRRSABaseline(EncodingBaseline):
     train_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
 
     @train_infra.apply(exclude_from_cache_uid=("n_jobs", "verbose"))
-    def _train_cached(self) -> list[GridSearchCV]:
+    def _train_cached(self) -> list["FRRSA"]:
         models = []
         corr = pearsonr if self.scoring == "pearson" else spearmanr
         for train, _ in self.get_folds():
@@ -121,7 +139,7 @@ class FRRSABaseline(EncodingBaseline):
                 scoring=lambda model, X, y: corr(y, model.predict(X)).statistic,
                 n_jobs=self.n_jobs,
             ).fit(X, y)
-            models.append(model)
+            models.append(FRRSA(model))
         return models
 
 
