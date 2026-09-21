@@ -92,8 +92,8 @@ class RandomMlpSimulation(BaseModel):
     category_cardinalities: tuple[int, ...] = (4, 4, 4)
     hidden_dim: int = Field(default=40, ge=1)
     d: int = Field(default=768, ge=1)
-    gain_sigma: float = Field(default=0.55, ge=0)
-    noise: float = Field(default=0.25, ge=0)
+    gain_sigma: float = Field(default=1.1, ge=0)
+    noise: float = Field(default=1.0, ge=0)
     _model: torch.nn.Module = None
     _Y: torch.Tensor = None
     _Y0: torch.Tensor = None

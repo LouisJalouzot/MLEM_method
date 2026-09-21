@@ -143,7 +143,7 @@ class FeatureImportance(BaseModelSharing):
     n_perm: int = 5
     perturbations_per_eval: int = Field(default=32, ge=1)
     alpha: float = 0.01
-    fi_splits: tuple[tp.Literal["train", "test"], ...] = ("train", "test")
+    fi_splits: tuple[tp.Literal["train", "test"], ...] = ("test",)
 
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="12")
     layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")

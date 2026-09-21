@@ -26,7 +26,7 @@ def _pair_names(names: np.ndarray) -> np.ndarray:
 class Dataset(BaseModel):
     path: str = "datasets/short_sentence.csv"
     seed: int = 0
-    mahalanobis: bool = False
+    mahalanobis: bool = True
     simulation: Simulation | None = None
     _features: list[str] = None
     _triu_indices: tuple[np.ndarray, np.ndarray] = None
