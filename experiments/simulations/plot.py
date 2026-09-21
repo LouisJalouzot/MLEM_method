@@ -12,8 +12,8 @@ root = Path(__file__).parent
 output = root.parent.parent / "paper" / "figs" / "simulation"
 output.mkdir(exist_ok=True)
 
-params = {"cholesky": "MLEM", "sym": "FR-RSA-I", "diagonal": "Diagonal"}
-methods = [*params.values(), "Random Forest"]
+labels = {"mlem": "MLEM", "rf": "Random Forest", "frrsa": "FR-RSA"}
+methods = list(labels.values())
 metrics = {
     "mean": "Spearman $\\rho$ (↑)",
     "fi_tau": "FI Kendall $\\tau$ with Oracle (↑)",
@@ -63,40 +63,20 @@ def preprocess(df):
 oracle = preprocess(pd.read_parquet(root / "oracle" / "0.parquet", filters=[("split", "==", "test")]))
 oracle = {key: g[["Feature", "Order", "mean"]] for key, g in oracle.groupby(["dataset.seed", "schema"])}
 
-estimates, geometries = [], []
-
-for folder in ("mlem", "rf"):
-    paths = [root / folder]
-    extension = root / "mlp" / "efficiency" / "extension" / "rf"
-    if folder == "rf" and extension.exists():
-        paths += [extension]
-
-    is_mlem = folder == "mlem"
-    param = ["trainer.model_builder.param"] if is_mlem else []
-
-    importance = preprocess(
-        pd.concat([pd.read_parquet(p / "0.parquet", filters=[("split", "==", "test")]) for p in paths])
-    )
-
-    geometry = preprocess(
-        pd.concat([pd.read_parquet(p / "1.parquet", filters=[("split", "==", "test")]) for p in paths])
-    )
-
-    if is_mlem:
-        importance["method"] = importance["trainer.model_builder.param"].map(params)
-        geometry["method"] = geometry["trainer.model_builder.param"].map(params)
-    else:
-        importance["method"] = geometry["method"] = "Random Forest"
-
-    estimates.append(importance)
-    geometries.append(geometry)
+importance = preprocess(pd.read_parquet(root / "0.parquet", filters=[("split", "==", "test")]))
+geometry = preprocess(pd.read_parquet(root / "1.parquet", filters=[("split", "==", "test")]))
+for frame in (importance, geometry):
+    frame["method"] = frame["trainer.kind"].map(labels)
+    frame["noise"] = pd.to_numeric(frame["dataset.simulation.noise"])
+# These geometry/FI comparisons use the main noise=1 grid.
+importance, geometry = importance[importance.noise == 1], geometry[geometry.noise == 1]
 
 
 # %% Feature-importance agreement
 keys = ["dataset.seed", "n", "q", "q_over_n", "schema", "method"]
 
 rows = []
-for key, g in pd.concat(estimates).groupby(keys):
+for key, g in importance.groupby(keys):
     target = oracle.get((key[0], key[4]))
     if target is None:
         continue
@@ -110,7 +90,7 @@ for key, g in pd.concat(estimates).groupby(keys):
         }
     )
 
-data = pd.concat(geometries).merge(pd.DataFrame(rows), on=keys)
+data = geometry.merge(pd.DataFrame(rows), on=keys)
 
 
 # %% Seed coverage (unique seeds, not feature/geometry rows)
@@ -165,7 +145,7 @@ for df, x, xlabel, filename in plots:
             ax.set_xticks([128, 256, 512, 1024], ["128", "256", "512", "1024"])
 
     sns.despine(trim=True)
-    sns.move_legend(g, "lower center", bbox_to_anchor=(0.5, 0.95), ncols=4, title=None)
+    sns.move_legend(g, "lower center", bbox_to_anchor=(0.5, 0.95), ncols=3, title=None)
     g.savefig(output / filename, bbox_inches="tight")
     plt.close(g.fig)
 

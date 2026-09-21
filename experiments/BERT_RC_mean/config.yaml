@@ -1,5 +1,3 @@
-# Four methods x ten cells x five folds = 200 fits; no seed sweep.
-# Fixed folds; nested training subsets. The noiseless/full-training cell is shared.
 base_config:
   infra:
     folder: .cache
@@ -19,11 +17,7 @@ base_config:
     representations: {model_name: bert-base-uncased, layer: 7, level: sentence}
 
 grid_search:
-  trainer:
-    - {model_builder: {param: diagonal}}
-    - {model_builder: {param: triu}}
-    - {model_builder: {param: cholesky}}
-    - {kind: rf, n_jobs: 24, infra: {version: "5"}}
+  trainer.kind: [mlem, rf, frrsa]
 
 grid_search_zip:
   # Sample efficiency at noise=0; noise robustness on the full training pool.

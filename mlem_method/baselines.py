@@ -4,11 +4,15 @@ import numpy as np
 import pandas as pd
 import torch
 from exca import TaskInfra
+from fracridge import FracRidgeRegressor
 from pydantic import ConfigDict, Field
 from sklearn.ensemble import RandomForestRegressor
+from scipy.stats import pearsonr, spearmanr
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import GridSearchCV, KFold, StratifiedKFold
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from tqdm.auto import tqdm
 
 from .dataset import Dataset, SimulatedRepresentations
@@ -81,6 +85,49 @@ class EncodingBaseline(BaseModelSharing):
         importances = compute_stats([tree.feature_importances_ for tree in forest.estimators_])
         importances["Feature"] = self.dataset.coordinates
         return importances.sort_values("mean", ascending=False)
+
+
+class FRRSA(GridSearchCV):
+    def score(self, X, target, metric):
+        pred = torch.as_tensor(self.predict(X.square().cpu().numpy()), device=X.device, dtype=X.dtype)
+        return metric(pred, target)
+
+
+class FRRSABaseline(EncodingBaseline):
+    kind: tp.Literal["frrsa"] = "frrsa"
+    # Unconstrained FR-RSA defaults: ViCCo-Group/frrsa, fitting/crossvalidation.py.
+    fractions: tuple[float, ...] = tuple(np.linspace(0.05, 1, 20))
+    inner_cv: int = 5
+    scoring: tp.Literal["pearson", "spearman"] = "pearson"
+
+    train_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="2")
+
+    @train_infra.apply(exclude_from_cache_uid=("n_jobs", "verbose"))
+    def _train_cached(self) -> list[FRRSA]:
+        models = []
+        corr = pearsonr if self.scoring == "pearson" else spearmanr
+        for train, _ in self.get_folds():
+            left, right, delta, distance, *_ = train.sample(train.n_pairs, get_idx=True, only_valid=True)
+            left, right = left.cpu().numpy(), right.cpu().numpy()
+            X = delta.square().cpu().numpy()
+            y = distance.cpu().numpy()
+            cv = [
+                (
+                    np.flatnonzero(np.isin(left, tr) & np.isin(right, tr)),
+                    np.flatnonzero(np.isin(left, te) & np.isin(right, te)),
+                )
+                for tr, te in KFold(
+                    self.inner_cv, shuffle=True, random_state=self.dataset.seed
+                ).split(np.arange(train.n))
+            ]
+            model = FRRSA(
+                estimator=make_pipeline(StandardScaler(), FracRidgeRegressor(fit_intercept=True, jit=False)),
+                param_grid={"fracridgeregressor__fracs": self.fractions},
+                cv=cv,
+                scoring=lambda model, X, y: corr(y, model.predict(X)).statistic,
+            ).fit(X, y)
+            models.append(model)
+        return models
 
 
 def compute_decoding_baseline(X, Y, n_splits=5):

@@ -10,8 +10,6 @@ base_config:
       level: sentence
 
 grid_search_prepare:
-  trainer.model_builder.param:
-    - cholesky
   trainer.representations.layer:
     - 7
 

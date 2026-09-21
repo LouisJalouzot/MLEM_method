@@ -11,17 +11,12 @@ base_config:
       level: sentence
 
 grid_search_prepare:
-  trainer.model_builder.param:
-    - diagonal
   trainer.representations.seed:
     - 0
   trainer.representations.noise_level:
     - 0
 
 grid_search:
-  trainer.model_builder.param:
-    - diagonal
-    - triu
-    - cholesky
+  trainer.kind: [mlem, rf, frrsa]
   trainer.representations.seed: [0, 1, 2]
   trainer.representations.noise_level: [0, 0.1, 0.5, 1, 2]

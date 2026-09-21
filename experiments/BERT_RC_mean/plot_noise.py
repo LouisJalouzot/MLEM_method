@@ -1,22 +1,17 @@
 # %% Setup (run from the repository root)
-from ast import literal_eval
 from pathlib import Path
 
 import pandas as pd
 import seaborn as sns
 
 root = Path("experiments/BERT_RC_mean")
-labels = {"cholesky": "MLEM", "triu": "FR-RSA-I", "diagonal": "Diagonal", "rf": "Random Forest"}
+labels = {"mlem": "MLEM", "rf": "Random Forest", "frrsa": "FR-RSA"}
 
 # %% Read test results and select the full-training noise sweep
 fi = pd.read_parquet(root / "0.parquet", filters=[("split", "==", "test")])
 scores = pd.read_parquet(root / "1.parquet", filters=[("split", "==", "test")])
-names = {}
-for value in fi.trainer.unique():
-    trainer = literal_eval(value)
-    names[value] = labels[trainer.get("model_builder", {}).get("param", trainer.get("kind"))]
 for frame in (fi, scores):
-    frame["method"] = frame.trainer.map(names)
+    frame["method"] = frame["trainer.kind"].map(labels)
     frame["n"] = pd.to_numeric(frame["trainer.dataloader_builder.n_train"].replace({"None": "6144"}))
     frame["noise"] = pd.to_numeric(frame["trainer.representations.noise_level"])
 fi, scores = fi[fi.n == 6144], scores[scores.n == 6144]
@@ -40,6 +35,6 @@ g = sns.relplot(data=long, x="noise", y="value", hue="method", hue_order=order, 
 g.set_titles("{col_name}").set_axis_labels("Noise SD multiplier", "")
 g.set(xticks=[0, 0.1, 0.5, 1, 2])
 g.tick_params(axis="x", labelrotation=45)
-sns.move_legend(g, "upper center", bbox_to_anchor=(0.5, 1.15), ncol=4, title=None)
+sns.move_legend(g, "upper center", bbox_to_anchor=(0.5, 1.15), ncol=3, title=None)
 g.savefig(root / "noise.pdf", bbox_inches="tight")
 g.savefig(root / "noise.png", dpi=220, bbox_inches="tight")

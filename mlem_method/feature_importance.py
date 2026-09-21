@@ -7,7 +7,7 @@ from pydantic import ConfigDict, Field
 from sklearn.ensemble import RandomForestRegressor
 from tqdm.auto import tqdm
 
-from .baselines import EncodingBaseline
+from .baselines import EncodingBaseline, FRRSA, FRRSABaseline
 from .dataset import Dataset
 from .estimate_correlations import EstimateCorrelations
 from .pairwise_dataloader import PairwiseDataloader
@@ -21,7 +21,7 @@ if tp.TYPE_CHECKING:
 
 
 def compute_feature_importance(
-    model: "SPDMatrixLearner | OracleLearner | RandomForestRegressor",
+    model: "SPDMatrixLearner | OracleLearner | RandomForestRegressor | FRRSA",
     dataloader: PairwiseDataloader,
     groups: np.ndarray,
     n_perm: int = 5,
@@ -74,7 +74,7 @@ def compute_feature_importance(
                     distance = (batch_predicted[left] - batch_predicted[right]).norm(dim=-1)
                     clean_scores.append(metric(distance, clean))
 
-        elif isinstance(model, SPDMatrixLearner):
+        elif isinstance(model, (SPDMatrixLearner, FRRSA)):
             replacements = [
                 dataloader.pair_delta(permutations[k][left], permutations[k][right], block)
                 for k, block in enumerate(blocks)
@@ -168,9 +168,9 @@ def compute_cv_stats_per_split(df, alpha=0.01):
 class FeatureImportance(BaseModelSharing):
     dataset: Dataset = Field(default_factory=lambda: Dataset())
     estimate_correlations: EstimateCorrelations = Field(default_factory=lambda: EstimateCorrelations())
-    trainer: tp.Annotated[Trainer | OracleTrainer | EncodingBaseline, Field(discriminator="kind")] = Field(
-        default_factory=lambda: Trainer()
-    )
+    trainer: tp.Annotated[
+        Trainer | OracleTrainer | EncodingBaseline | FRRSABaseline, Field(discriminator="kind")
+    ] = Field(default_factory=lambda: Trainer())
 
     scoring: tp.Literal["spearman", "pearson", "mse"] = "spearman"
     n_perm: int = 5

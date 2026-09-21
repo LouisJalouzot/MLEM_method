@@ -19,5 +19,5 @@ base_config:
     representations: {model_name: bert-base-uncased, layer: 7, level: sentence}
 
 grid_search:
-  trainer.model_builder.param: [diagonal, triu, cholesky]
+  trainer.kind: [mlem, rf, frrsa]
   trainer.dataloader_builder.n_train: [256, 512, 1024, 2048, 4096, null]
