@@ -7,7 +7,7 @@ from pydantic import ConfigDict, Field
 from sklearn.ensemble import RandomForestRegressor
 from tqdm.auto import tqdm
 
-from .baselines import EncodingBaseline, FRRSA, FRRSABaseline
+from .baselines import FRRSA, EncodingBaseline, FRRSABaseline
 from .dataset import Dataset
 from .estimate_correlations import EstimateCorrelations
 from .pairwise_dataloader import PairwiseDataloader

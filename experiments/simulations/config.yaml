@@ -28,9 +28,7 @@ base_config:
       hint: nomultithread
   dataset:
     mahalanobis: true
-    simulation: {kind: mlp, gain_sigma: 1.1, noise: 1.0}
-  n_perm: 5
-  estimate_correlations: {product: false}
+    simulation: {kind: mlp}
   trainer:
     kind: mlem
     dataloader_builder: {cv: 0.25}
@@ -45,5 +43,4 @@ grid_search_zip:
   dataset.simulation.n: [256, 256, 256, 256, 512, 512, 512, 512, 512, 1024, 1024, 512, 512, 512, 512, 512, 512, 512, 1024, 1024, 2048, 512, 512, 512, 512]
   dataset.simulation.n_numeric: [8, 16, 24, 28, 16, 28, 44, 60, 72, 28, 60, 4, 8, 12, 20, 24, 36, 88, 16, 88, 16, 16, 16, 16, 16]
   dataset.simulation.category_cardinalities: [*q28, *q56, *q84, *q98, *q56, *q98, *q154, *q210, *q252, *q98, *q210, *q14, *q28, *q42, *q70, *q84, *q126, *q308, *q56, *q308, *q56, *q56, *q56, *q56, *q56]
-  # Last four cells add noise robustness at n=512, q=56; noise=1 is already covered.
   dataset.simulation.noise: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.25, 0.5, 2.0]
