@@ -62,12 +62,17 @@ class THINGSFmriRepresentations(BaseModel):
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
+    @property
+    def is_empty(self) -> bool:
+        vox = pd.read_csv(Path(self.dataset.root) / "fmri/betas_csv" / f"sub-{self.subject}_VoxelMetadata.csv")
+        return self.roi not in vox.columns or not vox[self.roi].any()
+
     @infra.apply
     def forward(self) -> np.ndarray:
         base = Path(self.dataset.root) / "fmri/betas_csv"
         stim = pd.read_csv(base / f"sub-{self.subject}_StimulusMetadata.csv")
         vox = pd.read_csv(base / f"sub-{self.subject}_VoxelMetadata.csv")
-        if self.roi not in vox.columns or not vox[self.roi].any():
+        if self.is_empty:
             raise ValueError(f"ROI {self.roi} is empty for sub-{self.subject}")
 
         names = self.dataset.stimulus_names
@@ -120,6 +125,7 @@ class THINGSMegRepresentations(BaseModel):
     def load_epochs(self):
         import mne
 
+        mne.set_log_level("WARNING")
         path = Path(self.dataset.root) / "meg" / f"preprocessed_P{self.subject}-epo.fif"
         return mne.read_epochs(path, preload=False)
 

@@ -13,6 +13,7 @@ from .estimate_correlations import EstimateCorrelations
 from .pairwise_dataloader import PairwiseDataloader
 from .spd_matrix_learner_torch import SPDMatrixLearner
 from .things_dataset import THINGSDataset
+from .things_representations import THINGSFmriRepresentations
 from .trainer import OracleTrainer, Trainer
 from .utils import BaseModelSharing, compute_stats, get_metric, get_n_layers
 
@@ -215,6 +216,11 @@ class FeatureImportance(BaseModelSharing):
     @infra.apply
     def compute(self) -> tuple["pd.DataFrame", "pd.DataFrame", "pd.DataFrame"]:
         import pandas as pd
+
+        representations = self.trainer.representations
+        if isinstance(representations, THINGSFmriRepresentations) and representations.is_empty:
+            logger.warning(f"ROI {representations.roi} is empty for sub-{representations.subject}; no results")
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
         n_features = self.dataset.n_features
         logger.info(
