@@ -158,7 +158,7 @@ PairwiseDataLoaderGenerator = tp.Generator[tuple[PairwiseDataloader, PairwiseDat
 
 
 class PairwiseDataloaderBuilder(BaseModel):
-    cv: int | float | tuple[list[int], list[int]] | None = None
+    cv: int | float | tuple[list[int], list[int]] | tp.Literal["split"] | None = None
     n_train: int | None = Field(default=None, ge=2)
     distance: str | float | int = 2
     nan_to_num: float = 0
@@ -212,6 +212,7 @@ class PairwiseDataloaderBuilder(BaseModel):
         from sklearn.utils.validation import check_consistent_length
 
         assert X is not None or Y is not None, "X or Y must be provided"
+        assert self.cv != "split", 'cv="split" needs a dataset with a split (resolved by trainers)'
         check_consistent_length(X, Y, Y2)
         data = X if X is not None else Y
         if isinstance(self.cv, tuple):

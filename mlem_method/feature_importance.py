@@ -3,7 +3,7 @@ import typing as tp
 import numpy as np
 from exca import MapInfra, TaskInfra
 from loguru import logger
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 from sklearn.ensemble import RandomForestRegressor
 from tqdm.auto import tqdm
 
@@ -12,6 +12,7 @@ from .dataset import Dataset
 from .estimate_correlations import EstimateCorrelations
 from .pairwise_dataloader import PairwiseDataloader
 from .spd_matrix_learner_torch import SPDMatrixLearner
+from .things_dataset import THINGSDataset
 from .trainer import OracleTrainer, Trainer
 from .utils import BaseModelSharing, compute_stats, get_metric, get_n_layers
 
@@ -159,6 +160,21 @@ class FeatureImportance(BaseModelSharing):
         "dataset": ["trainer", "estimate_correlations"],
         "estimate_correlations": ["trainer"],
     }
+
+    @model_validator(mode="before")
+    @classmethod
+    def _things_dataset(cls, data: tp.Any) -> tp.Any:
+        """THINGS representations need THINGSDataset, which a YAML dict cannot name."""
+        if isinstance(data, dict):
+            trainer = data.get("trainer")
+            representations = trainer.get("representations") if isinstance(trainer, dict) else None
+            if isinstance(representations, dict) and str(representations.get("level", "")).startswith(
+                "things-"
+            ):
+                dataset = data.get("dataset", {})
+                if isinstance(dataset, dict):
+                    data["dataset"] = THINGSDataset(**dataset)
+        return data
 
     @map_infra.apply(item_uid=str, exclude_from_cache_uid=("trainer.representations.layer",))
     def run_layers(

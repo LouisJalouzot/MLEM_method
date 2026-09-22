@@ -1,0 +1,25 @@
+base_config:
+  infra:
+    folder: .cache
+    cluster: slurm
+    job_name: things-fmri
+    logs: .cache/logs/things-fmri/%j
+    timeout_min: 1200
+    cpus_per_task: 24
+    gpus_per_node: 1
+    slurm_constraint: h100
+    slurm_account: ioj@h100
+    slurm_additional_parameters: {qos: qos_gpu_h100-t3, hint: nomultithread}
+  trainer:
+    kind: mlem
+    dataloader_builder: {cv: split, distance: correlation}
+    representations: {level: things-fmri}
+
+grid_search:
+  trainer.representations.subject: ["01", "02", "03"]
+  trainer.representations.roi: [
+    V1, V2, V3, hV4, VO1, VO2, "LO1 (prf)", "LO2 (prf)",
+    TO1, TO2, V3b, V3a, lEBA, rEBA, lFFA, rFFA, lOFA, rOFA,
+    lSTS, rSTS, lPPA, rPPA, lRSC, rRSC, lTOS, rTOS, lLOC, rLOC, IT,
+  ]
+  trainer.kind: [mlem, rf, frrsa]

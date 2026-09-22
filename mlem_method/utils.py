@@ -6,6 +6,7 @@ import random
 import subprocess
 import sys
 import typing as tp
+from functools import cache
 
 # Set environment variable for deterministic CuBLAS operations
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
@@ -31,25 +32,29 @@ level = os.getenv("LOGGER_LEVEL", "INFO").upper()
 logger.add(sink=sys.stdout, level=level)
 
 
+@cache
 def get_device():
     import torch
 
     if torch.cuda.is_available():
         if os.getenv("CUDA_VISIBLE_DEVICES"):
-            return "cuda"
-        # Get GPU id with the most free memory, select at random if there are multiple
-        try:
-            gpus = subprocess.check_output(["nvidia-smi", "--format=csv", "--query-gpu=memory.free"])
-            gpus = gpus.decode("utf-8").split("\n")
-            free_rams = tuple(float(x.rstrip(" [MiB]")) for x in gpus[1:-1])
-            max_free = max(free_rams)
-            max_free_idxs = tuple(i for i in range(len(free_rams)) if abs(max_free - free_rams[i]) <= 200)
-            gpu_id = random.choice(max_free_idxs)
-            return f"cuda:{gpu_id}"
-        except (OSError, subprocess.SubprocessError, ValueError, IndexError):
-            return "cuda"
+            device = "cuda"
+        else:
+            # Get GPU id with the most free memory, select at random if there are multiple
+            try:
+                gpus = subprocess.check_output(["nvidia-smi", "--format=csv", "--query-gpu=memory.free"])
+                gpus = gpus.decode("utf-8").split("\n")
+                free_rams = tuple(float(x.rstrip(" [MiB]")) for x in gpus[1:-1])
+                max_free = max(free_rams)
+                max_free_idxs = tuple(i for i in range(len(free_rams)) if abs(max_free - free_rams[i]) <= 200)
+                gpu_id = random.choice(max_free_idxs)
+                device = f"cuda:{gpu_id}"
+            except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+                device = "cuda"
     else:
-        return "cpu"
+        device = "cpu"
+    logger.info(f"Using device: {device}")
+    return device
 
 
 def _get_layers_from_config(config) -> int | None:
@@ -203,6 +208,16 @@ class BaseModelSharing(BaseModel):
     """
 
     _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {}
+
+    @model_validator(mode="after")
+    def _resolve_split_cv(self):
+        """`cv="split"` uses the dataset's official train/test split (e.g. THINGS)."""
+        builder = getattr(self, "dataloader_builder", None)
+        if getattr(builder, "cv", None) == "split":
+            split = getattr(getattr(self, "dataset", None), "split", None)
+            assert split is not None, 'cv="split" needs a dataset defining a split'
+            builder.cv = split
+        return self
 
     @model_validator(mode="before")
     @classmethod
