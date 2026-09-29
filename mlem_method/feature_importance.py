@@ -241,7 +241,7 @@ class FeatureImportance(BaseModelSharing):
                 weights["estimation_duration"] = np.nan if logs.empty else logs["estimation_duration"].iloc[0]
                 weights["training_duration"] = weights["estimation_duration"] + weights["step_duration"]
                 weights["n_epochs"] = len(logs)
-                gt_weights = getattr(self.trainers.representations, "gt_weights", None)
+                gt_weights = getattr(self.trainer.representations, "gt_weights", None)
                 if gt_weights is not None:
                     weights = weights.merge(gt_weights)
                     weights["L2"] = np.linalg.norm(weights.GTWeight - weights.Weight)
