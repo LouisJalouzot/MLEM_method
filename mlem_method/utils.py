@@ -320,16 +320,6 @@ def corrcoef(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     return (x_n * y_n).sum(dim=-1)
 
 
-def _average_ranks(x: torch.Tensor) -> torch.Tensor:
-    """Average ranks along the last axis via SciPy's Array API (stays a torch tensor)."""
-    from scipy._lib import _array_api_override
-    from scipy.stats import rankdata
-
-    # Runtime switch (no SCIPY_ARRAY_API env var needed); NumPy-only callers are unaffected.
-    _array_api_override.SCIPY_ARRAY_API = True
-    return rankdata(x, axis=-1).to(x.dtype)
-
-
 def spearman(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     """Spearman correlation along the last axis, using average ranks for ties.
 
@@ -340,11 +330,15 @@ def spearman(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     >>> spearman(torch.ones(3), y).isnan().item()
     True
     """
-    rx = _average_ranks(x)
-    ry = _average_ranks(y)
-    rx = rx - rx.mean(dim=-1, keepdim=True)
-    ry = ry - ry.mean(dim=-1, keepdim=True)
-    return (rx * ry).sum(dim=-1) / (rx.square().sum(dim=-1).sqrt() * ry.square().sum(dim=-1).sqrt())
+    import torch
+    from scipy._lib import _array_api_override
+    from scipy.stats import rankdata
+
+    _array_api_override.SCIPY_ARRAY_API = True  # runtime switch, no env var needed
+    with torch.device(x.device):  # SciPy temporaries follow the input device
+        rx = rankdata(x, axis=-1).to(x.dtype)
+        ry = rankdata(y, axis=-1).to(y.dtype)
+    return corrcoef(rx, ry)
 
 
 def get_metric(name: tp.Literal["spearman", "pearson", "mse"]) -> tuple[tp.Callable, bool]:

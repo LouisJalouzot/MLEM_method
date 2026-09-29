@@ -3,24 +3,9 @@ import warnings
 import numpy as np
 import pytest
 import torch
-from scipy.stats import ConstantInputWarning, rankdata, spearmanr
+from scipy.stats import ConstantInputWarning, spearmanr
 
-from mlem_method.utils import _average_ranks, spearman
-
-
-def test_average_ranks_match_scipy():
-    rng = np.random.default_rng(0)
-    cases = [
-        np.array([1.0, 1.0, 2.0]),
-        np.ones(8),
-        rng.integers(-3, 4, (2, 3, 40)).astype(float)[..., ::2],  # non-contiguous batch
-        rng.normal(size=(4, 40)),
-        np.array([-np.inf, 0.0, np.inf, np.inf]),
-    ]
-    for a in cases:
-        np.testing.assert_allclose(
-            _average_ranks(torch.tensor(a)).numpy(), rankdata(a, axis=-1), rtol=1e-6, atol=1e-6
-        )
+from mlem_method.utils import spearman
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
