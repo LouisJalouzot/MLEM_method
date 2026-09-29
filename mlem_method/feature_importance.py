@@ -169,9 +169,7 @@ class FeatureImportance(BaseModelSharing):
         if isinstance(data, dict):
             trainer = data.get("trainer")
             representations = trainer.get("representations") if isinstance(trainer, dict) else None
-            if isinstance(representations, dict) and str(representations.get("level", "")).startswith(
-                "things-"
-            ):
+            if isinstance(representations, dict) and str(representations.get("level", "")).startswith("things-"):
                 dataset = data.get("dataset", {})
                 if isinstance(dataset, dict):
                     data["dataset"] = THINGSDataset(**dataset)
@@ -239,9 +237,11 @@ class FeatureImportance(BaseModelSharing):
                 weights["split"] = "train"
                 weights["converged"] = False if logs.empty else logs.converged.iloc[0]
                 weights["spd"] = False if logs.empty else logs.spd.iloc[0]
-                weights["training_duration"] = 0 if logs.empty else logs["Step Duration"].sum()
+                weights["step_duration"] = np.nan if logs.empty else logs["Step Duration"].sum()
+                weights["estimation_duration"] = np.nan if logs.empty else logs["estimation_duration"].iloc[0]
+                weights["training_duration"] = weights["estimation_duration"] + weights["step_duration"]
                 weights["n_epochs"] = len(logs)
-                gt_weights = getattr(self.trainer.representations, "gt_weights", None)
+                gt_weights = getattr(self.trainers.representations, "gt_weights", None)
                 if gt_weights is not None:
                     weights = weights.merge(gt_weights)
                     weights["L2"] = np.linalg.norm(weights.GTWeight - weights.Weight)
@@ -251,7 +251,7 @@ class FeatureImportance(BaseModelSharing):
                 weights = pd.DataFrame({"Feature": self.dataset.coordinates, "Weight": weight})
                 weights["cv"] = i
                 weights["split"] = "train"
-                weights["training_duration"] = logs["training_duration"].iloc[0] if len(logs) else 0
+                weights["training_duration"] = logs["training_duration"].iloc[0] if len(logs) else np.nan
                 weights["n_epochs"] = 1
                 all_weights.append(weights)
             dataloaders = {"train": train_dl, "test": test_dl}

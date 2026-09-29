@@ -70,7 +70,7 @@ class EncodingBaseline(BaseModelSharing):
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("n_jobs", "verbose", "infra", "train_infra")
 
     def get_folds(self):
-        _, n_pairs = self.estimate_correlations.estimate_correlations()
+        _, n_pairs, _ = self.estimate_correlations.estimate_correlations()
         device = get_device()
         X = self.dataset.encode()[0].to(device)
         Y = self.representations().to(device)

@@ -94,7 +94,7 @@ class RSA(BaseModelSharing):
         device = self.device or get_device()
 
         # Retrieve stable n_pairs from the convergence estimator (cached).
-        _, n_pairs = self.estimate_correlations.estimate_correlations()
+        _, n_pairs, _ = self.estimate_correlations.estimate_correlations()
 
         logger.debug(
             f"RSA: {self.representations_1.model_name} "

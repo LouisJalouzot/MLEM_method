@@ -6,6 +6,8 @@ if tp.TYPE_CHECKING:
     import pandas as pd
     import torch
 
+from time import time
+
 from exca import TaskInfra
 from loguru import logger
 from pydantic import ConfigDict, Field
@@ -161,12 +163,12 @@ class EstimateCorrelations(BaseModel):
     ci_confidence: float = 0.99
 
     device: str | None = None
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="2")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
 
     @infra.apply
-    def estimate_correlations(self) -> tuple[pd.DataFrame, int]:
+    def estimate_correlations(self) -> tuple[pd.DataFrame, int, float]:
         import pandas as pd
 
         X = self.dataset.encode()[0].to(self.device or get_device())
@@ -176,6 +178,7 @@ class EstimateCorrelations(BaseModel):
             signed=self.dataset.mahalanobis,
         )
 
+        start = time()
         correlations, n_pairs = estimate_correlations(
             dataloader=dataloader,
             n_trials=self.n_trials,
@@ -194,4 +197,4 @@ class EstimateCorrelations(BaseModel):
             index=labels,
         )
 
-        return correlations, n_pairs
+        return correlations, n_pairs, time() - start

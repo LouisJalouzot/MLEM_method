@@ -52,7 +52,7 @@ class Trainer(BaseModelSharing):
     device: str | None = None
     unit_indices: list[int] | None = None
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="7")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="8")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
     _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {
@@ -80,7 +80,7 @@ class Trainer(BaseModelSharing):
         device = device or self.device or get_device()
 
         # Estimate number of pairs for acceptable variability
-        _, n_pairs = self.estimate_correlations.estimate_correlations()
+        _, n_pairs, _ = self.estimate_correlations.estimate_correlations()
 
         X = self.dataset.encode()[0].to(device)
         Y = self.representations().to(device)
@@ -113,6 +113,8 @@ class Trainer(BaseModelSharing):
         all_logs = []
 
         device = self.device or get_device()
+        # Cache hit: replays the recorded pair-budget estimation time without recomputing.
+        _, _, estimation_duration = self.estimate_correlations.estimate_correlations()
 
         for i, (train_dl, test_dl) in enumerate(self.get_folds(device=device)):
             model, logs = train(
@@ -129,6 +131,7 @@ class Trainer(BaseModelSharing):
                 scoring=self.model_builder.scoring,
             )
             logs["cv"] = i
+            logs["estimation_duration"] = estimation_duration
             # Move off GPU before caching so the cached state dicts stay loadable without CUDA
             all_state_dicts.append(model.to("cpu").state_dict())
             all_logs.append(logs)
@@ -169,7 +172,7 @@ class OracleTrainer(Trainer):
         simulation = self.representations.dataset.simulation
         X = self.dataset.encode()[0].to(device)
         Y = simulation.transform(X)
-        _, n_pairs = self.estimate_correlations.estimate_correlations()
+        _, n_pairs, _ = self.estimate_correlations.estimate_correlations()
         return self.dataloader_builder.get_folds(
             X=X,
             Y=Y,
