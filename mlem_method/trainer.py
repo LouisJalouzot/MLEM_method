@@ -52,7 +52,7 @@ class Trainer(BaseModelSharing):
     device: str | None = None
     unit_indices: list[int] | None = None
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="6")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="7")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
     _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {

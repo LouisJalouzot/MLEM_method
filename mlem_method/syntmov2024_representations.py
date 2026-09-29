@@ -45,8 +45,11 @@ class SyntMov2024Representations(BaseModel):
         Yields:
             Array of shape (n_stimuli_in_run, n_voxels) for each run.
         """
-        from ants import image_read, resample_image_to_target
-        from ants.utils import from_nibabel_nifti
+        try:
+            from ants import image_read, resample_image_to_target
+            from ants.utils import from_nibabel_nifti
+        except ModuleNotFoundError:
+            raise ModuleNotFoundError("SyntMov2024 preprocessing needs antspyx: pip install antspyx")
         from nilearn.datasets import load_mni152_brain_mask
 
         mask = load_mni152_brain_mask(

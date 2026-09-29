@@ -9,7 +9,6 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-  "antspyx>=0.6.2; platform_machine == 'x86_64'",
   "awscli>=1.46.0",
   "bitsandbytes>=0.49.2",                            # For RWKV/v6-Finch-*-HF
   "captum>=0.8.0",
@@ -50,7 +49,7 @@ dependencies = [
   "pytest-testmon>=2.2.0",
   "pytest>=8.3.5",
   "scikit-learn>=1.6.1",
-  "scipy>=1.15.2",
+  "scipy>=1.18",
   "seaborn>=0.13.2",
   "sentencepiece>=0.2.1",                            # For XLM-Roberta
   "sqlmodel>=0.0.24",

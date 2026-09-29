@@ -57,9 +57,9 @@ class RSA(BaseModelSharing):
     n_batches: int = 5
     device: tp.Optional[str] = None
 
-    infra: TaskInfra = TaskInfra()
-    map_infra: MapInfra = MapInfra(folder=".cache")
-    layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry")
+    infra: TaskInfra = TaskInfra(version="1")
+    map_infra: MapInfra = MapInfra(folder=".cache", version="1")
+    layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="1")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
         "device",

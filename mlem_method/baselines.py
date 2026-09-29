@@ -64,7 +64,7 @@ class EncodingBaseline(BaseModelSharing):
     n_jobs: int = -2
     verbose: bool = False
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="5")
-    train_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
+    train_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="4")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {"dataset": ["estimate_correlations", "representations"]}
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("n_jobs", "verbose", "infra", "train_infra")
@@ -132,12 +132,14 @@ class FRRSABaseline(EncodingBaseline):
         pairs = np.triu_indices(len(X), k=1)
         metric = self.dataloader_builder.distance
         params = {"metric": metric} if isinstance(metric, str) else {"metric": "minkowski", "p": metric}
-        X = np.column_stack([
-            pairwise_distances(
-                x[:, None], metric="sqeuclidean", n_jobs=self.n_jobs, ensure_all_finite="allow-nan"
-            )[pairs]
-            for x in X.cpu().numpy().T
-        ])
+        X = np.column_stack(
+            [
+                pairwise_distances(x[:, None], metric="sqeuclidean", n_jobs=self.n_jobs, ensure_all_finite="allow-nan")[
+                    pairs
+                ]
+                for x in X.cpu().numpy().T
+            ]
+        )
         np.nan_to_num(X, copy=False, nan=self.dataloader_builder.nan_to_num**2)
         if not self.dataset.mahalanobis:
             X.clip(0, 1, out=X)
