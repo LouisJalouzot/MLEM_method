@@ -6,6 +6,7 @@ from contextlib import nullcontext
 from functools import reduce
 from itertools import batched, product
 from pathlib import Path
+from random import Random
 
 import pandas as pd
 import yaml
@@ -101,12 +102,14 @@ def run_grid_search(
             if infra.mode == "force" or status == "not submitted" or (infra.mode == "retry" and status == "failed"):
                 pending[infra.uid()] = task
         if pending:
+            tasks = list(pending.values())
+            Random(0).shuffle(tasks)
             executor = base_infra.executor()
             executor.update_parameters(slurm_array_parallelism=max_workers or n_configs)
             with base_infra._work_env(), executor.batch():
                 jobs = [
                     executor.submit(run_batch, batch, infra_path_split[-1])
-                    for batch in batched(pending.values(), tasks_per_alloc)
+                    for batch in batched(tasks, tasks_per_alloc)
                 ]
             for job in tqdm(jobs, desc="Waiting for batches"):
                 job.result()
