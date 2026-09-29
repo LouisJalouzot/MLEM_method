@@ -4,7 +4,7 @@ import math
 import sys
 from contextlib import nullcontext
 from functools import reduce
-from itertools import product
+from itertools import batched, product
 from pathlib import Path
 
 import pandas as pd
@@ -13,6 +13,13 @@ from joblib import Parallel, delayed
 from loguru import logger
 from tqdm.auto import tqdm
 from exca.confdict import ConfDict
+
+
+def run_batch(tasks, infra_name):
+    """Run a batch locally, saving results in each task's existing Exca cache."""
+    for task in tasks:
+        task = getattr(task, infra_name).clone_obj(**{infra_name: {"cluster": None, "conda_env": None}})
+        getattr(task, infra_name).job().result()
 
 
 def yield_grid_search(grid_config, grid_search_zip=None):
@@ -40,6 +47,7 @@ def run_grid_search(
     sequential=False,
     n_jobs=-2,
     grid_search_zip=None,
+    tasks_per_alloc=1,
 ):
     """Run grid search with job array support.
 
@@ -51,7 +59,10 @@ def run_grid_search(
         max_workers: Maximum number of cluster workers. Defaults to n_configs if not specified.
         sequential: Run each task locally, cancelling its pending cluster job first.
         n_jobs: Joblib workers used to construct tasks.
+        tasks_per_alloc: Maximum configs run sequentially per allocation; timeout_min must cover the whole batch.
     """
+    if tasks_per_alloc < 1:
+        raise ValueError("tasks_per_alloc must be positive")
     flat_configs = []
     n_configs = math.prod(len(v) for v in grid_search.values())
     if grid_search_zip:
@@ -60,11 +71,12 @@ def run_grid_search(
     # Resolve which infra to use for cloning and job array
     infra_path_split = infra_path.split(".")
     base_infra = reduce(getattr, infra_path_split, base_class)
+    packed = tasks_per_alloc > 1 and not sequential and base_infra.cluster is not None
 
     # Create tasks and optionally submit them to a job array
     logger.info(f"Creating {n_configs} tasks for {base_class.__class__.__name__}.{infra_path}")
     logger.trace(f"Infra config: {base_infra.model_dump_json(indent=2)}")
-    if sequential:
+    if sequential or packed:
         context = nullcontext([])
     else:
         context = base_infra.job_array(max_workers=max_workers or n_configs, allow_repeated_tasks=True)
@@ -81,6 +93,24 @@ def run_grid_search(
         if not sequential:
             logger.info("Submitting tasks to job array")
 
+    if packed:
+        pending = {}
+        for task in array:
+            infra = getattr(task, infra_path_split[-1])
+            status = infra.status()
+            if infra.mode == "force" or status == "not submitted" or (infra.mode == "retry" and status == "failed"):
+                pending[infra.uid()] = task
+        if pending:
+            executor = base_infra.executor()
+            executor.update_parameters(slurm_array_parallelism=max_workers or n_configs)
+            with base_infra._work_env(), executor.batch():
+                jobs = [
+                    executor.submit(run_batch, batch, infra_path_split[-1])
+                    for batch in batched(pending.values(), tasks_per_alloc)
+                ]
+            for job in tqdm(jobs, desc="Waiting for batches"):
+                job.result()
+
     # Wait for completion and collect results if necessary
     results = []
     has_error = False
@@ -90,6 +120,10 @@ def run_grid_search(
     for idx, task in enumerate(tqdm(array, desc=desc)):
         task_infra = getattr(task, infra_path_split[-1])
         try:
+            if packed:
+                # Batches already applied retry/force; only read their per-task results here.
+                task = task_infra.clone_obj(**{infra_path_split[-1]: {"mode": "read-only"}})
+                task_infra = getattr(task, infra_path_split[-1])
             if sequential:
                 try:
                     cached = task_infra.status() == "completed"
@@ -120,7 +154,7 @@ def run_grid_search(
     return flat_configs, results
 
 
-def main(config: dict | None = None, n_jobs=-2):
+def main(config: dict | None = None, n_jobs=-2, tasks_per_alloc=1):
     config = config or {}
     target = config.get("target", "mlem_method.FeatureImportance")
     module_name, class_name = target.rsplit(".", 1)
@@ -140,6 +174,7 @@ def main(config: dict | None = None, n_jobs=-2):
             max_workers=config.get("max_workers"),
             sequential=config.get("sequential", False),
             n_jobs=n_jobs,
+            tasks_per_alloc=tasks_per_alloc,
         )
 
     logger.info("Running grid search")
@@ -151,6 +186,7 @@ def main(config: dict | None = None, n_jobs=-2):
         sequential=config.get("sequential", False),
         n_jobs=n_jobs,
         grid_search_zip=config.get("grid_search_zip"),
+        tasks_per_alloc=tasks_per_alloc,
     )
 
     all_dfs = []
@@ -182,6 +218,12 @@ if __name__ == "__main__":
         help="Joblib workers used to construct tasks (default: -2; use 1 if the backend is not thread-safe).",
     )
     parser.add_argument(
+        "--tasks-per-alloc",
+        type=int,
+        default=1,
+        help="Grid configs packed sequentially into each Slurm allocation (default: 1).",
+    )
+    parser.add_argument(
         "--log-level",
         type=str,
         default="INFO",
@@ -200,7 +242,7 @@ if __name__ == "__main__":
             with open(config_file, "r") as f:
                 config = yaml.safe_load(f)
             config["sequential"] = args.sequential
-            for i, df in enumerate(main(config, n_jobs=args.n_jobs)):
+            for i, df in enumerate(main(config, n_jobs=args.n_jobs, tasks_per_alloc=args.tasks_per_alloc)):
                 df.to_parquet(config_file.parent / f"{i}.parquet")
     else:
-        main(n_jobs=args.n_jobs)
+        main(n_jobs=args.n_jobs, tasks_per_alloc=args.tasks_per_alloc)
