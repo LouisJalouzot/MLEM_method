@@ -50,9 +50,11 @@ def test_training(fi, scoring):
 
 
 def test_inner_cv_has_no_stimulus_leakage(fi):
+    import torch
+
     model, _, train, _ = next(fi.trainer.train())
-    # Fresh loaders have the same seed: replay the training pairs.
-    left, right, *_ = train.sample(train.n_pairs, get_idx=True, only_valid=True)
+    # Replay all training pairs in row-major order.
+    left, right = torch.triu_indices(train.n, train.n, offset=1)
     pairs = np.column_stack((left.cpu().numpy(), right.cpu().numpy()))
 
     for train_rows, test_rows in model.grid.cv:

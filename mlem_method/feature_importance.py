@@ -147,9 +147,9 @@ class FeatureImportance(BaseModelSharing):
     alpha: float = 0.01
     fi_splits: tuple[tp.Literal["train", "test"], ...] = ("test",)
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="12")
-    layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
-    map_infra: MapInfra = MapInfra(version="2")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="15")
+    layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="6")
+    map_infra: MapInfra = MapInfra(version="5")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
         "infra",

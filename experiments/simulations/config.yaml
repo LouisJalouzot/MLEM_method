@@ -37,7 +37,7 @@ base_config:
 
 grid_search:
   dataset.seed: [0, 1, 2, 3, 4]
-  trainer.kind: [mlem, rf, frrsa]
+  trainer.kind: [mlem, rf, frrsa, oracle]
 
 grid_search_zip:
   dataset.simulation.n: [256, 256, 256, 256, 512, 512, 512, 512, 512, 1024, 1024, 512, 512, 512, 512, 512, 512, 512, 1024, 1024, 2048, 512, 512, 512, 512]

@@ -7,10 +7,10 @@ import torch
 from exca import TaskInfra
 from fracridge import FracRidgeRegressor
 from pydantic import ConfigDict, Field
-from sklearn.ensemble import RandomForestRegressor
 from scipy.stats import pearsonr, spearmanr
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import pairwise_distances, roc_auc_score
 from sklearn.model_selection import GridSearchCV, KFold, StratifiedKFold
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
@@ -117,25 +117,43 @@ class EncodingBaseline(BaseModelSharing):
 
 
 class FRRSABaseline(EncodingBaseline):
+    """Fractional ridge on exhaustive CPU RDMs, with stimulus-disjoint inner CV."""
+
     kind: tp.Literal["frrsa"] = "frrsa"
     # Unconstrained FR-RSA defaults: ViCCo-Group/frrsa, fitting/crossvalidation.py.
     fractions: tuple[float, ...] = tuple(np.linspace(0.05, 1, 20))
     inner_cv: int = 5
     scoring: tp.Literal["pearson", "spearman"] = "pearson"
 
-    train_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="4")
+    train_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="7")
+
+    def rdms(self, X, Y):
+        """Build CPU RDMs with n_jobs: feature-distance columns and a target vector."""
+        pairs = np.triu_indices(len(X), k=1)
+        metric = self.dataloader_builder.distance
+        params = {"metric": metric} if isinstance(metric, str) else {"metric": "minkowski", "p": metric}
+        X = np.column_stack([
+            pairwise_distances(
+                x[:, None], metric="sqeuclidean", n_jobs=self.n_jobs, ensure_all_finite="allow-nan"
+            )[pairs]
+            for x in X.cpu().numpy().T
+        ])
+        np.nan_to_num(X, copy=False, nan=self.dataloader_builder.nan_to_num**2)
+        if not self.dataset.mahalanobis:
+            X.clip(0, 1, out=X)
+        y = pairwise_distances(Y.cpu().numpy(), n_jobs=self.n_jobs, **params)[pairs]
+        if self.dataloader_builder.min_max_scale:
+            y = (y - y.min()) / (y.max() - y.min())
+        return X, y
 
     @train_infra.apply(exclude_from_cache_uid=("n_jobs", "verbose"))
     def _train_cached(self) -> tuple[list["FRRSA"], "pd.DataFrame"]:
-        import pandas as pd
-
         models, durations = [], []
         corr = pearsonr if self.scoring == "pearson" else spearmanr
         for i, (train, _) in enumerate(self.get_folds()):
-            left, right, delta, distance, *_ = train.sample(train.n_pairs, get_idx=True, only_valid=True)
-            left, right = left.cpu().numpy(), right.cpu().numpy()
-            X = delta.square().cpu().numpy()
-            y = distance.cpu().numpy()
+            start = time()
+            X, y = self.rdms(train.X, train.Y)
+            left, right = np.triu_indices(train.n, k=1)
             cv = [
                 (
                     np.flatnonzero(np.isin(left, tr) & np.isin(right, tr)),
@@ -145,7 +163,6 @@ class FRRSABaseline(EncodingBaseline):
                     np.arange(train.n)
                 )
             ]
-            start = time()
             model = GridSearchCV(
                 estimator=make_pipeline(StandardScaler(), FracRidgeRegressor(fit_intercept=True, jit=False)),
                 param_grid={"fracridgeregressor__fracs": self.fractions},

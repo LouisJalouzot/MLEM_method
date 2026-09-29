@@ -60,9 +60,6 @@ def preprocess(df):
 
 
 # %% Load data
-oracle = preprocess(pd.read_parquet(root / "oracle" / "0.parquet", filters=[("split", "==", "test")]))
-oracle = {key: g[["Feature", "Order", "mean"]] for key, g in oracle.groupby(["dataset.seed", "schema"])}
-
 importance = preprocess(pd.read_parquet(root / "0.parquet", filters=[("split", "==", "test")]))
 geometry = preprocess(pd.read_parquet(root / "1.parquet", filters=[("split", "==", "test")]))
 for frame in (importance, geometry):
@@ -74,10 +71,14 @@ importance, geometry = importance[importance.noise == 1], geometry[geometry.nois
 
 # %% Feature-importance agreement
 keys = ["dataset.seed", "n", "q", "q_over_n", "schema", "method"]
+oracle = {
+    key: g[["Feature", "Order", "mean"]]
+    for key, g in importance[importance["trainer.kind"] == "oracle"].groupby(keys[:-1])
+}
 
 rows = []
 for key, g in importance.groupby(keys):
-    target = oracle.get((key[0], key[4]))
+    target = oracle.get(key[:-1])
     if target is None:
         continue
 
