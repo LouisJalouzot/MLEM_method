@@ -3,7 +3,7 @@ from ast import literal_eval
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
+import matplotlib.ticker as mticker
 import pandas as pd
 import seaborn as sns
 from scipy.stats import kendalltau
@@ -12,178 +12,152 @@ root = Path(__file__).parent
 output = root.parent.parent / "paper" / "figs" / "simulation"
 output.mkdir(exist_ok=True)
 
-labels = {"mlem": "MLEM", "rf": "Random Forest", "frrsa": "FR-RSA"}
-methods = list(labels.values())
+methods = {"mlem": "MLEM", "frrsa": "FR-RSA", "rf": "Random Forest", "oracle": "Oracle"}
+hue_order = list(methods.values())[:-1]
 metrics = {
-    "mean": "Spearman $\\rho$ (↑)",
-    "fi_tau": "FI Kendall $\\tau$ with Oracle (↑)",
-    "fi_distance": "FI distance to Oracle (↓)",
+    "spearman": "Spearman $\\rho$ (↑)",
+    "kendalltau": "FI Kendall $\\tau$ with Oracle (↑)",
+    "euclidean": "FI distance to Oracle (↓)",
 }
-
-ratio_grid = {
-    (128, 14),
-    (128, 28),
-    (128, 42),
-    (128, 56),
-    (128, 70),
-    (256, 28),
-    (256, 56),
-    (256, 84),
-    (256, 98),
-    (256, 126),
-    (512, 56),
-    (512, 98),
-    (512, 154),
-    (512, 210),
-    (512, 252),
-    (1024, 98),
-    (1024, 210),
-    (1024, 308),
-    (1024, 406),
-    (1024, 518),
-}
+col_order = list(metrics.values())
+gb_cols = ["Method", "q", "n", "noise", "seed"]
 
 
-def preprocess(df):
-    schemas = df["dataset.simulation.category_cardinalities"]
-    cards = schemas.map({x: literal_eval(x) for x in schemas.unique()})
-    numeric = pd.to_numeric(df["dataset.simulation.n_numeric"])
+def count_cards(cards: str) -> int:
+    cards = literal_eval(cards)
+    return sum(cards) - len(cards)
 
-    df["q"] = numeric + cards.map(lambda x: sum(v - 1 for v in x))
-    df["schema"] = (numeric + cards.map(len)).astype(str) + "|" + schemas
 
-    if "dataset.simulation.n" in df:
-        df["n"] = pd.to_numeric(df["dataset.simulation.n"])
-        df["q_over_n"] = df.q / df.n
+def load(path: str) -> pd.DataFrame:
+    df = pd.read_parquet(root / path, filters=[("split", "==", "test")])
+    for col in df:
+        try:
+            df[col] = pd.to_numeric(df[col])
+        except (ValueError, TypeError):
+            pass
+    rename = {col: col.split(".")[-1] for col in df.columns}
+    df = df.rename(columns=rename)
+
+    cardinalities = df["category_cardinalities"]
+    cardinalities = cardinalities.map({x: count_cards(x) for x in cardinalities.unique()})
+    df["q"] = cardinalities + df["n_numeric"]
+    df["Method"] = df["kind"].map(methods)
 
     return df
 
 
-# %% Load data
-importance = preprocess(pd.read_parquet(root / "0.parquet", filters=[("split", "==", "test")]))
-geometry = preprocess(pd.read_parquet(root / "1.parquet", filters=[("split", "==", "test")]))
-for frame in (importance, geometry):
-    frame["method"] = frame["trainer.kind"].map(labels)
-    frame["noise"] = pd.to_numeric(frame["dataset.simulation.noise"])
-# These geometry/FI comparisons use the main noise=1 grid.
-importance, geometry = importance[importance.noise == 1], geometry[geometry.noise == 1]
+df = load("0.parquet")[["mean", "Feature"] + gb_cols].rename(columns={"mean": "fi"})
+df_oracle = df[df["Method"] == "Oracle"].rename(columns={"fi": "fi_oracle"}).drop(columns=["Method"])
+df = df[df["Method"] != "Oracle"].merge(df_oracle)
+df_score = load("1.parquet")[["mean"] + gb_cols].rename(columns={"mean": "spearman"})
+df_score = df_score[df_score["Method"] != "Oracle"]
 
-
-# %% Feature-importance agreement
-keys = ["dataset.seed", "n", "q", "q_over_n", "schema", "method"]
-oracle = {
-    key: g[["Feature", "Order", "mean"]]
-    for key, g in importance[importance["trainer.kind"] == "oracle"].groupby(keys[:-1])
-}
-
-rows = []
-for key, g in importance.groupby(keys):
-    target = oracle.get(key[:-1])
-    if target is None:
-        continue
-
-    g = g.merge(target, on=["Feature", "Order"], suffixes=("", "_oracle"))
-    rows.append(
-        {
-            **dict(zip(keys, key)),
-            "fi_tau": kendalltau(g["mean"], g["mean_oracle"]).statistic,
-            "fi_distance": np.linalg.norm(g["mean"] - g["mean_oracle"]),
-        }
+df = (
+    df.groupby(gb_cols, group_keys=False)
+    .apply(
+        lambda group: pd.Series(
+            {
+                "euclidean": (group.fi - group.fi_oracle).abs().mean(),
+                "kendalltau": kendalltau(group.fi, group.fi_oracle).statistic,
+            }
+        )
     )
-
-data = geometry.merge(pd.DataFrame(rows), on=keys)
-
-
-# %% Seed coverage (unique seeds, not feature/geometry rows)
-coverage = data.groupby(["method", "q", "n"])["dataset.seed"].nunique().unstack("method", fill_value=0)[methods]
-print("\nUnique seeds:")
-print(coverage.to_string())
-
-# %% Line plots
-sns.set_theme(style="ticks")
-
-ratios = np.arange(0.1, 0.6, 0.1)
-ratio_data = data[[x in ratio_grid for x in zip(data.n, data.q)]].assign(
-    ratio_group=lambda x: x.q_over_n.map(lambda r: ratios[np.abs(ratios - r).argmin()])
+    .reset_index()
 )
 
-plots = [
-    (data.query("q == 56"), "n", "Stimuli $n$ ($q=56$)", "sample_efficiency.pdf"),
-    (ratio_data, "ratio_group", "Encoded coordinate/sample ratio $q/n$", "ratio_robustness.pdf"),
-    (data.query("n == 512"), "q", "Encoded coordinates $q$ ($n=512$)", "q_robustness.pdf"),
-]
+df = df.merge(df_score).melt(
+    id_vars=gb_cols,
+    value_vars=["spearman", "euclidean", "kendalltau"],
+    var_name="Metric",
+    value_name="value",
+)
+df["Metric"] = df["Metric"].map(metrics)
+df
 
-for df, x, xlabel, filename in plots:
-    df = df.melt(
-        id_vars=[x, "method"],
-        value_vars=metrics,
-        var_name="metric",
-        value_name="value",
-    )
+# %% Noise robustness
+df_plot = df[(df.n == 512) & (df.q == 56)]
+print(df_plot.groupby(["Method", "Metric", "noise"]).count())
+g = sns.relplot(
+    data=df_plot,
+    x="noise",
+    y="value",
+    hue="Method",
+    hue_order=hue_order,
+    kind="line",
+    errorbar="sd",
+    marker="o",
+    col="Metric",
+    col_order=col_order,
+    facet_kws={"sharey": False},
+    height=1.75,
+    aspect=1.25,
+)
+for ax in g.axes.flat:
+    ax.set_xscale("log")
+    ax.xaxis.set_major_locator(mticker.LogLocator(base=10, subs=(1, 2, 5)))
+    ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, pos: f"{x:g}"))
+    ax.xaxis.set_minor_formatter(mticker.NullFormatter())
 
-    g = sns.relplot(
-        data=df,
-        x=x,
-        y="value",
-        hue="method",
-        hue_order=methods,
-        col="metric",
-        col_order=metrics,
-        kind="line",
-        marker="o",
-        facet_kws={"sharey": False},
-        height=3.5,
-        aspect=1,
-    )
-    g.set_xlabels(xlabel)
-    g.set_ylabels("")
+g.set_titles("{col_name}")
+g.set_axis_labels("", "")
+g.axes.flatten()[1].set_xlabel("Noise level $\\sigma$ ($n=512$, $q=56$)")
+sns.move_legend(g, "lower center", bbox_to_anchor=(0.475, 0.95), ncols=3, title=None)
+plt.savefig(output / "noise_robustness.pdf", bbox_inches="tight", metadata={"CreationDate": None})
 
-    for ax, ylabel in zip(g.axes.flat, metrics.values()):
-        ax.set_title(ylabel)
-        ax.lines[0].set_zorder(10)
-        if x == "n":
-            ax.set_xscale("log", base=2)
-            ax.set_xticks([128, 256, 512, 1024], ["128", "256", "512", "1024"])
+# %% Sample efficiency
+df_plot = df[(df.noise == 1.0) & (df.q == 56)]
+print(df_plot.groupby(["Method", "Metric", "n"]).count())
+g = sns.relplot(
+    data=df_plot,
+    x="n",
+    y="value",
+    hue="Method",
+    hue_order=hue_order,
+    kind="line",
+    errorbar="sd",
+    marker="o",
+    col="Metric",
+    col_order=col_order,
+    facet_kws={"sharey": False},
+    height=1.75,
+    aspect=1.25,
+)
+for ax in g.axes.flat:
+    ax.set_xscale("log", base=2)
+    ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, pos: f"{int(x):d}"))
 
-    sns.despine(trim=True)
-    sns.move_legend(g, "lower center", bbox_to_anchor=(0.5, 0.95), ncols=3, title=None)
-    g.savefig(output / filename, bbox_inches="tight")
-    plt.close(g.fig)
+g.set_titles("{col_name}")
+g.set_axis_labels("", "")
+g.axes.flatten()[1].set_xlabel("Sample size $n$ (log scale, $q=56$, $\\sigma=1.0$)")
+sns.move_legend(g, "lower center", bbox_to_anchor=(0.475, 0.95), ncols=3, title=None)
+plt.savefig(output / "sample_efficiency.pdf", bbox_inches="tight", metadata={"CreationDate": None})
 
+# %% Cardinality efficiency
+df_plot = df[(df.noise == 1.0) & (df.n == 512)]
+print(df_plot.groupby(["Method", "Metric", "q"]).count())
+g = sns.relplot(
+    data=df_plot,
+    x="q",
+    y="value",
+    hue="Method",
+    hue_order=hue_order,
+    kind="line",
+    errorbar="sd",
+    marker="o",
+    col="Metric",
+    col_order=col_order,
+    facet_kws={"sharey": False},
+    height=1.75,
+    aspect=1.25,
+)
+for ax in g.axes.flat:
+    ax.set_xscale("log", base=2)
+    ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, pos: f"{int(x):d}"))
 
-# %% Heatmaps
-means = data.groupby(["method", "q", "n"])[list(metrics)].mean()
-qs, ns = sorted(data.q.unique()), sorted(data.n.unique())
-fig, axes = plt.subplots(len(metrics), len(methods), figsize=(14, 10), sharex=True, sharey=True, layout="constrained")
+g.axes.flat[2].set_yscale("log")
 
-for row, ((metric, title), cmap) in enumerate(zip(metrics.items(), ["Blues", "Oranges", "Purples_r"])):
-    # Share limits across methods within each metric row.
-    vmin, vmax = means[metric].min(), means[metric].max()
-    tables = means[metric].unstack("method").reindex(columns=methods)
-    for col, method in enumerate(methods):
-        ax = axes[row, col]
-        table = tables[method].unstack("n").reindex(index=qs[::-1], columns=ns)
-        sns.heatmap(
-            table,
-            ax=ax,
-            cmap=cmap,
-            vmin=vmin,
-            vmax=vmax,
-            cbar=False,
-            linewidths=0.35,
-            linecolor="white",
-            xticklabels=True,
-            yticklabels=True,
-        )
-        ax.set_facecolor("#eeeeeedb")
-        ax.tick_params(axis="both", length=0, labelsize=8, labelrotation=0)
-        ax.label_outer()
-        ax.set_xlabel("Stimuli $n$" if row == len(metrics) - 1 else "")
-        ax.set_ylabel(f"{title}\nEncoded coordinates $q$" if col == 0 else "", fontsize=11)
-        if row == 0:
-            ax.set_title(method, fontsize=12, pad=12)
-    fig.colorbar(ax.collections[0], ax=axes[row, :], fraction=0.025, pad=0.02)
-
-fig.supxlabel("Light gray cells: no observations", fontsize=9, color="0.4")
-fig.savefig(output / "heatmaps.pdf", bbox_inches="tight")
-plt.close(fig)
+g.set_titles("{col_name}")
+g.set_axis_labels("", "")
+g.axes.flatten()[1].set_xlabel("Number of feature coordinates $q$ (log scale, $n=512$, $\\sigma=1.0$)")
+sns.move_legend(g, "lower center", bbox_to_anchor=(0.475, 0.95), ncols=3, title=None)
+plt.savefig(output / "cardinality_efficiency.pdf", bbox_inches="tight", metadata={"CreationDate": None})
