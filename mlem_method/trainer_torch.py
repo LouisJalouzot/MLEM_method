@@ -57,6 +57,12 @@ def train(
         loss = model.loss(Y_pred, Y_batch)
         loss.backward()
         grad_norm = model.compute_gradient_norm()
+        loss_value = loss.item()
+        # Loss checkpoints must match the pre-update parameters that produced the loss.
+        if monitor == "loss" and (
+            (maximize and loss_value > best_score) or (not maximize and loss_value < best_score)
+        ):
+            best_model_state_dict = deepcopy(model.state_dict())
         optimizer.step()
         X_batch_test, Y_batch_test, *_ = test_dataloader[i]
         X_batch_test, Y_batch_test = X_batch_test.to(device), Y_batch_test.to(device)
@@ -69,7 +75,7 @@ def train(
         log = {
             "Step": i,
             "Batch size": len(X_batch),
-            "Loss": loss.item(),
+            "Loss": loss_value,
             "Train score": train_score,
             "Test score": test_score,
             "Step Duration": time() - t,
@@ -101,14 +107,15 @@ def train(
                 case "test_score":
                     current_score = test_score
                 case "loss":
-                    current_score = loss.item()
+                    current_score = loss_value
 
             improved = (maximize and current_score > best_score) or (not maximize and current_score < best_score)
 
             if improved:
                 best_score = current_score
                 epochs_without_improvement = 0
-                best_model_state_dict = deepcopy(model.state_dict())
+                if monitor != "loss":
+                    best_model_state_dict = deepcopy(model.state_dict())
             else:
                 epochs_without_improvement += 1
 
@@ -120,8 +127,6 @@ def train(
                     f"did not improve for {patience} epochs"
                 )
                 converged = True
-                if best_model_state_dict is not None:
-                    model.load_state_dict(best_model_state_dict)
                 break
 
         prev_w = model.get_W().clone()
@@ -132,6 +137,9 @@ def train(
                 f"diff norm {diff_norm:.3g} > eps {eps:.3g} and "
             )
             break
+
+    if best_model_state_dict is not None:
+        model.load_state_dict(best_model_state_dict)
 
     logs = pd.DataFrame(logs)
     logs["converged"] = converged

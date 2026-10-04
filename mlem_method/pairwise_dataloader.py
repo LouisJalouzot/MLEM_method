@@ -11,7 +11,7 @@ from .utils import BaseModel, corrcoef
 
 class PairwiseDataloader:
     """
-    A dataset that generates pairs of samples from two datasets (X and Y) and computes the distance between them.
+    A dataset that generates nonself pairs of samples from two datasets (X and Y) and computes the distance between them.
     The dataset can be used for training models that learn to predict the distance between samples.
     """
 
@@ -93,7 +93,7 @@ class PairwiseDataloader:
         else:
             raise ValueError("Y is not provided.")
 
-    def sample(self, n_pairs=4096, n_trials=1, get_idx=False, only_valid=False):
+    def sample(self, n_pairs=4096, n_trials=1, get_idx=False):
         import torch
 
         if n_pairs > self.max_n_pairs and not self.logged_debug:
@@ -105,11 +105,10 @@ class PairwiseDataloader:
         n_pairs *= n_trials
 
         ind_1 = torch.randint(0, self.n, (n_pairs,), device=self.device, generator=self.generator)
-        ind_2 = torch.randint(0, self.n, (n_pairs,), device=self.device, generator=self.generator)
-        if only_valid:
-            valid = ind_1 != ind_2
-            ind_1 = ind_1[valid]
-            ind_2 = ind_2[valid]
+        ind_2 = torch.randint(0, self.n - 1, (n_pairs,), device=self.device, generator=self.generator)
+        # Trick to uniformly sample nonself pairs
+        # Source: https://stackoverflow.com/a/64015315
+        ind_2 += ind_2 >= ind_1
 
         out = ()
 
@@ -231,7 +230,7 @@ class PairwiseDataloaderBuilder(BaseModel):
                 if self.n_train > len(train):
                     raise ValueError(f"n_train={self.n_train} exceeds the training pool ({len(train)})")
                 if self.n_train < len(train):
-                    train = default_rng(seed).permutation(train)[:self.n_train]
+                    train = default_rng(seed).permutation(train)[: self.n_train]
             if isinstance(self.cv, int):
                 logger.info(f"Split {i} of {self.cv}")
             yield tuple(

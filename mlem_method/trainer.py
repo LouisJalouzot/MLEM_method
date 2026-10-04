@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as tp
 
 from exca import TaskInfra
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator, SerializeAsAny
 
 from .dataset import Dataset, SimulatedRepresentations
 from .estimate_correlations import EstimateCorrelations
@@ -28,7 +28,8 @@ if tp.TYPE_CHECKING:
 
 class Trainer(BaseModelSharing):
     kind: tp.Literal["mlem"] = "mlem"
-    dataset: Dataset = Field(default_factory=lambda: Dataset())
+    # SerializeAsAny to Preserve subclass fields (e.g. THINGS average_train) in Exca serialization/cloning.
+    dataset: SerializeAsAny[Dataset] = Field(default_factory=lambda: Dataset())
     estimate_correlations: EstimateCorrelations = Field(default_factory=lambda: EstimateCorrelations())
     representations: tp.Annotated[
         SentenceRepresentations
@@ -52,7 +53,7 @@ class Trainer(BaseModelSharing):
     device: str | None = None
     unit_indices: list[int] | None = None
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="8")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="11")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
     _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {

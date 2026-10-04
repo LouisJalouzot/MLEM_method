@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 from exca import TaskInfra
 from fracridge import FracRidgeRegressor
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, SerializeAsAny
 from scipy.stats import pearsonr, spearmanr
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LogisticRegression
@@ -47,7 +47,7 @@ class FRRSA(torch.nn.Module):
 
 class EncodingBaseline(BaseModelSharing):
     kind: tp.Literal["rf"] = "rf"
-    dataset: Dataset = Field(default_factory=lambda: Dataset())
+    dataset: SerializeAsAny[Dataset] = Field(default_factory=lambda: Dataset())
     estimate_correlations: EstimateCorrelations = Field(default_factory=lambda: EstimateCorrelations())
     representations: tp.Annotated[
         SentenceRepresentations
@@ -61,7 +61,7 @@ class EncodingBaseline(BaseModelSharing):
     n_estimators: int = 100
     dataloader_builder: PairwiseDataloaderBuilder = Field(default_factory=lambda: PairwiseDataloaderBuilder(cv=0.2))
 
-    n_jobs: int = -2
+    n_jobs: int = 12
     verbose: bool = False
     infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="5")
     train_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="4")
@@ -200,7 +200,7 @@ def compute_decoding_baseline(X, Y, n_splits=5):
 
 
 class DecodingBaseline(BaseModelSharing):
-    dataset: Dataset = Field(default_factory=lambda: Dataset())
+    dataset: SerializeAsAny[Dataset] = Field(default_factory=lambda: Dataset())
     representations: tp.Annotated[
         SentenceRepresentations | WordRepresentations | SimulatedRepresentations,
         Field(discriminator="level"),

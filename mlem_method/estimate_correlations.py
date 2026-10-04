@@ -10,7 +10,7 @@ from time import time
 
 from exca import TaskInfra
 from loguru import logger
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, SerializeAsAny
 
 from .dataset import Dataset
 from .pairwise_dataloader import PairwiseDataloader, PairwiseDataloaderBuilder
@@ -151,7 +151,7 @@ def estimate_correlations(
 
 
 class EstimateCorrelations(BaseModel):
-    dataset: Dataset = Field(default_factory=lambda: Dataset())
+    dataset: SerializeAsAny[Dataset] = Field(default_factory=lambda: Dataset())
     dataloader_builder: PairwiseDataloaderBuilder = Field(default_factory=lambda: PairwiseDataloaderBuilder())
     n_trials: int = 64
     init_sample_size: int = 4096
@@ -163,7 +163,7 @@ class EstimateCorrelations(BaseModel):
     ci_confidence: float = 0.99
 
     device: str | None = None
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="3")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="4")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("device",)
 

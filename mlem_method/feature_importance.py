@@ -3,7 +3,7 @@ import typing as tp
 import numpy as np
 from exca import MapInfra, TaskInfra
 from loguru import logger
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator, SerializeAsAny
 from sklearn.ensemble import RandomForestRegressor
 from tqdm.auto import tqdm
 
@@ -135,7 +135,7 @@ def compute_cv_stats_per_split(df, alpha=0.01):
 
 
 class FeatureImportance(BaseModelSharing):
-    dataset: Dataset = Field(default_factory=lambda: Dataset())
+    dataset: SerializeAsAny[Dataset] = Field(default_factory=lambda: Dataset())
     estimate_correlations: EstimateCorrelations = Field(default_factory=lambda: EstimateCorrelations())
     trainer: tp.Annotated[Trainer | OracleTrainer | EncodingBaseline | FRRSABaseline, Field(discriminator="kind")] = (
         Field(default_factory=lambda: Trainer())
@@ -147,9 +147,9 @@ class FeatureImportance(BaseModelSharing):
     alpha: float = 0.01
     fi_splits: tuple[tp.Literal["train", "test"], ...] = ("test",)
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="16")
-    layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="7")
-    map_infra: MapInfra = MapInfra(version="6")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="17")
+    layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="8")
+    map_infra: MapInfra = MapInfra(version="7")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
         "infra",
