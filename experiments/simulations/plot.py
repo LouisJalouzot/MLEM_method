@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import pandas as pd
 import seaborn as sns
-from scipy.stats import kendalltau
+from scipy.stats import weightedtau
 
 root = Path(__file__).parent
 output = root.parent.parent / "paper" / "figs" / "simulation"
@@ -16,7 +16,7 @@ methods = {"mlem": "MLEM", "frrsa": "FR-RSA", "rf": "Random Forest", "oracle": "
 hue_order = list(methods.values())[:-1]
 metrics = {
     "spearman": "Spearman $\\rho$ (↑)",
-    "kendalltau": "FI Kendall $\\tau$ with Oracle (↑)",
+    "kendalltau": "FI weighted Kendall $\\tau_w$\nwith Oracle (↑)",
     "euclidean": "FI distance to Oracle (↓)",
 }
 col_order = list(metrics.values())
@@ -58,7 +58,7 @@ df = (
         lambda group: pd.Series(
             {
                 "euclidean": (group.fi - group.fi_oracle).abs().mean(),
-                "kendalltau": kendalltau(group.fi, group.fi_oracle).statistic,
+                "kendalltau": weightedtau(group.fi, group.fi_oracle).statistic,
             }
         )
     )
