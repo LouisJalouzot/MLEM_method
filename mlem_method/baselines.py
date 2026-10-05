@@ -67,7 +67,7 @@ class EncodingBaseline(BaseModelSharing):
     train_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="4")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {"dataset": ["estimate_correlations", "representations"]}
-    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("n_jobs", "verbose", "infra", "train_infra")
+    _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("n_jobs", "verbose", "infra", "train_infra", "estimate_correlations")
 
     @model_validator(mode="after")
     def check_cv(self):
