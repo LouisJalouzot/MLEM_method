@@ -2,7 +2,7 @@ base_config:
   infra:
     folder: .cache
     cluster: slurm
-    job_name: bert_robustness
+    job_name: bert
     timeout_min: 1200
     cpus_per_task: 24
     gpus_per_node: 1
