@@ -11,20 +11,7 @@ base_config:
   distance: euclidean
 
 grid_search_prepare:
-  representations.layer:
-    - 7
+  representations.layer: [7]
 
 grid_search:
-  representations.layer:
-    - 1
-    - 2
-    - 3
-    - 4
-    - 5
-    - 6
-    - 7
-    - 8
-    - 9
-    - 10
-    - 11
-    - 12
+  representations.layer: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
