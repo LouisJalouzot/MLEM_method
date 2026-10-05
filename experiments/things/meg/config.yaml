@@ -4,7 +4,7 @@ base_config:
     cluster: slurm
     job_name: things-meg
     logs: .cache/logs/things-meg/%j
-    timeout_min: 120
+    timeout_min: 60
     cpus_per_task: 24
     gpus_per_node: 1
     slurm_constraint: h100

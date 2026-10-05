@@ -2,9 +2,9 @@ base_config:
   infra:
     folder: .cache
     cluster: slurm
-    job_name: things-meg
-    logs: .cache/logs/things-meg/%j
-    timeout_min: 120
+    job_name: things-fmri
+    logs: .cache/logs/things-fmri/%j
+    timeout_min: 60
     cpus_per_task: 24
     gpus_per_node: 1
     slurm_constraint: h100
@@ -13,7 +13,7 @@ base_config:
   trainer:
     kind: mlem
     dataloader_builder: {cv: split, distance: correlation}
-    representations: {level: things-meg}
+    representations: {level: things-fmri}
   dataset:
     average_train: true
 
