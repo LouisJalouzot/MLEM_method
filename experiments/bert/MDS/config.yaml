@@ -1,4 +1,4 @@
-target: src.reduce_dimensions.ReduceDimensions
+target: mlem_method.reduce_dimensions.ReduceDimensions
 method: transform
 
 base_config:

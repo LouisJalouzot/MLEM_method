@@ -1,4 +1,4 @@
-target: src.baselines.DecodingBaseline
+target: mlem_method.baselines.DecodingBaseline
 
 base_config:
   n_splits: 5

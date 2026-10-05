@@ -83,9 +83,14 @@ class THINGSDataset(Dataset):
     columns that need a shorter name; every other requested name is read as-is from
     the two annotation tables. The concept table is optional and only read for
     lexical features.
+
+    Set ``average_train=True`` to use one training row per concept and average
+    its image responses before computing neural distances. Test images and their
+    repetition averages stay separate. ``meta`` retains the image-level mapping.
     """
 
     root: str = "data/things"
+    average_train: bool = False
     features: list[str] = Field(default_factory=lambda: BASE_FEATURE_COLS.copy(), min_length=1)
 
     @property
@@ -95,7 +100,15 @@ class THINGSDataset(Dataset):
     def read(self, only_columns=False) -> pd.DataFrame | np.ndarray:
         if only_columns:
             return np.array(self.features, dtype=str)
-        return self.meta[["stimulus", "concept", *self.features]]
+        meta = self.meta
+        if self.average_train:
+            meta = pd.concat(
+                [
+                    meta.query('trial_type == "train"').drop_duplicates("concept"),
+                    meta.query('trial_type == "test"'),
+                ]
+            )
+        return meta[["stimulus", "concept", *self.features]]
 
     @cached_property
     def meta(self) -> pd.DataFrame:
@@ -119,9 +132,7 @@ class THINGSDataset(Dataset):
             annotations = pd.read_csv(path, sep="\t", usecols=["uniqueID", *columns.values()]).rename(
                 columns={column: name for name, column in columns.items()}
             )
-            meta = meta.merge(
-                annotations, left_on="concept", right_on="uniqueID", how="left", validate="many_to_one"
-            )
+            meta = meta.merge(annotations, left_on="concept", right_on="uniqueID", how="left", validate="many_to_one")
         meta["confound_word_length"] = meta["concept"].str.len().astype(float)
         for name in self.features:
             meta[name] = pd.to_numeric(meta[name], errors="coerce")
@@ -132,9 +143,18 @@ class THINGSDataset(Dataset):
             raise ValueError(f"{missing.sum()} stimuli have missing THINGS features")
         return meta
 
+    def average(self, Y: np.ndarray) -> np.ndarray:
+        """Collapse training image responses in the same concept order as ``read``."""
+        if not self.average_train:
+            return Y
+        train = self.meta.trial_type.eq("train").to_numpy()
+        means = pd.DataFrame(Y[train]).groupby(self.meta.loc[train, "concept"].to_numpy(), sort=False).mean().to_numpy()
+        return np.concatenate([means, Y[~train]])
+
     @property
     def n_train(self) -> int:
-        return int((self.meta.trial_type == "train").sum())
+        train = self.meta.query('trial_type == "train"')
+        return train.concept.nunique() if self.average_train else len(train)
 
     @property
     def stimulus_names(self) -> list[str]:
@@ -142,5 +162,5 @@ class THINGSDataset(Dataset):
 
     @property
     def split(self) -> tuple[list[int], list[int]]:
-        n = len(self.meta)
+        n = len(self.read())
         return list(range(self.n_train)), list(range(self.n_train, n))

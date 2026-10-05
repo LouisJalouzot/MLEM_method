@@ -1,0 +1,31 @@
+base_config:
+  infra:
+    folder: .cache
+    cluster: slurm
+    job_name: pearson
+    logs: .cache/logs/pearson/%j
+    timeout_min: 120
+    cpus_per_task: 24
+    gpus_per_node: 1
+    slurm_constraint: h100
+    slurm_account: ioj@h100
+    slurm_additional_parameters:
+      qos: qos_gpu_h100-t3
+      hint: nomultithread
+  dataset:
+    simulation:
+      kind: mlp
+      n: 512
+      n_numeric: 18
+      # q = 18 numeric + 40 categorical simplex coordinates.
+      category_cardinalities: [2, 3, 4, 5, 2, 3, 4, 5, 2, 3, 4, 5, 2, 3, 4, 5]
+      d: 768
+  trainer:
+    kind: mlem
+    dataloader_builder: {cv: 0.25}
+    representations: {level: simulated}
+  scoring: pearson
+
+grid_search:
+  dataset.seed: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  trainer.kind: [mlem, frrsa, oracle]

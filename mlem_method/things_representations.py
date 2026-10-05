@@ -1,7 +1,7 @@
 """THINGS fMRI betas and MEG epochs as MLEM representations.
 
-Both modalities produce one row per dataset stimulus: single trials for the main
-images, super-trials (mean of the 12 repetitions) for the repeated test images.
+Both modalities average repetitions of test images. With dataset.average_train,
+training responses are also averaged across images of each concept.
 """
 
 import typing as tp
@@ -76,7 +76,7 @@ class THINGSFmriRepresentations(BaseModel):
             raise ValueError(f"ROI {self.roi} is empty for sub-{self.subject}")
 
         names = self.dataset.stimulus_names
-        n_train = self.dataset.n_train
+        n_train = int(self.dataset.meta.trial_type.eq("train").sum())
         counts = stim.stimulus.value_counts()
         assert counts.reindex(names[:n_train]).eq(1).all(), "train stimuli need exactly one trial"
         assert counts.reindex(names[n_train:]).ge(1).all(), "test stimuli need at least one trial"
@@ -95,7 +95,7 @@ class THINGSFmriRepresentations(BaseModel):
         by_name = stim.stimulus.to_numpy()
         train = Y[[index[name] for name in names[:n_train]]]
         test = np.stack([Y[by_name == name].mean(axis=0) for name in names[n_train:]])
-        out = np.concatenate([train, test])
+        out = self.dataset.average(np.concatenate([train, test]))
         logger.info(f"THINGS fMRI sub-{self.subject} roi={self.roi}: {out.shape}")
         return out
 
@@ -172,7 +172,7 @@ class THINGSMegRepresentations(BaseModel):
                 acc[w, start : start + len(data)] = data[:, :, window_start : window_start + width].mean(axis=-1)
 
         for mat in acc:
-            yield np.stack([mat[group].mean(axis=0) for group in groups])
+            yield self.dataset.average(np.stack([mat[group].mean(axis=0) for group in groups]))
 
     def __call__(self) -> "torch.Tensor":
         import torch
