@@ -209,16 +209,6 @@ class BaseModelSharing(BaseModel):
 
     _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {}
 
-    @model_validator(mode="after")
-    def _resolve_split_cv(self):
-        """`cv="split"` uses the dataset's official train/test split (e.g. THINGS)."""
-        builder = getattr(self, "dataloader_builder", None)
-        if getattr(builder, "cv", None) == "split":
-            split = getattr(getattr(self, "dataset", None), "split", None)
-            assert split is not None, 'cv="split" needs a dataset defining a split'
-            builder.cv = split
-        return self
-
     @model_validator(mode="before")
     @classmethod
     def _inject_shared_instances(cls, data: tp.Any) -> tp.Any:

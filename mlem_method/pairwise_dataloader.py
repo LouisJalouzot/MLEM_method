@@ -196,6 +196,7 @@ class PairwiseDataloaderBuilder(BaseModel):
         gamma=1,
         seed=None,
         signed=False,
+        split=None,
     ) -> PairwiseDataLoaderGenerator:
         """Keep the holdout fixed; subsample only the training pool.
 
@@ -211,19 +212,22 @@ class PairwiseDataloaderBuilder(BaseModel):
         from sklearn.utils.validation import check_consistent_length
 
         assert X is not None or Y is not None, "X or Y must be provided"
-        assert self.cv != "split", 'cv="split" needs a dataset with a split (resolved by trainers)'
+        cv = self.cv
+        if cv == "split":
+            assert split is not None, 'cv="split" needs a dataset defining a split'
+            cv = split
         check_consistent_length(X, Y, Y2)
         data = X if X is not None else Y
-        if isinstance(self.cv, tuple):
-            train_indices, test_indices = (np.asarray(i, dtype=int) for i in self.cv)
+        if isinstance(cv, tuple):
+            train_indices, test_indices = (np.asarray(i, dtype=int) for i in cv)
             logger.info(f"Predefined split: {len(train_indices)} train / {len(test_indices)} test samples")
             splits = [(train_indices, test_indices)]
-        elif self.cv is None:
+        elif cv is None:
             splits = [(slice(None), slice(None))]
-        elif isinstance(self.cv, int):
-            splits = KFold(n_splits=self.cv, shuffle=True, random_state=0).split(data)
+        elif isinstance(cv, int):
+            splits = KFold(n_splits=cv, shuffle=True, random_state=0).split(data)
         else:
-            splits = ShuffleSplit(n_splits=1, test_size=self.cv, random_state=0).split(data)
+            splits = ShuffleSplit(n_splits=1, test_size=cv, random_state=0).split(data)
 
         for i, (train, test) in enumerate(splits, start=1):
             if self.n_train is not None:
@@ -231,8 +235,8 @@ class PairwiseDataloaderBuilder(BaseModel):
                     raise ValueError(f"n_train={self.n_train} exceeds the training pool ({len(train)})")
                 if self.n_train < len(train):
                     train = default_rng(seed).permutation(train)[: self.n_train]
-            if isinstance(self.cv, int):
-                logger.info(f"Split {i} of {self.cv}")
+            if isinstance(cv, int):
+                logger.info(f"Split {i} of {cv}")
             yield tuple(
                 PairwiseDataloader(
                     X=X[index] if X is not None else None,
@@ -250,7 +254,7 @@ class PairwiseDataloaderBuilder(BaseModel):
             )
 
     def get_folds(
-        self, X=None, Y=None, Y2=None, n_pairs=None, gamma=1, seed=None, signed=False
+        self, X=None, Y=None, Y2=None, n_pairs=None, gamma=1, seed=None, signed=False, split=None
     ) -> PairwiseDataLoaderGenerator:
-        """Single choke point for fold construction; pair budget and tensors stay caller-side."""
-        return self.build(X=X, Y=Y, Y2=Y2, n_pairs=n_pairs, gamma=gamma, seed=seed, signed=signed)
+        """Resolve the current dataset's official split without changing stored ``cv``."""
+        return self.build(X=X, Y=Y, Y2=Y2, n_pairs=n_pairs, gamma=gamma, seed=seed, signed=signed, split=split)

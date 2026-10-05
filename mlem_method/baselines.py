@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 from exca import TaskInfra
 from fracridge import FracRidgeRegressor
-from pydantic import ConfigDict, Field, SerializeAsAny
+from pydantic import ConfigDict, Field, SerializeAsAny, model_validator
 from scipy.stats import pearsonr, spearmanr
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LogisticRegression
@@ -69,6 +69,12 @@ class EncodingBaseline(BaseModelSharing):
     _shared_fields_config: tp.ClassVar[dict[str, list[str]]] = {"dataset": ["estimate_correlations", "representations"]}
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = ("n_jobs", "verbose", "infra", "train_infra")
 
+    @model_validator(mode="after")
+    def check_cv(self):
+        if self.representations.level in ("things-fmri", "things-meg") and self.dataloader_builder.cv != "split":
+            self.dataloader_builder.cv = "split"
+        return self
+
     def get_folds(self):
         _, n_pairs, _ = self.estimate_correlations.estimate_correlations()
         device = get_device()
@@ -77,7 +83,8 @@ class EncodingBaseline(BaseModelSharing):
         simulation = self.dataset.simulation
         Y2 = simulation.transform(X) if simulation is not None and simulation.kind == "mlp" else None
         return self.dataloader_builder.get_folds(
-            X=X, Y=Y, Y2=Y2, n_pairs=n_pairs, seed=self.dataset.seed, signed=self.dataset.mahalanobis
+            X=X, Y=Y, Y2=Y2, n_pairs=n_pairs, seed=self.dataset.seed, signed=self.dataset.mahalanobis,
+            split=getattr(self.dataset, "split", None),
         )
 
     @train_infra.apply(exclude_from_cache_uid=("n_jobs", "verbose"))

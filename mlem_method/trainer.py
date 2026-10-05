@@ -67,6 +67,8 @@ class Trainer(BaseModelSharing):
             assert self.dataset.level == "things" and self.representations.level in ("things-fmri", "things-meg"), (
                 f"Dataset level {self.dataset.level} does not match representations level {self.representations.level}"
             )
+            if self.dataloader_builder.cv != "split":
+                self.dataloader_builder.cv = "split"
         return self
 
     def get_model(self, state_dict=None, device=None) -> SPDMatrixLearner:
@@ -101,6 +103,7 @@ class Trainer(BaseModelSharing):
             gamma=self.gamma,
             seed=self.dataset.seed,
             signed=self.dataset.mahalanobis,
+            split=getattr(self.dataset, "split", None),
         )
 
     @infra.apply(exclude_from_cache_uid=["device"])
@@ -181,6 +184,7 @@ class OracleTrainer(Trainer):
             gamma=self.gamma,
             seed=self.dataset.seed,
             signed=self.dataset.mahalanobis,
+            split=getattr(self.dataset, "split", None),
         )
 
     def train(self):
