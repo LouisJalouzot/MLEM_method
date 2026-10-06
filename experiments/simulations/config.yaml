@@ -11,7 +11,7 @@ base_config:
     cluster: slurm
     job_name: simulation
     logs: .cache/logs/simulation/%j
-    timeout_min: 1200
+    timeout_min: 60
     cpus_per_task: 24
     gpus_per_node: 1
     slurm_constraint: h100
