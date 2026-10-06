@@ -49,6 +49,7 @@ def run_grid_search(
     n_jobs=-2,
     grid_search_zip=None,
     tasks_per_alloc=1,
+    method=None,
 ):
     """Run grid search with job array support.
 
@@ -61,6 +62,7 @@ def run_grid_search(
         sequential: Run each task locally, cancelling its pending cluster job first.
         n_jobs: Joblib workers used to construct tasks.
         tasks_per_alloc: Maximum configs run sequentially per allocation; timeout_min must cover the whole batch.
+        method: Optional dotted method called to collect results after the cached job completes.
     """
     if tasks_per_alloc < 1:
         raise ValueError("tasks_per_alloc must be positive")
@@ -144,7 +146,7 @@ def run_grid_search(
                 logger.error(f"Config: {flat_configs[idx]} | Cache: {Path(task_infra.uid_folder()).resolve()}")
                 logger.error(exc)
             if fetch_results:
-                results.append(job.result())
+                results.append(reduce(getattr, method.split("."), task)() if method else job.result())
         except KeyboardInterrupt:
             logger.error(
                 f"Keyboard interrupt | Config: {flat_configs[idx]} | Cache: {Path(task_infra.uid_folder()).resolve()}"
@@ -190,6 +192,7 @@ def main(config: dict | None = None, n_jobs=-2, tasks_per_alloc=1):
         n_jobs=n_jobs,
         grid_search_zip=config.get("grid_search_zip"),
         tasks_per_alloc=tasks_per_alloc,
+        method=config.get("method"),
     )
 
     all_dfs = []
