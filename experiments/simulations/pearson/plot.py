@@ -1,3 +1,4 @@
+# %%
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -7,6 +8,9 @@ import seaborn as sns
 from scipy.stats import weightedtau
 
 root = Path(__file__).parent
+output = root.parent.parent.parent / "paper" / "figs" / "simulation"
+output.mkdir(parents=True, exist_ok=True)
+
 methods = {"mlem": "MLEM", "frrsa": "FR-RSA", "oracle": "Oracle"}
 hue_order = list(methods.values())[:-1]
 metrics = {
@@ -56,6 +60,7 @@ df = df.merge(df_score).melt(
 )
 df["Metric"] = df["Metric"].map(metrics)
 
+# %%
 g = sns.catplot(
     data=df,
     x="Method",
@@ -63,16 +68,30 @@ g = sns.catplot(
     order=hue_order,
     hue="Method",
     hue_order=hue_order,
-    kind="bar",
-    errorbar="sd",
     col="Metric",
     col_order=col_order,
+    kind="strip",
+    jitter=0.2,
+    alpha=0.8,
     sharey=False,
-    height=1.75,
-    aspect=1.25,
+    height=2,
+    aspect=1,
 )
-g.map_dataframe(sns.stripplot, x="Method", y="value", order=hue_order, color="black", jitter=0.15, alpha=0.6, zorder=3)
-g.set_titles("{col_name}")
+for ax, metric in zip(g.axes.flat, col_order):
+    sns.barplot(
+        data=df[df["Metric"] == metric],
+        x="Method",
+        y="value",
+        order=hue_order,
+        hue="Method",
+        hue_order=hue_order,
+        errorbar="sd",
+        linestyle="none",
+        alpha=0.6,
+        err_kws={"zorder": 3},
+        legend=False,
+        ax=ax,
+    )
+g.set_titles("{col_name}", pad=10)
 g.set_axis_labels("", "")
-plt.savefig(root / "pearson_comparison.pdf", bbox_inches="tight", metadata={"CreationDate": None})
-plt.savefig(root / "pearson_comparison.png", dpi=300, bbox_inches="tight")
+plt.savefig(output / "pearson_comparison.pdf", bbox_inches="tight", metadata={"CreationDate": None})

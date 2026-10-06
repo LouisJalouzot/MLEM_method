@@ -1,3 +1,4 @@
+# %%
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -6,14 +7,12 @@ from mlem_method.viz import *
 
 parser = ArgumentParser()
 parser.add_argument("--dataset", default="datasets/relative_clause.csv")
-parser.add_argument("--output-dir", type=Path, default=Path("think_alike/figures"))
+parser.add_argument("--output-dir", default="paper/figs")
 args = parser.parse_args()
-args.output_dir.mkdir(parents=True, exist_ok=True)
+Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
-correlations, n_pairs = EstimateCorrelations(
-    dataset={"path": args.dataset}, product=False, device="cpu"
-).estimate_correlations()
-correlations.to_csv(Path(__file__).parent / "feature_correlations.csv")
+correlations, n_pairs, _ = EstimateCorrelations(dataset={"path": args.dataset}).estimate_correlations()
+
 correlations = correlations.rename(columns=feature_rename, index=feature_rename)
 
 values = correlations.to_numpy(copy=True)
@@ -23,6 +22,7 @@ print(f"pairs={n_pairs}, max |r|={np.abs(values).max():.3f}")
 values[np.triu_indices_from(values)] = np.nan
 correlations = pd.DataFrame(values[1:, :-1], index=correlations.index[1:], columns=correlations.columns[:-1])
 
+# %%
 fig, ax = plt.subplots(figsize=(6, 6))
 annotations = correlations.round(2).where(correlations.abs() > 0.4, "")
 sns.heatmap(
@@ -43,4 +43,4 @@ colorbar.set_label("Correlation", labelpad=10)
 colorbar.ax.xaxis.set_label_position("top")
 colorbar.ax.xaxis.set_ticks_position("top")
 plt.xticks(rotation=45, ha="right")
-plt.savefig(args.output_dir / "feature_correlations.pdf", metadata={"CreationDate": None})
+plt.savefig(Path(args.output_dir) / (Path(args.dataset).stem + "_correlations.pdf"), metadata={"CreationDate": None})
