@@ -1,6 +1,16 @@
 target: mlem_method.baselines.DecodingBaseline
 
 base_config:
+  infra:
+    folder: .cache
+    cluster: slurm
+    job_name: opt
+    timeout_min: 20
+    cpus_per_task: 24
+    gpus_per_node: 1
+    slurm_constraint: h100
+    slurm_account: ioj@h100
+    slurm_additional_parameters: {qos: qos_gpu_h100-t3, hint: nomultithread}
   n_splits: 5
   dataset:
     path: datasets/relative_clause.csv
