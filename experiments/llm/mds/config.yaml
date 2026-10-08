@@ -12,6 +12,7 @@ base_config:
     slurm_constraint: h100
     slurm_account: ioj@h100
     slurm_additional_parameters: {qos: qos_gpu_h100-t3, hint: nomultithread}
+  dataset:
     path: datasets/relative_clause.csv
   representations:
     model_name: facebook/opt-125m
