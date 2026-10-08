@@ -22,7 +22,7 @@ class UnivariateAnalysis(BaseModelSharing):
         default_factory=lambda: FeatureImportance()
     )
 
-    map_infra: MapInfra = MapInfra(folder=".cache", version="1")
+    map_infra: MapInfra = MapInfra(folder=".cache", version="2")
     model_config: ConfigDict = ConfigDict(extra="forbid")
 
     def model_post_init(self, __context):

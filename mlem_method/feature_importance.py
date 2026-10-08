@@ -3,7 +3,7 @@ import typing as tp
 import numpy as np
 from exca import MapInfra, TaskInfra
 from loguru import logger
-from pydantic import ConfigDict, Field, model_validator, SerializeAsAny
+from pydantic import ConfigDict, Field, SerializeAsAny, model_validator
 from sklearn.ensemble import RandomForestRegressor
 from tqdm.auto import tqdm
 
@@ -42,60 +42,81 @@ def compute_feature_importance(
     alpha: float = 0.01,
     scoring: tp.Literal["spearman", "pearson", "mse"] = "spearman",
     perturbations_per_eval: int = 32,
+    pfi: tp.Literal["feature", "channel"] = "feature",
 ) -> tuple["pd.DataFrame", "pd.DataFrame"]:
-    """Permutation effects using shared stimulus permutations for mains and joints."""
-    from itertools import combinations
+    """Score drops from stimulus-feature or MLEM quadratic-channel permutation.
 
+    ``groups`` maps input coordinates to theoretical features; categorical blocks
+    are always shuffled together. See ``FeatureImportance`` for mode semantics.
+    """
     import pandas as pd
     import torch
     from captum.attr import FeatureAblation
+
+    if pfi == "channel" and not isinstance(model, SPDMatrixLearner):
+        raise ValueError("pfi='channel' requires MLEM")
 
     metric, maximize = get_metric(scoring)
     sign = 1 if maximize else -1
     X = dataloader.X
     group_ids, names = pd.factorize(groups)
     group_ids = torch.as_tensor(group_ids, device=X.device)
-    blocks = [torch.where(group_ids == k)[0] for k in range(len(names))]
-    pairs = list(combinations(range(len(names)), 2))
-    pair_ids = torch.tensor(pairs, dtype=torch.long, device=X.device)
-    # Score columns are mains then joints; joint_map sends each joint to the two groups it switches.
-    joint_map = torch.zeros(len(pairs), len(names), device=X.device).scatter_(1, pair_ids, 1)
-    keep = X.new_ones(1, len(names) + len(pairs))
+    members = [[name] for name in names]
+    if pfi == "channel":
+        a, b = np.triu_indices(len(names))
+        members = [[names[i]] if i == j else [names[i], names[j]] for i, j in zip(a, b)]
+        channels = torch.empty((len(names), len(names)), dtype=torch.long, device=X.device)
+        channels[a, b] = channels[b, a] = torch.arange(len(members), device=X.device)
+        row, col = model.triu_indices
+        product_ids = channels[group_ids[row], group_ids[col]]
+    else:
+        blocks = [torch.where(group_ids == k)[0] for k in range(len(names))]
+    features = [m[0] if len(m) == 1 else f"({m[0]} x {m[1]})" for m in members]
+    keep = X.new_ones(1, len(features))
     effects, scores = [], []
 
     with torch.no_grad():
         for _ in range(n_perm):
-            left, right, _, observed, *clean_targets = dataloader.sample(dataloader.n_pairs, get_idx=True)
+            left, right, delta, observed, *clean_targets = dataloader.sample(dataloader.n_pairs, get_idx=True)
             clean = clean_targets[-1] if clean_targets else observed
-            permuted = X.clone()
-            for block in blocks:
-                permutation = torch.randperm(dataloader.n, generator=dataloader.generator, device=X.device)
-                permuted[:, block] = X[permutation][:, block]
+            if pfi == "channel":
+                # Combine both off-diagonal coefficients of the actual forward matrix once.
+                W = model.W.weight
+                terms = delta[:, row] * delta[:, col] * (W[row, col] + (row != col) * W[col, row])
+                contributions = delta.new_zeros(len(delta), len(features)).scatter_add_(
+                    1, product_ids.expand(len(delta), -1), terms
+                )
+                permutation = torch.randperm(len(delta), generator=dataloader.generator, device=X.device)
+                change = (contributions[permutation] - contributions).T
+                prediction = model(delta)[None]
 
-            def score(mask):
-                # mask 0 switches a selection to its permuted stimuli; torch.where keeps NaNs intact.
-                ablated = (1 - mask[:, : len(names)]) + (1 - mask[:, len(names) :]) @ joint_map
-                variants = torch.where((ablated == 0)[:, None, group_ids], X, permuted)
-                return sign * metric(predict_pairs(model, dataloader, variants, left, right), clean)
+                def score(mask):
+                    return sign * metric(prediction + (1 - mask) @ change, clean)
 
-            prediction = predict_pairs(model, dataloader, X[None], left, right)
+            else:
+                permuted = X.clone()
+                for block in blocks:
+                    permutation = torch.randperm(dataloader.n, generator=dataloader.generator, device=X.device)
+                    permuted[:, block] = X[permutation][:, block]
+
+                def score(mask):
+                    # torch.where preserves missing values in the untouched coordinates.
+                    variants = torch.where(mask[:, None, group_ids].bool(), X, permuted)
+                    return sign * metric(predict_pairs(model, dataloader, variants, left, right), clean)
+
+                prediction = predict_pairs(model, dataloader, X[None], left, right)
             scores.append((sign * metric(prediction, observed)).item())
-            # Captum attr = baseline - score, so main_a = S(all) - S_a and attr for a
-            # joint mask gives S(all) - S_ab.
             attr = FeatureAblation(score).attribute(
                 keep, perturbations_per_eval=perturbations_per_eval, show_progress=True
             )[0]
-            main, joint = attr[: len(names)], attr[len(names) :]
-            # inter_ab = S_a + S_b - S_ab - S(all) = joint - main_a - main_b (baseline cancels).
-            effects.append(torch.cat([main, joint - main[pair_ids].sum(dim=-1)]).cpu().tolist())
+            effects.append(attr.cpu().tolist())
 
-    features = [*names, *(f"({names[a]} x {names[b]})" for a, b in pairs)]
     stats = compute_stats(pd.DataFrame(effects, columns=features), alpha).reset_index(names="Feature")
     importances = pd.DataFrame(
         {
             "Feature": features,
-            "AllFeatures": [[name] for name in names] + [[names[a], names[b]] for a, b in pairs],
-            "Order": ["main"] * len(names) + ["interaction"] * len(pairs),
+            "AllFeatures": members,
+            "Order": ["main" if len(m) == 1 else "interaction" for m in members],
             "Group": features,
         }
     ).merge(stats)
@@ -135,6 +156,25 @@ def compute_cv_stats_per_split(df, alpha=0.01):
 
 
 class FeatureImportance(BaseModelSharing):
+    """Permutation importance of fitted pairwise predictions.
+
+    ``pfi="feature"`` (default) shuffles one theoretical feature across stimuli,
+    keeping its encoded coordinates together. Works with MLEM, RF, FR-RSA and
+    the simulation oracle; returns one main row per feature, with no pairwise
+    interaction estimate. These drops include reliance through interactions.
+
+    ``pfi="channel"`` requires MLEM. It shuffles one weighted quadratic block
+    across comparison rows, keeping the fitted matrix and all other blocks
+    fixed. Within-feature blocks are main channels; cross-feature blocks are
+    interaction channels. Summing a block before shuffling is equivalent to
+    jointly shuffling all its products. Perturbed predictions remain unclipped.
+
+    Both modes average score drops over ``n_perm`` repeats, using the clean
+    target when simulations provide one; reported fit scores use observed data.
+    In an experiment YAML, set ``base_config.pfi: channel`` to opt in.
+    Switching PFI modes reuses the same fitted models.
+    """
+
     dataset: SerializeAsAny[Dataset] = Field(default_factory=lambda: Dataset())
     estimate_correlations: EstimateCorrelations = Field(default_factory=lambda: EstimateCorrelations())
     trainer: tp.Annotated[Trainer | OracleTrainer | EncodingBaseline | FRRSABaseline, Field(discriminator="kind")] = (
@@ -142,14 +182,15 @@ class FeatureImportance(BaseModelSharing):
     )
 
     scoring: tp.Literal["spearman", "pearson", "mse"] = "spearman"
+    pfi: tp.Literal["feature", "channel"] = "feature"
     n_perm: int = 5
     perturbations_per_eval: int = Field(default=32, ge=1)
     alpha: float = 0.01
     fi_splits: tuple[tp.Literal["train", "test"], ...] = ("test",)
 
-    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="17")
-    layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="8")
-    map_infra: MapInfra = MapInfra(version="7")
+    infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="18")
+    layers_infra: TaskInfra = TaskInfra(folder=".cache", mode="retry", version="9")
+    map_infra: MapInfra = MapInfra(version="8")
     model_config: ConfigDict = ConfigDict(extra="forbid")
     _exclude_from_cls_uid: tp.ClassVar[tuple[str, ...]] = (
         "infra",
@@ -174,6 +215,12 @@ class FeatureImportance(BaseModelSharing):
                 if isinstance(dataset, dict):
                     data["dataset"] = THINGSDataset(**dataset)
         return data
+
+    @model_validator(mode="after")
+    def check_pfi(self):
+        if self.pfi == "channel" and self.trainer.kind != "mlem":
+            raise ValueError("pfi='channel' requires MLEM")
+        return self
 
     @map_infra.apply(item_uid=str, exclude_from_cache_uid=("trainer.representations.layer",))
     def run_layers(
@@ -221,10 +268,8 @@ class FeatureImportance(BaseModelSharing):
             return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
         n_features = self.dataset.n_features
-        logger.info(
-            f"Computing {n_features + n_features * (n_features - 1) // 2} permutation effects "
-            f"with {self.n_perm} permutations."
-        )
+        n_effects = n_features if self.pfi == "feature" else n_features * (n_features + 1) // 2
+        logger.info(f"Computing {n_effects} {self.pfi} permutation effects with {self.n_perm} permutations.")
 
         all_importances = []
         all_score = []
@@ -264,6 +309,7 @@ class FeatureImportance(BaseModelSharing):
                     alpha=self.alpha,
                     scoring=self.scoring,
                     perturbations_per_eval=self.perturbations_per_eval,
+                    pfi=self.pfi,
                 )
                 for frame in [importances, score]:
                     frame["cv"] = i

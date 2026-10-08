@@ -69,12 +69,19 @@ def test_feature_importance(fi):
     assert fi.infra.uid() == serial.infra.uid()
     assert fi.layers_infra.uid() == serial.layers_infra.uid()
     assert fi.map_infra.uid() == serial.map_infra.uid()
+    with pytest.raises(ValueError, match="requires MLEM"):
+        fi.infra.clone_obj(pfi="channel")
+    mlem = FeatureImportance()
+    channel = mlem.infra.clone_obj(pfi="channel")
+    for name in ("infra", "layers_infra", "map_infra"):
+        assert getattr(mlem, name).uid() != getattr(channel, name).uid()
+    assert mlem.trainer.infra.uid() == channel.trainer.infra.uid()
     importance, scores, weights = fi.compute()
 
-    # Three original features give three main effects and three interactions per fold.
-    assert len(importance) == 2 * 6
+    # Feature PFI reports only the three original features per fold.
+    assert len(importance) == 2 * 3
     assert {"Feature", "AllFeatures", "Order", "Group", "mean", "cv", "split"} <= set(importance.columns)
-    assert set(importance.Order) == {"main", "interaction"}
+    assert set(importance.Order) == {"main"}
     assert set(importance.split) == {"test"}
     assert len(scores) == 2
     assert np.isfinite(importance["mean"]).all()

@@ -5,6 +5,7 @@ import torch
 from mlem_method.feature_importance import compute_feature_importance
 from mlem_method.pairwise_dataloader import PairwiseDataloader
 from mlem_method.simulation import RandomMlpSimulation
+from mlem_method.spd_matrix_learner_torch import SPDMatrixLearner
 from mlem_method.utils import encode_df
 
 
@@ -71,31 +72,57 @@ def make_loader():
 @pytest.mark.parametrize("perturbations_per_eval", [1, 2, 32])
 def test_stimulus_permutation_keeps_categorical_block_together(recording_score, perturbations_per_eval):
     X, loader = make_loader()
-    model = RecordingScore(X)
-    compute_feature_importance(
+    model = RecordingScore(X, interaction=0.4)
+    importance, _ = compute_feature_importance(
         model, loader, np.array(["c", "c", "x"]), n_perm=1, perturbations_per_eval=perturbations_per_eval
     )
 
-    permuted_c = model.inputs[2]
+    assert len(model.inputs) == 4  # Prediction, baseline and two single-feature perturbations.
+    permuted_c, permuted_x = model.inputs[2:]
     original_rows = {tuple(row.tolist()) for row in X[:, :2]}
     assert all(tuple(row.tolist()) in original_rows for row in permuted_c[:, :2])
     assert torch.equal(permuted_c[:, 2], X[:, 2])
-    assert torch.equal(model.inputs[-1][:, :2], permuted_c[:, :2])
-    assert torch.equal(model.inputs[-1][:, 2], model.inputs[3][:, 2])
+    assert torch.equal(permuted_x[:, :2], X[:, :2])
+    assert sorted(permuted_x[:, 2].tolist()) == sorted(X[:, 2].tolist())
+    assert set(importance.Order) == {"main"}
+    np.testing.assert_allclose(importance.set_index("Feature").loc[["c", "x"], "mean"], [0.2, 0.3])
 
 
-@pytest.mark.filterwarnings("ignore:Precision loss occurred")
 @pytest.mark.parametrize("perturbations_per_eval", [1, 2, 32])
-def test_permutation_interaction_algebra(recording_score, perturbations_per_eval):
-    X, loader = make_loader()
-    additive, _ = compute_feature_importance(
-        RecordingScore(X), loader, np.array(["c", "c", "x"]), n_perm=2, perturbations_per_eval=perturbations_per_eval
-    )
-    X, loader = make_loader()
-    interacting, _ = compute_feature_importance(
-        RecordingScore(X, interaction=0.4), loader, np.array(["c", "c", "x"]), n_perm=2,
+@pytest.mark.parametrize("param", ["cholesky", "none", "triu"])
+def test_channel_permutation_matches_quadratic_blocks(perturbations_per_eval, param):
+    torch.manual_seed(0)
+    model = SPDMatrixLearner(3, param=param, fro_norm=False)
+    _, loader = make_loader()
+    _, reference = make_loader()
+    loader.Y2, reference.Y2 = loader.Y / 2, reference.Y / 2
+    groups = np.array(["c", "x", "c"])  # A categorical block need not be contiguous.
+    importance, scores = compute_feature_importance(
+        model, loader, groups, n_perm=2, scoring="mse", pfi="channel",
         perturbations_per_eval=perturbations_per_eval,
     )
-
-    assert abs(additive.loc[additive.Order == "interaction", "mean"].item()) < 1e-7
-    assert abs(interacting.loc[interacting.Order == "interaction", "mean"].item() - 0.4) < 1e-7
+    W = model.W.weight.detach().clone()
+    expected, baselines = [], []
+    for _ in range(2):
+        delta, observed, clean = reference.sample(reference.n_pairs)
+        permutation = torch.randperm(len(delta), generator=reference.generator)
+        terms = delta[:, :, None] * W * delta[:, None, :]
+        prediction = model(delta).detach()
+        torch.testing.assert_close(terms.sum(dim=(1, 2)), prediction)
+        baseline = (prediction - clean).square().mean()
+        baselines.append(-(prediction - observed).square().mean().item())
+        drops = []
+        for members in importance.AllFeatures:
+            mask = np.isin(groups[:, None], members) & np.isin(groups[None, :], members)
+            if len(members) == 2:
+                mask &= groups[:, None] != groups[None, :]
+            contribution = terms[:, mask].sum(dim=-1)
+            perturbed = prediction - contribution + contribution[permutation]
+            drops.append(((perturbed - clean).square().mean() - baseline).item())
+        expected.append(drops)
+    assert len(importance) == 3 and importance.Order.value_counts().to_dict() == {"main": 2, "interaction": 1}
+    np.testing.assert_allclose(importance["mean"], np.mean(expected, axis=0), rtol=2e-5, atol=1e-3)
+    assert scores["mean"].item() == pytest.approx(np.mean(baselines))
+    torch.testing.assert_close(model.W.weight, W)
+    with pytest.raises(ValueError, match="requires MLEM"):
+        compute_feature_importance(lambda X: X, loader, groups, pfi="channel")

@@ -25,7 +25,6 @@ Enable full Mahalanobis learning with one dataset flag:
 ```yaml
 dataset:
   mahalanobis: true
-pfi_grouping: feature  # or coordinate
 ```
 
 Continuous features keep the legacy min-max scaling. A categorical feature with
@@ -40,9 +39,8 @@ the model input and the upper triangle of `W`. `Dataset.encode()` returns
 `Dataset.pcoordinate_groups` gives the corresponding mapping for quadratic
 coordinate terms.
 
-`pfi_grouping: feature` jointly permutes all coordinate terms belonging to one
-theoretical feature or interaction. `pfi_grouping: coordinate` reports each
-Helmert coordinate or coordinate pair separately while retaining its `Group`.
+Permutation-importance modes and usage are documented in
+[`FeatureImportance`](mlem_method/feature_importance.py).
 
 ## THINGS-data
 
