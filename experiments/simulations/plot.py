@@ -4,6 +4,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+import numpy as np
 import pandas as pd
 import seaborn as sns
 from scipy.stats import weightedtau
@@ -17,7 +18,7 @@ hue_order = list(methods.values())[:-1]
 metrics = {
     "spearman": "Spearman $\\rho$ (↑)",
     "kendalltau": "FI weighted Kendall $\\tau_w$\nwith Oracle (↑)",
-    "euclidean": "FI distance to Oracle (↓)",
+    "euclidean": "FI Euclidean distance\nto Oracle (↓)",
 }
 col_order = list(metrics.values())
 gb_cols = ["Method", "q", "n", "noise", "seed"]
@@ -46,7 +47,7 @@ def load(path: str) -> pd.DataFrame:
     return df
 
 
-df = load("0.parquet")[["mean", "Feature"] + gb_cols].rename(columns={"mean": "fi"})
+df = load("0.parquet").query("Order == 'main'")[["mean", "Feature"] + gb_cols].rename(columns={"mean": "fi"})
 df_oracle = df[df["Method"] == "Oracle"].rename(columns={"fi": "fi_oracle"}).drop(columns=["Method"])
 df = df[df["Method"] != "Oracle"].merge(df_oracle)
 df_score = load("1.parquet")[["mean"] + gb_cols].rename(columns={"mean": "spearman"})
@@ -57,7 +58,7 @@ df = (
     .apply(
         lambda group: pd.Series(
             {
-                "euclidean": (group.fi - group.fi_oracle).abs().mean(),
+                "euclidean": np.linalg.norm(group.fi - group.fi_oracle),
                 "kendalltau": weightedtau(group.fi, group.fi_oracle).statistic,
             }
         )
@@ -153,8 +154,6 @@ g = sns.relplot(
 for ax in g.axes.flat:
     ax.set_xscale("log", base=2)
     ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, pos: f"{int(x):d}"))
-
-g.axes.flat[2].set_yscale("log")
 
 g.set_titles("{col_name}")
 g.set_axis_labels("", "")

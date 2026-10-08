@@ -34,7 +34,7 @@ def load(path: str) -> pd.DataFrame:
     return df
 
 
-df = load("0.parquet")[["mean", "Feature"] + gb_cols].rename(columns={"mean": "fi"})
+df = load("0.parquet").query("Order == 'main'")[["mean", "Feature"] + gb_cols].rename(columns={"mean": "fi"})
 df_oracle = df[df["Method"] == "Oracle"].rename(columns={"fi": "fi_oracle"}).drop(columns=["Method"])
 df = df[df["Method"] != "Oracle"].merge(df_oracle)
 df_score = load("1.parquet")[["mean"] + gb_cols].rename(columns={"mean": "pearson"})
