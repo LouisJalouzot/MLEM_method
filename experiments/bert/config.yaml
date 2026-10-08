@@ -2,7 +2,7 @@ base_config:
   infra:
     folder: .cache
     cluster: slurm
-    job_name: bert
+    job_name: opt
     timeout_min: 60
     cpus_per_task: 24
     gpus_per_node: 1
@@ -14,11 +14,14 @@ base_config:
   trainer:
     kind: mlem
     dataloader_builder: {cv: 5}
-    representations: {model_name: bert-base-uncased, level: sentence}
+    representations: {model_name: facebook/opt-125m, level: sentence, token_aggregation: last}
 
 grid_search_prepare:
   trainer.representations.layer: [7]
 
 grid_search:
   trainer.representations.layer: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-  trainer.kind: [mlem, rf, frrsa]
+
+grid_search_zip:
+  trainer.kind: [mlem, rf, frrsa, mlem]
+  pfi: [feature, feature, feature, channel]

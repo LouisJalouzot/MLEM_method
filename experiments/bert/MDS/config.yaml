@@ -2,11 +2,21 @@ target: mlem_method.reduce_dimensions.ReduceDimensions
 method: transform
 
 base_config:
-  dataset:
+  infra:
+    folder: .cache
+    cluster: slurm
+    job_name: mds
+    timeout_min: 20
+    cpus_per_task: 24
+    gpus_per_node: 1
+    slurm_constraint: h100
+    slurm_account: ioj@h100
+    slurm_additional_parameters: {qos: qos_gpu_h100-t3, hint: nomultithread}
     path: datasets/relative_clause.csv
   representations:
-    model_name: bert-base-uncased
+    model_name: facebook/opt-125m
     level: sentence
+    token_aggregation: last
   method: mds
   distance: euclidean
 

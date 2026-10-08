@@ -5,8 +5,9 @@ base_config:
   dataset:
     path: datasets/relative_clause.csv
   representations:
-    model_name: bert-base-uncased
+    model_name: facebook/opt-125m
     level: sentence
+    token_aggregation: last
 
 grid_search_prepare:
   representations.layer: [7]
