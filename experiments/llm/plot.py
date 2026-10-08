@@ -9,7 +9,7 @@ import seaborn as sns
 from mlem_method.viz import feature_rename
 
 root = Path(__file__).parent
-output = root.parent.parent / "paper" / "figs" / "bert"
+output = root.parent.parent / "paper" / "figs" / "llm"
 output.mkdir(parents=True, exist_ok=True)
 methods = {"mlem": "MLEM", "frrsa": "FR-RSA", "rf": "Random Forest"}
 
