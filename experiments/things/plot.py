@@ -1,7 +1,13 @@
 # %%
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+
+root = Path(__file__).parent
+output = root.parent.parent / "paper" / "figs"
+output.mkdir(exist_ok=True)
 
 df_fmri = pd.read_parquet("experiments/things/fmri/1.parquet").assign(target="fMRI")
 df_meg = pd.read_parquet("experiments/things/meg/1.parquet").assign(target="MEG")
@@ -68,4 +74,4 @@ for row, axes in enumerate(g.axes):
     axes[0].set_ylabel("MLEM Spearman $\\rho$")
 sns.despine(trim=True)
 sns.move_legend(g, "center left", bbox_to_anchor=(0.8, 0.5), title="Subject", frameon=True)
-plt.savefig("paper/figs/things.pdf", bbox_inches="tight", metadata={"CreationDate": None})
+plt.savefig(output / "things.pdf", bbox_inches="tight", metadata={"CreationDate": None})
