@@ -141,6 +141,12 @@ def encode_df(df: pd.DataFrame, simplex: bool = False) -> tuple[torch.Tensor, pd
             for t in df.dtypes
         ]
     )
+    missing = df.loc[:, number_cols].isna().any()
+    if missing.any():
+        raise ValueError(
+            f"Numeric features {list(missing.index[missing])} have missing values: "
+            "encode them as a category or drop those rows"
+        )
     if simplex:
         from scipy.linalg import helmert
 
@@ -155,12 +161,11 @@ def encode_df(df: pd.DataFrame, simplex: bool = False) -> tuple[torch.Tensor, pd
                     z = MinMaxScaler().fit_transform(z)
                 names = [feature]
             else:
-                categorical = s.astype("category")
-                codes = categorical.cat.codes.to_numpy()
-                n_levels = len(categorical.cat.categories)
+                # A missing value is its own level, sorted last.
+                codes, levels = pd.factorize(s, sort=True, use_na_sentinel=False)
+                n_levels = len(levels)
                 if n_levels > 1:
                     z = (helmert(n_levels).T[codes] / np.sqrt(2)).astype(np.float32)
-                    z[codes < 0] = np.nan
                 else:
                     z = np.empty((len(s), 0), dtype=np.float32)
                 names = [f"{feature}_{i}" for i in range(z.shape[1])]
@@ -177,10 +182,7 @@ def encode_df(df: pd.DataFrame, simplex: bool = False) -> tuple[torch.Tensor, pd
         if number_cols[i]:
             X[:, i] = s.values
         else:
-            s = s.astype("category").cat.codes
-            # -1 category code corresponds to NaN values
-            s[s == -1] = np.nan
-            X[:, i] = s
+            X[:, i] = pd.factorize(s, sort=True, use_na_sentinel=False)[0]
     # Only apply MinMaxScaler if there are numeric columns
     if np.any(number_cols):
         X[:, number_cols] = MinMaxScaler().fit_transform(X[:, number_cols])

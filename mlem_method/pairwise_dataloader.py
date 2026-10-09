@@ -23,7 +23,6 @@ class PairwiseDataloader:
         n_pairs=4096,
         gamma=1,
         distance=2,
-        nan_to_num=0,
         min_max_scale=True,
         seed=None,
         signed: bool = False,
@@ -56,7 +55,6 @@ class PairwiseDataloader:
             self.device = Y2.device
             self.Y2 = Y2.float()
         self.max_n_pairs = self.n * (self.n - 1) // 2
-        self.nan_to_num = nan_to_num
         self.min = torch.inf
         self.max = -torch.inf
         self.min2 = torch.inf
@@ -78,7 +76,7 @@ class PairwiseDataloader:
 
     def pair_delta(self, i, j, X=None):
         X = self.X if X is None else X
-        delta = (X[..., i, :] - X[..., j, :]).nan_to_num(self.nan_to_num)
+        delta = X[..., i, :] - X[..., j, :]
         return delta if self.signed else delta.abs().clip(0, 1)
 
     def get_X_shape(self):
@@ -160,7 +158,6 @@ class PairwiseDataloaderBuilder(BaseModel):
     cv: int | float | tuple[list[int], list[int]] | tp.Literal["split"] | None = None
     n_train: int | None = Field(default=None, ge=2)
     distance: str | float | int = 2
-    nan_to_num: float = 0
     min_max_scale: bool = True
 
     model_config: ConfigDict = ConfigDict(extra="forbid")
@@ -181,7 +178,6 @@ class PairwiseDataloaderBuilder(BaseModel):
         return PairwiseDataloader(
             X=X,
             distance=self.distance,
-            nan_to_num=self.nan_to_num,
             min_max_scale=self.min_max_scale,
             signed=signed,
             seed=seed,
@@ -245,7 +241,6 @@ class PairwiseDataloaderBuilder(BaseModel):
                     n_pairs=n_pairs,
                     gamma=gamma,
                     distance=self.distance,
-                    nan_to_num=self.nan_to_num,
                     min_max_scale=self.min_max_scale,
                     signed=signed,
                     seed=seed,

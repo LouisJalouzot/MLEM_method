@@ -141,13 +141,10 @@ class FRRSABaseline(EncodingBaseline):
         params = {"metric": metric} if isinstance(metric, str) else {"metric": "minkowski", "p": metric}
         X = np.column_stack(
             [
-                pairwise_distances(x[:, None], metric="sqeuclidean", n_jobs=self.n_jobs, ensure_all_finite="allow-nan")[
-                    pairs
-                ]
+                pairwise_distances(x[:, None], metric="sqeuclidean", n_jobs=self.n_jobs)[pairs]
                 for x in X.cpu().numpy().T
             ]
         )
-        np.nan_to_num(X, copy=False, nan=self.dataloader_builder.nan_to_num**2)
         if not self.dataset.mahalanobis:
             X.clip(0, 1, out=X)
         y = pairwise_distances(Y.cpu().numpy(), n_jobs=self.n_jobs, **params)[pairs]
@@ -224,7 +221,6 @@ class DecodingBaseline(BaseModelSharing):
     ) -> tuple[np.ndarray, np.ndarray]:
         X = self.representations()
         Y = self.dataset.encode()[0]
-        Y = torch.nan_to_num(Y, nan=-1)
 
         scores = compute_decoding_baseline(X, Y, self.n_splits)
         scores["Feature"] = self.dataset.coordinates
