@@ -12,7 +12,7 @@ triplets = [
         ("EleutherAI/pythia-1.4b-deduped", 8),
         ("AntonV/mamba2-780m-hf", 14),
         ("Qwen/Qwen3-4B-Base", 11),
-        "Verb lemma",
+        "Verb frequency",
     ),
 ]
 pairs = [(ref, m, feature) for ref, pos, neg, feature in triplets for m in (pos, neg)]

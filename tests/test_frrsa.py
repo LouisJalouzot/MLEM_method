@@ -70,12 +70,12 @@ def test_feature_importance(fi):
     assert fi.layers_infra.uid() == serial.layers_infra.uid()
     assert fi.map_infra.uid() == serial.map_infra.uid()
     with pytest.raises(ValueError, match="requires MLEM"):
-        fi.infra.clone_obj(pfi="channel")
+        fi.infra.clone_obj(pfi="term")
     mlem = FeatureImportance()
-    channel = mlem.infra.clone_obj(pfi="channel")
+    term = mlem.infra.clone_obj(pfi="term")
     for name in ("infra", "layers_infra", "map_infra"):
-        assert getattr(mlem, name).uid() != getattr(channel, name).uid()
-    assert mlem.trainer.infra.uid() == channel.trainer.infra.uid()
+        assert getattr(mlem, name).uid() != getattr(term, name).uid()
+    assert mlem.trainer.infra.uid() == term.trainer.infra.uid()
     importance, scores, weights = fi.compute()
 
     # Feature PFI reports only the three original features per fold.

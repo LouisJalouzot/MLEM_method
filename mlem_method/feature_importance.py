@@ -42,9 +42,9 @@ def compute_feature_importance(
     alpha: float = 0.01,
     scoring: tp.Literal["spearman", "pearson", "mse"] = "spearman",
     perturbations_per_eval: int = 32,
-    pfi: tp.Literal["feature", "channel"] = "feature",
+    pfi: tp.Literal["feature", "term"] = "feature",
 ) -> tuple["pd.DataFrame", "pd.DataFrame"]:
-    """Score drops from stimulus-feature or MLEM quadratic-channel permutation.
+    """Score drops from stimulus-feature or MLEM quadratic-term permutation.
 
     ``groups`` maps input coordinates to theoretical features; categorical blocks
     are always shuffled together. See ``FeatureImportance`` for mode semantics.
@@ -53,8 +53,10 @@ def compute_feature_importance(
     import torch
     from captum.attr import FeatureAblation
 
-    if pfi == "channel" and not isinstance(model, SPDMatrixLearner):
-        raise ValueError("pfi='channel' requires MLEM")
+    if pfi not in ("feature", "term"):
+        raise ValueError(f"Unknown pfi mode: {pfi!r}")
+    if pfi == "term" and not isinstance(model, SPDMatrixLearner):
+        raise ValueError("pfi='term' requires MLEM")
 
     metric, maximize = get_metric(scoring)
     sign = 1 if maximize else -1
@@ -62,13 +64,13 @@ def compute_feature_importance(
     group_ids, names = pd.factorize(groups)
     group_ids = torch.as_tensor(group_ids, device=X.device)
     members = [[name] for name in names]
-    if pfi == "channel":
+    if pfi == "term":
         a, b = np.triu_indices(len(names))
         members = [[names[i]] if i == j else [names[i], names[j]] for i, j in zip(a, b)]
-        channels = torch.empty((len(names), len(names)), dtype=torch.long, device=X.device)
-        channels[a, b] = channels[b, a] = torch.arange(len(members), device=X.device)
+        term_ids = torch.empty((len(names), len(names)), dtype=torch.long, device=X.device)
+        term_ids[a, b] = term_ids[b, a] = torch.arange(len(members), device=X.device)
         row, col = model.triu_indices
-        product_ids = channels[group_ids[row], group_ids[col]]
+        product_ids = term_ids[group_ids[row], group_ids[col]]
     else:
         blocks = [torch.where(group_ids == k)[0] for k in range(len(names))]
     features = [m[0] if len(m) == 1 else f"({m[0]} x {m[1]})" for m in members]
@@ -79,7 +81,7 @@ def compute_feature_importance(
         for _ in range(n_perm):
             left, right, delta, observed, *clean_targets = dataloader.sample(dataloader.n_pairs, get_idx=True)
             clean = clean_targets[-1] if clean_targets else observed
-            if pfi == "channel":
+            if pfi == "term":
                 # Combine both off-diagonal coefficients of the actual forward matrix once.
                 W = model.W.weight
                 terms = delta[:, row] * delta[:, col] * (W[row, col] + (row != col) * W[col, row])
@@ -163,15 +165,15 @@ class FeatureImportance(BaseModelSharing):
     the simulation oracle; returns one main row per feature, with no pairwise
     interaction estimate. These drops include reliance through interactions.
 
-    ``pfi="channel"`` requires MLEM. It shuffles one weighted quadratic block
+    ``pfi="term"`` requires MLEM. It shuffles one weighted quadratic block
     across comparison rows, keeping the fitted matrix and all other blocks
-    fixed. Within-feature blocks are main channels; cross-feature blocks are
-    interaction channels. Summing a block before shuffling is equivalent to
+    fixed. Within-feature blocks are main terms; cross-feature blocks are
+    interaction terms. Summing a block before shuffling is equivalent to
     jointly shuffling all its products. Perturbed predictions remain unclipped.
 
     Both modes average score drops over ``n_perm`` repeats, using the clean
     target when simulations provide one; reported fit scores use observed data.
-    In an experiment YAML, set ``base_config.pfi: channel`` to opt in.
+    In an experiment YAML, set ``base_config.pfi: term`` to opt in.
     Switching PFI modes reuses the same fitted models.
     """
 
@@ -182,7 +184,7 @@ class FeatureImportance(BaseModelSharing):
     )
 
     scoring: tp.Literal["spearman", "pearson", "mse"] = "spearman"
-    pfi: tp.Literal["feature", "channel"] = "feature"
+    pfi: tp.Literal["feature", "term"] = "feature"
     n_perm: int = 5
     perturbations_per_eval: int = Field(default=32, ge=1)
     alpha: float = 0.01
@@ -218,8 +220,8 @@ class FeatureImportance(BaseModelSharing):
 
     @model_validator(mode="after")
     def check_pfi(self):
-        if self.pfi == "channel" and self.trainer.kind != "mlem":
-            raise ValueError("pfi='channel' requires MLEM")
+        if self.pfi == "term" and self.trainer.kind != "mlem":
+            raise ValueError("pfi='term' requires MLEM")
         return self
 
     @map_infra.apply(item_uid=str, exclude_from_cache_uid=("trainer.representations.layer",))

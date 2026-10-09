@@ -44,7 +44,7 @@ feature_rename = {
     "embed_GEN": "Embedded gender",
     "embed_NUM_0": "Embedded number",
     "embed_NUM": "Embedded number",
-    "embed_ZIPF": "Embedded Zipf",
+    "embed_ZIPF": "Embedded frequency",
     "embedobj_GEN_0": "Embedded object gender",
     "embedobj_GEN": "Embedded object gender",
     "embedobj_NUM_0": "Embedded object number",
@@ -55,8 +55,10 @@ feature_rename = {
     "intervener_NUM_0": "Intervener number",
     "intervener_NUM": "Intervener number",
     "obj_GEN_0": "Object gender",
+    "obj_GEN": "Object gender",
     "obj_NUM_0": "Object number",
-    "obj_ZIPF": "Object Zipf",
+    "obj_NUM": "Object number",
+    "obj_ZIPF": "Object frequency",
     "prep_LEMMA_0": "Preposition lemma",
     "prep_LEMMA": "Preposition lemma",
     "sentence_CLAUSE_0": "Relative clause type",
@@ -69,11 +71,28 @@ feature_rename = {
     "subj_GEN": "Subject gender",
     "subj_NUM_0": "Subject number",
     "subj_NUM": "Subject number",
-    "subj_ZIPF": "Subject Zipf",
+    "subj_ZIPF": "Subject frequency",
     "verb_LEMMA_0": "Verb lemma",
     "verb_LEMMA": "Verb lemma",
     "verb_ZIPF": "Verb lemma",
 }
+
+# Stable feature colors, with the displayed MLEM terms first and the top two features blue and orange.
+llm_palette = dict(zip([
+    "Attachment site",
+    "Relative clause type",
+    "Verb lemma",
+    "Relative clause type ×\nAttachment site",
+    "Subject number",
+    "Object number",
+    "Embedded number",
+    "Object gender",
+    "Subject gender",
+    "Embedded gender",
+    "Object frequency",
+    "Subject frequency",
+    "Embedded frequency",
+], sns.color_palette("tab10", 13)))
 
 feature_order = [
     "Relative clause type",
@@ -93,6 +112,10 @@ families_rename = {
 }
 
 levels_rename = {
+    "Attachment site": {
+        "center_embedding": "Center embedding",
+        "peripheral": "Peripheral",
+    },
     "Relative clause type": {
         "objwho": "Object relative",
         "subjwho": "Subject relative",

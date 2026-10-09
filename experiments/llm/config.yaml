@@ -24,4 +24,4 @@ grid_search:
 
 grid_search_zip:
   trainer.kind: [mlem, rf, frrsa, mlem]
-  pfi: [feature, feature, feature, channel]
+  pfi: [feature, feature, feature, term]

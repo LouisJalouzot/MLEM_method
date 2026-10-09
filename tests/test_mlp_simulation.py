@@ -90,7 +90,7 @@ def test_stimulus_permutation_keeps_categorical_block_together(recording_score, 
 
 @pytest.mark.parametrize("perturbations_per_eval", [1, 2, 32])
 @pytest.mark.parametrize("param", ["cholesky", "none", "triu"])
-def test_channel_permutation_matches_quadratic_blocks(perturbations_per_eval, param):
+def test_term_permutation_matches_quadratic_blocks(perturbations_per_eval, param):
     torch.manual_seed(0)
     model = SPDMatrixLearner(3, param=param, fro_norm=False)
     _, loader = make_loader()
@@ -98,7 +98,7 @@ def test_channel_permutation_matches_quadratic_blocks(perturbations_per_eval, pa
     loader.Y2, reference.Y2 = loader.Y / 2, reference.Y / 2
     groups = np.array(["c", "x", "c"])  # A categorical block need not be contiguous.
     importance, scores = compute_feature_importance(
-        model, loader, groups, n_perm=2, scoring="mse", pfi="channel",
+        model, loader, groups, n_perm=2, scoring="mse", pfi="term",
         perturbations_per_eval=perturbations_per_eval,
     )
     W = model.W.weight.detach().clone()
@@ -125,4 +125,4 @@ def test_channel_permutation_matches_quadratic_blocks(perturbations_per_eval, pa
     assert scores["mean"].item() == pytest.approx(np.mean(baselines))
     torch.testing.assert_close(model.W.weight, W)
     with pytest.raises(ValueError, match="requires MLEM"):
-        compute_feature_importance(lambda X: X, loader, groups, pfi="channel")
+        compute_feature_importance(lambda X: X, loader, groups, pfi="term")

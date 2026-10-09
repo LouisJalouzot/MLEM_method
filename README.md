@@ -71,4 +71,4 @@ Feature selection is documented in [`THINGSDataset`](mlem_method/things_dataset.
 
 After the corresponding parquet results have been computed, run
 `./scripts/run_plotters.sh` from the repository root to generate the simulation,
-THINGS, and BERT plots.
+THINGS, and OPT plots.
