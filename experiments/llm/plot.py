@@ -72,7 +72,12 @@ for data, top, mode, order, aspect in [
     g.set(xticks=layer_ticks)
     g.legend.set_title(None)
     sns.despine(trim=True)
-    plt.savefig(output / f"{mode}_importance.pdf", metadata={"CreationDate": None})
+    if mode == "feature":
+        center = (g.axes.flat[0].get_position().x0 + g.axes.flat[-1].get_position().x1) / 2
+        sns.move_legend(g, "lower center", bbox_to_anchor=(center, 1), ncol=3, frameon=True, title="Feature")
+    else:
+        sns.move_legend(g, "center left", bbox_to_anchor=(0.6, 0.5), frameon=True, title="Term")
+    plt.savefig(output / f"{mode}_importance.pdf", bbox_inches="tight", metadata={"CreationDate": None})
 
 # %% Training duration
 durations = weights[["Method", "layer", "cv", "training_duration"]].drop_duplicates()
